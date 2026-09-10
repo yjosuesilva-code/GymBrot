@@ -137,3 +137,56 @@ body {
   display: flex; align-items: center; justify-content: center;
   font-family: var(--f-title); font-weight: 800; font-size: 14px;
 }
+
+
+
+/*   INSTRUCTORES  
+===== Botones ===== */
+.btn-neon {
+  background: var(--neon);
+  color: #000;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: none;
+  font-family: var(--f-label);
+  font-weight: 700;
+}
+.btn-neon:hover { opacity: 0.9; color: #000; }
+
+.btn-dark {
+  background: var(--bg-input);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-btn);
+  font-family: var(--f-label);
+  font-weight: 700;
+}
+.btn-dark:hover { background: var(--border-btn); color: #fff; }
+
+/* ===== Formularios ===== */
+.form-control {
+  background: var(--bg-input);
+  border: 1px solid var(--border-btn);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  font-size: 14px;
+  color: #fff;
+  margin-bottom: 12px;
+}
+.form-control:focus {
+  background: var(--bg-input);
+  color: #fff;
+  border-color: var(--neon);
+  box-shadow: 0 0 0 2px var(--neon);
+}
+.form-label { color: var(--nav-text); font-family: var(--f-body); font-size: 13px; }
+
+/* ===== Modal ===== */
+.modal-content {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: #fff;
+}
+.modal-header { border-bottom: 1px solid var(--border); }
+.btn-close { filter: invert(1); }

@@ -1,4 +1,5 @@
 layout.render('clientes', 'Gestión de clientes');
+const modalCliente = new bootstrap.Modal(document.getElementById('modalCliente'));
 
 const contenido = document.getElementById('app-content');
 let clientesCargados = []; 
@@ -38,6 +39,75 @@ contenido.innerHTML = `
     </div>
   </div>
 `;
+
+document.body.insertAdjacentHTML('beforeend', `
+  <div class="modal fade" id="modalCliente" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalTitulo">Nuevo cliente</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert-g alert-error" id="modalError"></div>
+          <form id="formCliente">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label-g">Tipo</label>
+                <select class="form-control-dark" id="fTipo">
+                  <option value="CC">CC</option>
+                  <option value="TI">TI</option>
+                  <option value="CE">CE</option>
+                  <option value="PP">PP</option>
+                </select>
+              </div>
+              <div class="col-md-8">
+                <label class="form-label-g">Número de identificación</label>
+                <input class="form-control-dark" id="fIdentificacion" type="text">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label-g">Nombre</label>
+                <input class="form-control-dark" id="fNombre" type="text">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label-g">Apellidos</label>
+                <input class="form-control-dark" id="fApellidos" type="text">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label-g">Teléfono</label>
+                <input class="form-control-dark" id="fTelefono" type="text">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label-g">Correo</label>
+                <input class="form-control-dark" id="fCorreo" type="email">
+              </div>
+              <div class="col-md-8">
+                <label class="form-label-g">Dirección</label>
+                <input class="form-control-dark" id="fDireccion" type="text">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label-g">Fecha de nacimiento</label>
+                <input class="form-control-dark" id="fNacimiento" type="date">
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-dark" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn-neon" id="btnGuardar">Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+document.getElementById('btnNuevo').addEventListener('click', function () {
+  document.getElementById('formCliente').reset();     
+  document.getElementById('modalError').classList.remove('show'); 
+  document.getElementById('modalTitulo').textContent = 'Nuevo cliente';
+  modalCliente.show();                                 
+});
+
 document.getElementById('txtBuscar').addEventListener('input', function (e) {
   const filtro = e.target.value.trim().toLowerCase();
 

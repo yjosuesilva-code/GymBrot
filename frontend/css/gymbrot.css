@@ -191,3 +191,15 @@ body {
 .spinner-g { width: 18px; height: 18px; border: 2px solid var(--border-btn); border-top-color: var(--neon); border-radius: 50%; display: inline-block; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 8px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .empty-state { text-align: center; padding: 40px 16px; color: var(--muted); }
+
+/* ===== Modales (tema oscuro sobre Bootstrap) ===== */
+.modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); }
+.modal-header, .modal-footer { border-color: var(--border); }
+.modal-title { font-family: var(--f-title); font-weight: 600; color: #fff; }
+.btn-close { filter: invert(1) grayscale(1) brightness(1.6); }
+
+/* ===== Alertas ===== */
+.alert-g { border-radius: var(--radius-sm); padding: 12px 16px; font-size: 13px; margin-bottom: 16px; border: 1px solid; display: none; }
+.alert-g.show { display: block; }
+.alert-ok    { background: rgba(212,255,0,.08);  border-color: rgba(212,255,0,.35);  color: var(--neon); }
+.alert-error { background: rgba(255,107,107,.08); border-color: rgba(255,107,107,.35); color: #ff8a8a; }

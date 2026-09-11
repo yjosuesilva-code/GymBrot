@@ -47,12 +47,13 @@ function renderizarTabla() {
         const fila = document.createElement("tr");
         fila.innerHTML = `
             <td>${instructor.id}</td>
-            <td><a href="instructor-detalle.html?id=${instructor.id}">${instructor.nombre} ${instructor.apellidos}</a></td>
+            <td>${instructor.nombre} ${instructor.apellidos}</td>
             <td>${instructor.especialidad}</td>
             <td>${instructor.estado}</td>
             <td>
                 <button class="btn btn-sm btn-dark btn-editar" data-id="${instructor.id}">Editar</button>
                 <button class="btn btn-sm btn-dark btn-eliminar" data-id="${instructor.id}">Eliminar</button>
+                <button class="btn-icon btn-ver" data-id="${instructor.id}"><i class="bi bi-arrow-right"></i></button>
             </td>
         `;
         tbody.appendChild(fila);
@@ -134,7 +135,11 @@ document.getElementById("tablaInstructores").addEventListener("click", function 
 
         const modal = new bootstrap.Modal(document.getElementById("modalInstructor"));
         modal.show();
+    }else if (event.target.closest(".btn-ver")) {
+    const idVer = event.target.closest(".btn-ver").dataset.id;
+    window.location.href = `instructor-detalle.html?id=${idVer}`;
     }
+
 });
 
 document.getElementById("btnNuevoInstructor").addEventListener("click", function () {

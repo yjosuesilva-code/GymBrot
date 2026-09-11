@@ -1,4 +1,3 @@
-/* ===== layout.js — dibuja el sidebar + topbar en TODA página ===== */
 const layout = {
 
   paginas: [

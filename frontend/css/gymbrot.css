@@ -1,3 +1,20 @@
+/* ============================================================
+   GYMBROT · gymbrot.css — Hoja de estilos UNICA del proyecto
+   REGLAS DE EQUIPO (para no chocar al juntar):
+   1. Reutiliza las clases que ya existen (card-g, btn-neon,
+      table-g, badge-g, form-control-dark...). NO inventes una
+      nueva si ya hay una que sirve.
+   2. Si DEBES agregar un estilo propio de tu pagina, ponlo SOLO
+      en tu seccion de abajo ([P1], [P2], [P3], [P4]).
+   3. NO edites la seccion BASE (tokens/layout/componentes) sin
+      avisar al equipo — es compartida por todos.
+   4. Haz "git merge developer" antes de empezar y antes de subir.
+   ============================================================ */
+
+/* ############################################################
+   #  SECCION BASE (COMPARTIDA) — reutilizable por todas las paginas
+   ############################################################ */
+
 /* ===== GYMBROT · Tokens base (Guía de Diseño) ===== */
 :root {
   /* Fondos y bordes */
@@ -203,3 +220,20 @@ body {
 .alert-g.show { display: block; }
 .alert-ok    { background: rgba(212,255,0,.08);  border-color: rgba(212,255,0,.35);  color: var(--neon); }
 .alert-error { background: rgba(255,107,107,.08); border-color: rgba(255,107,107,.35); color: #ff8a8a; }
+
+
+/* ############################################################
+   #  SECCIONES POR INTEGRANTE — cada quien SOLO en la suya
+   ############################################################ */
+
+/* ===== [P1] Estilos propios · dashboard, acceso, finanzas ===== */
+
+
+/* ===== [P2] Estilos propios · clientes, cliente-detalle, progreso, citas ===== */
+/* (por ahora vacia: se reutilizaron los componentes de la base — asi debe ser) */
+
+
+/* ===== [P3] Estilos propios · instructores, instructor-detalle, rutinas ===== */
+
+
+/* ===== [P4] Estilos propios · ejercicios, membresias ===== */

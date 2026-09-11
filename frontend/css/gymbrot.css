@@ -190,3 +190,20 @@ body {
 }
 .modal-header { border-bottom: 1px solid var(--border); }
 .btn-close { filter: invert(1); }
+
+/* ===== Tarjetas ===== */
+.card-g {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* ===== Links dentro del tema oscuro ===== */
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--neon);
+  text-decoration: underline;
+}

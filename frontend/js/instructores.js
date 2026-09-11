@@ -47,7 +47,7 @@ function renderizarTabla() {
         const fila = document.createElement("tr");
         fila.innerHTML = `
             <td>${instructor.id}</td>
-            <td>${instructor.nombre} ${instructor.apellidos}</td>
+            <td><a href="instructor-detalle.html?id=${instructor.id}">${instructor.nombre} ${instructor.apellidos}</a></td>
             <td>${instructor.especialidad}</td>
             <td>${instructor.estado}</td>
             <td>

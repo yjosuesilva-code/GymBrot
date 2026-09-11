@@ -1,5 +1,4 @@
 layout.render('clientes', 'Gestión de clientes');
-const modalCliente = new bootstrap.Modal(document.getElementById('modalCliente'));
 
 const contenido = document.getElementById('app-content');
 let clientesCargados = []; 
@@ -100,6 +99,43 @@ document.body.insertAdjacentHTML('beforeend', `
     </div>
   </div>
 `);
+const modalCliente = new bootstrap.Modal(document.getElementById('modalCliente'));
+
+
+document.getElementById('btnGuardar').addEventListener('click', async function () {
+  const data = {
+    tipo_identificacion: document.getElementById('fTipo').value,
+    numero_identificacion: document.getElementById('fIdentificacion').value.trim(),
+    nombre: document.getElementById('fNombre').value.trim(),
+    apellidos: document.getElementById('fApellidos').value.trim(),
+    telefono: document.getElementById('fTelefono').value.trim(),
+    correo: document.getElementById('fCorreo').value.trim(),
+    direccion: document.getElementById('fDireccion').value.trim(),
+    fecha_nacimiento: document.getElementById('fNacimiento').value
+  };
+
+  if (!data.numero_identificacion || !data.nombre || !data.apellidos) {
+    mostrarError('La identificación, el nombre y los apellidos son obligatorios');
+    return;   
+  }
+
+  
+  const res = await api.clientes.create(data);
+
+  if (!res.ok) {
+    mostrarError(res.mensaje);
+    return;
+  }
+
+  modalCliente.hide();
+  cargarClientes();
+});
+
+function mostrarError(mensaje) {
+  const box = document.getElementById('modalError');
+  box.textContent = mensaje;
+  box.classList.add('show');
+}
 
 document.getElementById('btnNuevo').addEventListener('click', function () {
   document.getElementById('formCliente').reset();     

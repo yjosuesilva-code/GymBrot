@@ -2,6 +2,7 @@ layout.render('clientes', 'Gestión de clientes');
 
 const contenido = document.getElementById('app-content');
 let clientesCargados = []; 
+let editandoId = null;
 contenido.innerHTML = `
   <div class="card-g">
     <div class="card-head">
@@ -104,23 +105,24 @@ const modalCliente = new bootstrap.Modal(document.getElementById('modalCliente')
 
 document.getElementById('btnGuardar').addEventListener('click', async function () {
   const data = {
-    tipo_identificacion: document.getElementById('fTipo').value,
+    tipo_identificacion:   document.getElementById('fTipo').value,
     numero_identificacion: document.getElementById('fIdentificacion').value.trim(),
-    nombre: document.getElementById('fNombre').value.trim(),
-    apellidos: document.getElementById('fApellidos').value.trim(),
-    telefono: document.getElementById('fTelefono').value.trim(),
-    correo: document.getElementById('fCorreo').value.trim(),
-    direccion: document.getElementById('fDireccion').value.trim(),
-    fecha_nacimiento: document.getElementById('fNacimiento').value
+    nombre:                document.getElementById('fNombre').value.trim(),
+    apellidos:             document.getElementById('fApellidos').value.trim(),
+    telefono:              document.getElementById('fTelefono').value.trim(),
+    correo:                document.getElementById('fCorreo').value.trim(),
+    direccion:             document.getElementById('fDireccion').value.trim(),
+    fecha_nacimiento:      document.getElementById('fNacimiento').value
   };
 
   if (!data.numero_identificacion || !data.nombre || !data.apellidos) {
     mostrarError('La identificación, el nombre y los apellidos son obligatorios');
-    return;   
+    return;
   }
 
-  
-  const res = await api.clientes.create(data);
+  const res = editandoId
+    ? await api.clientes.update(editandoId, data)
+    : await api.clientes.create(data);
 
   if (!res.ok) {
     mostrarError(res.mensaje);
@@ -138,12 +140,37 @@ function mostrarError(mensaje) {
 }
 
 document.getElementById('btnNuevo').addEventListener('click', function () {
-  document.getElementById('formCliente').reset();     
-  document.getElementById('modalError').classList.remove('show'); 
+  editandoId = null;                                           
+  document.getElementById('formCliente').reset();
+  document.getElementById('fIdentificacion').disabled = false; 
+  document.getElementById('modalError').classList.remove('show');
   document.getElementById('modalTitulo').textContent = 'Nuevo cliente';
-  modalCliente.show();                                 
+  modalCliente.show();
 });
 
+// Clic en los botones de la tabla (delegación) — se registra UNA vez al cargar
+document.getElementById('tbodyClientes').addEventListener('click', function (e) {
+  const btnEditar = e.target.closest('.btn-editar');
+  if (btnEditar) abrirEdicion(btnEditar.dataset.id);
+});
+
+async function abrirEdicion(id) {
+  const c = await api.clientes.get(id);
+  if (!c) return;
+  editandoId = id;
+  document.getElementById('modalTitulo').textContent = 'Editar cliente';
+  document.getElementById('fTipo').value            = c.tipo_identificacion;
+  document.getElementById('fIdentificacion').value  = c.numero_identificacion;
+  document.getElementById('fIdentificacion').disabled = true;
+  document.getElementById('fNombre').value          = c.nombre;
+  document.getElementById('fApellidos').value       = c.apellidos;
+  document.getElementById('fTelefono').value        = c.telefono;
+  document.getElementById('fCorreo').value          = c.correo;
+  document.getElementById('fDireccion').value       = c.direccion;
+  document.getElementById('fNacimiento').value      = c.fecha_nacimiento;
+  document.getElementById('modalError').classList.remove('show');
+  modalCliente.show();
+}
 document.getElementById('txtBuscar').addEventListener('input', function (e) {
   const filtro = e.target.value.trim().toLowerCase();
 
@@ -185,10 +212,10 @@ function pintarClientes(lista) {
         <td>${utils.esc(c.telefono)}</td>
         <td>${edad != null ? edad + ' años' : '—'}</td>
         <td><span class="badge-g ${utils.badgeClass(c.estado)}">${utils.esc(c.estado)}</span></td>
-        <td>
+                <td>
           <div class="cell-actions">
             <button class="btn-icon" title="Ver detalle">👁</button>
-            <button class="btn-icon" title="Editar">✏️</button>
+            <button class="btn-icon btn-editar" data-id="${c.numero_identificacion}" title="Editar">✏️</button>
           </div>
         </td>
       </tr>

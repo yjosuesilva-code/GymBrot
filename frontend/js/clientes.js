@@ -1,6 +1,7 @@
 layout.render('clientes', 'Gestión de clientes');
 
 const contenido = document.getElementById('app-content');
+let clientesCargados = []; 
 contenido.innerHTML = `
   <div class="card-g">
     <div class="card-head">
@@ -37,10 +38,20 @@ contenido.innerHTML = `
     </div>
   </div>
 `;
+document.getElementById('txtBuscar').addEventListener('input', function (e) {
+  const filtro = e.target.value.trim().toLowerCase();
+
+  const filtrados = clientesCargados.filter(function (c) {
+    const texto = (c.nombre + ' ' + c.apellidos + ' ' + c.numero_identificacion + ' ' + c.correo).toLowerCase();
+    return texto.includes(filtro);
+  });
+
+  pintarClientes(filtrados);
+});
 
 async function cargarClientes() {
-  const clientes = await api.clientes.list();
-  pintarClientes(clientes);
+  clientesCargados = await api.clientes.list();   
+  pintarClientes(clientesCargados);
 }
 
 function pintarClientes(lista) {

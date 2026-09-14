@@ -75,3 +75,75 @@ const api = {
     }
   }
 };
+/* ===== INICIO P4 · Ejercicios · propuesta para probar localmente =====
+ * No sustituye ni modifica el bloque de Clientes.
+ * Contrato basado en Ejercicio, DIAGRAMA_CLASES.md
+ */
+(() => {
+  // Si ya hay un módulo de ejercicios, detenerse para no reemplazar trabajo ajeno.
+  if (api.ejercicios) {
+    throw new Error('El bloque de ejercicios ya existe. No pegues el agregado dos veces.');
+  }
+
+  api.ejercicios = {
+    validar(data) {
+      const texto = (valor) => String(valor ?? '').trim();
+      const ejercicio = {
+        nombre: texto(data.nombre),
+        descripcion: texto(data.descripcion),
+        grupoMuscular: texto(data.grupoMuscular),
+        nivel: texto(data.nivel),
+        series: Number(data.series),
+        repeticiones: Number(data.repeticiones),
+        recursoUrl: texto(data.recursoUrl)
+      };
+      // Reglas propuestas para esta demostración; no son restricciones del DDL.
+      if (!ejercicio.nombre || !ejercicio.grupoMuscular || !ejercicio.nivel) {
+        return { ok: false, mensaje: 'Nombre, grupo muscular y nivel son obligatorios.' };
+      }
+      if (![ejercicio.series, ejercicio.repeticiones].every((n) => Number.isSafeInteger(n) && n > 0)) {
+        return { ok: false, mensaje: 'Series y repeticiones deben ser números enteros mayores que cero.' };
+      }
+      if (ejercicio.recursoUrl) {
+        try {
+          const url = new URL(ejercicio.recursoUrl);
+          if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Protocolo no permitido');
+        } catch {
+          return { ok: false, mensaje: 'El recurso debe ser una dirección completa que comience por http:// o https://.' };
+        }
+      }
+      return { ok: true, data: ejercicio };
+    },
+
+    async list() {
+      const lista = db.read('ejercicios');
+      if (!Array.isArray(lista)) throw new Error('El catálogo almacenado no tiene formato de lista.');
+      return lista;
+    },
+
+    async create(data) {
+      const validacion = this.validar(data);
+      if (!validacion.ok) return validacion;
+      // Se lee de nuevo al guardar. La colección comienza vacía: sin semillas ficticias.
+      const lista = db.read('ejercicios');
+      if (!Array.isArray(lista)) throw new Error('El catálogo almacenado no tiene formato de lista.');
+      const ultimoId = lista.reduce((maximo, item) => Math.max(maximo, Number(item.idEjercicio) || 0), 0);
+      const idEjercicio = ultimoId + 1;
+      if (!Number.isSafeInteger(idEjercicio)) throw new Error('No es posible generar otro identificador local.');
+      const nuevo = { idEjercicio, ...validacion.data };
+      lista.push(nuevo);
+      db.write('ejercicios', lista); // Usa gymbrot_ejercicios; Clientes conserva su propia clave.
+      return { ok: true, mensaje: 'Ejercicio guardado', data: nuevo };
+    }
+  };
+
+  // La base descargada no tiene api.get(). Este puente cumple la lectura
+  // api.get('/ejercicios') y conserva otros endpoints si existiera un get previo.
+  const getAnterior = typeof api.get === 'function' ? api.get.bind(api) : null;
+  api.get = async function (endpoint, ...opciones) {
+    if (endpoint === '/ejercicios') return api.ejercicios.list();
+    if (getAnterior) return getAnterior(endpoint, ...opciones);
+    throw new Error('Endpoint no disponible en esta base de prueba: ' + endpoint);
+  };
+})();
+/* ===== FIN P4 · Ejercicios ===== */

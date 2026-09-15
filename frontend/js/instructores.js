@@ -21,7 +21,7 @@ document.getElementById("app-content").innerHTML = `
                 <th>Nombre</th>
                 <th>Especialidad</th>
                 <th>Estado</th>
-                <th>Acciones</th>
+                <th>asdfasdfcciones</th>
             </tr>
         </thead>
         <tbody id="tablaInstructores"></tbody>

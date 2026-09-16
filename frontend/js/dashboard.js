@@ -182,7 +182,7 @@ const dashboard = {
     document.getElementById('demo-list').innerHTML =
       fila('demo-adulto', 'Adulto', '18 a 55 años', adulto) +
       fila('demo-menor', 'Menor de edad', 'Menos de 18', menor) +
-      fila('demo-senior', 'Séller', 'Más de 55', senior);
+      fila('demo-senior', 'Adulto mayor', 'Más de 55', senior);
   },
 
   // Barras de ocupación por hora

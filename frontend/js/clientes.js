@@ -148,10 +148,18 @@ document.getElementById('btnNuevo').addEventListener('click', function () {
   modalCliente.show();
 });
 
-// Clic en los botones de la tabla (delegación) — se registra UNA vez al cargar
-document.getElementById('tbodyClientes').addEventListener('click', function (e) {
+document.getElementById('tbodyClientes').addEventListener('click', async function (e) {
+  // Editar
   const btnEditar = e.target.closest('.btn-editar');
-  if (btnEditar) abrirEdicion(btnEditar.dataset.id);
+  if (btnEditar) { abrirEdicion(btnEditar.dataset.id); return; }
+
+  const btnEstado = e.target.closest('.btn-estado');
+  if (btnEstado) {
+    const id = btnEstado.dataset.id;
+    const nuevo = btnEstado.dataset.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';  
+    await api.clientes.setEstado(id, nuevo);   
+    cargarClientes();                
+  }
 });
 
 async function abrirEdicion(id) {
@@ -212,11 +220,13 @@ function pintarClientes(lista) {
         <td>${utils.esc(c.telefono)}</td>
         <td>${edad != null ? edad + ' años' : '—'}</td>
         <td><span class="badge-g ${utils.badgeClass(c.estado)}">${utils.esc(c.estado)}</span></td>
-                <td>
-          <div class="cell-actions">
-            <button class="btn-icon" title="Ver detalle">👁</button>
-            <button class="btn-icon btn-editar" data-id="${c.numero_identificacion}" title="Editar">✏️</button>
-          </div>
+          <td>
+            <div class="cell-actions">
+              <button class="btn-icon" title="Ver detalle">👁</button>
+              <button class="btn-icon btn-editar" data-id="${c.numero_identificacion}" title="Editar">✏️</button>
+              <button class="btn-icon btn-estado" data-id="${c.numero_identificacion}" data-estado="${c.estado}" title="${c.estado === 'ACTIVO' ? 'Desactivar' : 'Activar'}">${c.estado === 'ACTIVO' ? '🚫' : '✅'}</button>
+            </div>
+          </td>
         </td>
       </tr>
     `;

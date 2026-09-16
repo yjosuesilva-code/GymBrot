@@ -1,4 +1,4 @@
-/* ============================================================
+/* 
    GYMBROT · gymbrot.css — Hoja de estilos UNICA del proyecto
    REGLAS DE EQUIPO (para no chocar al juntar):
    1. Reutiliza las clases que ya existen (card-g, btn-neon,
@@ -227,6 +227,48 @@ body {
    ############################################################ */
 
 /* ===== [P1] Estilos propios · dashboard, acceso, finanzas ===== */
+
+/* ---- KPIs del dashboard ---- */
+.kpi { min-height: 150px; display: flex; flex-direction: column; gap: 8px; padding: 20px; }
+.kpi-accent { border-left: 4px solid var(--accent); }
+.kpi-label { font-family: var(--f-label); font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; display: flex; align-items: center; gap: 6px; }
+.kpi-value { font-family: var(--f-title); font-size: 44px; font-weight: 800; color: #fff; line-height: 1; margin-top: auto; }
+.kpi-value.neon { color: var(--neon); }
+.kpi-value.money { font-size: 30px; }
+.kpi-sub { font-size: 11px; color: var(--muted); }
+.kpi-bar { height: 4px; background: var(--border-btn); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.kpi-bar > span { display: block; height: 100%; background: var(--neon); border-radius: 3px; }
+.kpi-bar > span.accent { background: var(--accent); }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; animation: pulse 1.6s infinite; }
+@keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(189,244,255,.5)} 70%{box-shadow:0 0 0 6px rgba(189,244,255,0)} 100%{box-shadow:0 0 0 0 rgba(189,244,255,0)} }
+
+/* ---- Demografía en vivo ---- */
+.demo-list { display: flex; flex-direction: column; gap: 18px; }
+.demo-row { display: flex; align-items: center; gap: 14px; }
+.demo-badge { width: 56px; height: 56px; border-radius: 50%; border: 3px solid; display: flex; align-items: center; justify-content: center; font-family: var(--f-label); font-size: 13px; font-weight: 700; flex-shrink: 0; }
+.demo-adulto { background: #1e2a00; border-color: var(--neon); color: var(--neon); }
+.demo-menor  { background: #002a30; border-color: var(--accent); color: var(--accent); }
+.demo-senior { background: #252729; border-color: #aaaaaa; color: #fff; }
+.demo-info { display: flex; flex-direction: column; }
+.demo-name { color: #fff; font-size: 14px; font-weight: 500; }
+.demo-count { color: var(--muted); font-size: 11px; margin-left: 6px; }
+.demo-range { color: var(--muted); font-size: 11px; }
+
+/* ---- Horas pico ---- */
+.pico-wrap { display: flex; align-items: flex-end; gap: 4px; height: 160px; margin-top: 16px; }
+.pico-col { flex: 1; background: #2a2d30; border-radius: 2px 2px 0 0; min-height: 4px; transition: height .3s; }
+.pico-col.alto { background: var(--neon); }
+.pico-col.moderado { background: #3a5a60; }
+.pico-axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 10px; font-family: var(--f-label); margin-top: 8px; }
+
+/* ---- Acciones rápidas ---- */
+.quick-action { display: flex; align-items: center; gap: 16px; text-decoration: none; transition: border-color .15s; }
+.quick-action:hover { border-color: var(--border-btn); }
+.qa-badge { width: 44px; height: 44px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-family: var(--f-title); font-weight: 800; font-size: 18px; flex-shrink: 0; }
+.qa-badge.neon { background: var(--neon); color: #000; }
+.qa-badge.accent { background: var(--accent); color: #00363d; }
+.qa-title { color: #fff; font-weight: 600; font-size: 14px; }
+.qa-desc { color: var(--muted); font-size: 12px; }
 
 
 /* ===== [P2] Estilos propios · clientes, cliente-detalle, progreso, citas ===== */

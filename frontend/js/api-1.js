@@ -1,5 +1,5 @@
 const SEED_ENABLED = true;
- 
+
 const SEED = {
   clientes: [
     { numero_identificacion:'1000000001', tipo_identificacion:'CC', nombre:'Ana María',    apellidos:'Ruiz',     telefono:'3001112233', correo:'ana.ruiz@mail.com',   direccion:'Cra 15 #23-40', fecha_nacimiento:'1995-03-12', estado:'ACTIVO',     fecha_registro:'2026-01-10' },
@@ -47,7 +47,7 @@ const SEED = {
 };
 const db = {
   _key(col) { return 'gymbrot_' + col; },
- 
+
   read(col) {
     const guardado = localStorage.getItem(this._key(col));
     if (guardado) return JSON.parse(guardado);
@@ -55,33 +55,33 @@ const db = {
     this.write(col, semilla);
     return semilla;
   },
- 
+
   write(col, arreglo) {
     localStorage.setItem(this._key(col), JSON.stringify(arreglo));
   }
 };
- 
+
 const api = {
- 
+
   _delay(ms = 200) {
     return new Promise(res => setTimeout(res, ms));
   },
- 
+
   clientes: {
- 
+
     async list() {
       await api._delay();
       return db.read('clientes');
     },
- 
+
     async get(id) {
       await api._delay();
       return db.read('clientes').find(c => c.numero_identificacion === id) || null;
     },
- 
+
     async create(data) {
       await api._delay();
- 
+
       const arr = db.read('clientes');
       if (arr.some(c => c.numero_identificacion === data.numero_identificacion))
         return {
@@ -92,7 +92,7 @@ const api = {
       db.write('clientes', arr);
       return { ok: true, mensaje: 'Cliente registrado', data: nuevo };
     },
- 
+
     async update(id, data) {
       await api._delay();
       const arr = db.read('clientes');
@@ -102,7 +102,7 @@ const api = {
       db.write('clientes', arr);
       return { ok: true, mensaje: 'Cliente actualizado', data: c };
     },
- 
+
     async setEstado(id, estado) {
       await api._delay();
       const arr = db.read('clientes');
@@ -113,7 +113,7 @@ const api = {
       return { ok: true, mensaje: 'Estado actualizado', data: c };
     }
   },
- 
+
   membresias: {
     async list() {
       await api._delay();
@@ -124,7 +124,7 @@ const api = {
       return db.read('membresias').filter(m => m.id_cliente === id);
     }
   },
- 
+
   pagos: {
     async list() {
       await api._delay();
@@ -135,7 +135,7 @@ const api = {
       return db.read('pagos').filter(p => p.id_cliente === id);
     }
   },
- 
+
   ingresos: {
     async list() {
       await api._delay();
@@ -147,5 +147,3 @@ const api = {
     }
   }
 };
- 
-

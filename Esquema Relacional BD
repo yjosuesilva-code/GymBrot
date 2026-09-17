@@ -1,0 +1,218 @@
+# Entrega 1 — Esquema relacional
+
+> **Símbolos:** __subrayado__ = clave primaria. `FK → Tabla` = clave foránea. *(op.)* = columna nullable.
+> Los tipos mostrados son los de **PostgreSQL** (destino de la migración); el script fuente Oracle `database/GYMBROT_DDL.sql` indica el tipo originario (VARCHAR2, NUMBER, CLOB, BLOB, DATE, TIMESTAMP).
+
+## 1. Mapeo EER → relacional (reglas aplicadas)
+
+1. **Entidad fuerte → tabla.** Cada entidad fuerte del EER se convirtió en una relación con su clave.
+2. **Especialización** `USUARIOS` → **una tabla por subtipo con la clave del supertipo** (mapeo por subtipo): `CLIENTES`, `INSTRUCTORES` y `ADMINISTRADORES` comparten PK con `USUARIOS` y la referencian con FK 1:1. Esta opción se eligió sobre "una sola tabla con columnas NULL" porque los subtipos tienen atributos propios distintos y obligatorios para algunos (la huella, la especialidad).
+3. **M:N `RUTINAS`–`EJERCICIOS`** → tabla intersección `RUTINA_EJERCICIOS` con PK compuesta y atributos propios.
+4. **M:N `CLIENTES`–`MEMBRESIAS` (histórico)** → entidad asociativa `HISTORIAL_MEMBRESIAS` con clave propia y atributos de la relación.
+5. **M:N `CLIENTES`–`INSTRUCTORES` (citas)** → se materializó directamente en la entidad `CITAS` (relación con atributos).
+6. **Catálogos** (`ESPECIALIDADES`, `PLANES_MEMBRESIAS`, `EJERCICIOS`, `PLANTILLAS_MENSAJE`) → tablas independientes referenciadas por FK.
+
+## 2. Relaciones
+
+### 2.1 USUARIOS
+- __numero_identificacion__ VARCHAR(20)
+- tipo_identificacion VARCHAR(10) NOT NULL
+- nombre VARCHAR(200) NOT NULL
+- apellidos VARCHAR(200) NOT NULL
+- telefono VARCHAR(20)
+- correo VARCHAR(150)
+- contrasena_hash VARCHAR(255)
+- foto_url VARCHAR(500)
+- estado VARCHAR(20) NOT NULL
+- fecha_registro DATE NOT NULL
+- tipo_usuario VARCHAR(20) NOT NULL
+
+### 2.2 CLIENTES
+- __numero_identificacion__ VARCHAR(20), FK → **USUARIOS** (1:1)
+- direccion VARCHAR(300)
+- fecha_nacimiento DATE
+- huella_dactilar BYTEA
+
+### 2.3 INSTRUCTORES
+- __numero_identificacion__ VARCHAR(20), FK → **USUARIOS** (1:1)
+- id_especialidad NUMBER/BIGINT NOT NULL, FK → **ESPECIALIDADES**
+- disponibilidad VARCHAR(200)
+- fecha_contratacion DATE
+
+### 2.4 ADMINISTRADORES
+- __numero_identificacion__ VARCHAR(20), FK → **USUARIOS** (1:1)
+- rol VARCHAR(30) NOT NULL
+
+### 2.5 ESPECIALIDADES
+- __id_especialidad__ BIGINT (identidad)
+- nombre VARCHAR(100) NOT NULL
+
+### 2.6 PLANES_MEMBRESIAS
+- __id_plan__ BIGINT (identidad)
+- nombre VARCHAR(100) NOT NULL
+- descripcion VARCHAR(500)
+- precio_mensual NUMERIC(10,2)
+- precio_semestral NUMERIC(10,2)
+- precio_anual NUMERIC(10,2)
+- beneficios TEXT
+
+### 2.7 MEMBRESIAS
+- __id_membresia__ BIGINT (identidad)
+- id_plan BIGINT NOT NULL, FK → **PLANES_MEMBRESIAS**
+- tipo_membresia VARCHAR(50)
+- modalidad_pago VARCHAR(20)
+- valor NUMERIC(10,2)
+- fecha_inicio DATE
+- fecha_vencimiento DATE
+- estado VARCHAR(20) NOT NULL
+
+### 2.8 HISTORIAL_MEMBRESIAS
+- __id_historial__ BIGINT (identidad)
+- id_cliente VARCHAR(20) NOT NULL, FK → **CLIENTES**
+- id_membresia BIGINT NOT NULL, FK → **MEMBRESIAS**
+- fecha_asignacion DATE NOT NULL
+- fecha_fin DATE
+- activa SMALLINT NOT NULL
+
+### 2.9 PAGOS
+- __id_pago__ BIGINT (identidad)
+- id_membresia BIGINT NOT NULL, FK → **MEMBRESIAS**
+- id_cliente VARCHAR(20) NOT NULL, FK → **CLIENTES**
+- fecha_pago DATE NOT NULL
+- valor NUMERIC(10,2) NOT NULL
+- metodo_pago VARCHAR(30) NOT NULL
+- estado_pago VARCHAR(20) NOT NULL
+- referencia_transaccion VARCHAR(100)
+- observaciones VARCHAR(500)
+
+### 2.10 EJERCICIOS
+- __id_ejercicio__ BIGINT (identidad)
+- nombre VARCHAR(150) NOT NULL
+- descripcion TEXT
+- grupo_muscular VARCHAR(100)
+- series SMALLINT
+- repeticiones SMALLINT
+- duracion_minutos SMALLINT
+- nivel VARCHAR(20)
+- recurso_url VARCHAR(500)
+
+### 2.11 RUTINAS
+- __id_rutina__ BIGINT (identidad)
+- id_instructor VARCHAR(20) NOT NULL, FK → **INSTRUCTORES**
+- id_cliente VARCHAR(20) NOT NULL, FK → **CLIENTES**
+- nombre VARCHAR(150) NOT NULL
+- descripcion TEXT
+- fecha_creacion DATE NOT NULL
+- fecha_fin DATE
+- dias_semana VARCHAR(100)
+- objetivo VARCHAR(200)
+
+### 2.12 RUTINA_EJERCICIOS (intersección M:N)
+- __id_rutina__ BIGINT, FK → **RUTINAS**
+- __id_ejercicio__ BIGINT, FK → **EJERCICIOS**
+- orden SMALLINT NOT NULL
+- dia_semana VARCHAR(15)
+- notas_instructor TEXT
+
+### 2.13 PROGRESOS
+- __id_progreso__ BIGINT (identidad)
+- id_cliente VARCHAR(20) NOT NULL, FK → **CLIENTES**
+- fecha_registro DATE NOT NULL
+- peso NUMERIC(6,2)
+- altura NUMERIC(5,2)
+- imc NUMERIC(5,2)
+- porcentaje_grasa NUMERIC(5,2)
+- masa_muscular NUMERIC(6,2)
+- objetivo VARCHAR(200)
+- observaciones TEXT
+
+### 2.14 REGISTROS_INGRESOS
+- __id_ingreso__ BIGINT (identidad)
+- id_cliente VARCHAR(20) NOT NULL, FK → **CLIENTES**
+- fecha DATE NOT NULL
+- hora_entrada TIMESTAMP
+- hora_salida TIMESTAMP
+- metodo_verificacion VARCHAR(20) NOT NULL
+- estado_verificacion VARCHAR(20) NOT NULL
+
+### 2.15 CITAS
+- __id_cita__ BIGINT (identidad)
+- id_instructor VARCHAR(20) NOT NULL, FK → **INSTRUCTORES**
+- id_cliente VARCHAR(20) NOT NULL, FK → **CLIENTES**
+- fecha DATE NOT NULL
+- hora TIMESTAMP
+- tipo_cita VARCHAR(30)
+- estado VARCHAR(20) NOT NULL
+- notas TEXT
+
+### 2.16 SESIONES_GYMBROT
+- __id_sesion__ BIGINT (identidad)
+- id_cliente VARCHAR(20) NOT NULL, FK → **CLIENTES**
+- fecha DATE NOT NULL
+- hora_inicio TIMESTAMP
+- hora_fin TIMESTAMP
+- contexto_activo TEXT
+
+### 2.17 MENSAJES_GYMBROT
+- __id_mensaje__ BIGINT (identidad)
+- id_sesion BIGINT NOT NULL, FK → **SESIONES_GYMBROT**
+- id_cita BIGINT *(op.)*, FK → **CITAS**
+- remitente VARCHAR(10) NOT NULL
+- contenido TEXT NOT NULL
+- timestamp_msg TIMESTAMP NOT NULL
+- tipo_intencion VARCHAR(30)
+
+### 2.18 PLANTILLAS_MENSAJE
+- __id_plantilla__ BIGINT (identidad)
+- nombre VARCHAR(100) NOT NULL
+- tipo VARCHAR(20) NOT NULL
+- asunto VARCHAR(200)
+- cuerpo_html TEXT
+- cuerpo_texto TEXT
+- variables_disponibles VARCHAR(500)
+- activa SMALLINT NOT NULL
+
+### 2.19 NOTIFICACIONES
+- __id_notificacion__ BIGINT (identidad)
+- id_cliente VARCHAR(20) NOT NULL, FK → **CLIENTES**
+- id_plantilla BIGINT *(op.)*, FK → **PLANTILLAS_MENSAJE**
+- tipo VARCHAR(20) NOT NULL
+- asunto VARCHAR(200)
+- contenido TEXT NOT NULL
+- estado_envio VARCHAR(20) NOT NULL
+- fecha_envio TIMESTAMP
+- origen VARCHAR(20) NOT NULL
+
+## 3. Políticas de borrado (con su porqué)
+
+La regla de oro del dominio es: **la información con valor histórico (pagos, accesos, progreso, chat, notificaciones) nunca se destruye**. Por eso el borrado físico es la excepción y se hace **borrado lógico** vía el campo `estado`. Solo las tablas que no representan hechos (catálogos sin referencias y tablas intersección) admiten borrado real.
+
+| FK (tabla.hija → padre) | Política | Por qué |
+|--------------------------|----------|---------|
+| CLIENTES.nº_id → USUARIOS | **RESTRICT** | No se borra un usuario con subtipo; se desactiva con `estado`. RESTRICT protege la identidad y todas sus huellas. |
+| INSTRUCTORES.nº_id → USUARIOS | **RESTRICT** | Ídem: un instructor tiene rutinas y citas que se preservan. |
+| ADMINISTRADORES.nº_id → USUARIOS | **CASCADE** | Si (por error controlado) se borra el usuario, se elimina solo su fila de subtipo; no arrastra hechos porque el administrador no genera historial. |
+| INSTRUCTORES.id_especialidad → ESPECIALIDADES | **RESTRICT** | No se elimina una especialidad que tiene instructores asignados. |
+| MEMBRESIAS.id_plan → PLANES_MEMBRESIAS | **RESTRICT** | Un plan referenciado por membresías existentes no se borra; se desactiva. |
+| HISTORIAL_MEMBRESIAS.id_cliente → CLIENTES | **RESTRICT** | El historial de membreía es intocable (auditoría de pagos/vigencia). |
+| HISTORIAL_MEMBRESIAS.id_membresia → MEMBRESIAS | **RESTRICT** | La membreía tiene historia y pagos; no se destruye. |
+| PAGOS.id_membresia → MEMBRESIAS | **RESTRICT** | Un pago no puede quedar huérfano ni perderse. |
+| PAGOS.id_cliente → CLIENTES | **RESTRICT** | Ídem. |
+| RUTINAS.id_instructor → INSTRUCTORES | **RESTRICT** | Las rutinas son evidencia del trabajo del instructor. |
+| RUTINAS.id_cliente → CLIENTES | **RESTRICT** | Las rutinas pertenecen al historial de entrenamiento del cliente. |
+| RUTINA_EJERCICIOS.id_rutina → RUTINAS | **CASCADE** | Es la tabla **intersección**: no tiene vida propia; si muere la rutina, mueren sus filas de composición. |
+| RUTINA_EJERCICIOS.id_ejercicio → EJERCICIOS | **CASCADE** | Ídem: si se elimina un ejercicio del catálogo (no usado ya), se limpia su participación en rutinas. |
+| PROGRESOS.id_cliente → CLIENTES | **RESTRICT** | El progreso físico es historial de salud; no se borra (borrado lógico). |
+| REGISTROS_INGRESOS.id_cliente → CLIENTES | **RESTRICT** | La asistencia es auditoría de acceso. |
+| CITAS.id_instructor / .id_cliente → INSTRUCTORES / CLIENTES | **RESTRICT** | Una cita es un hecho con estado; antes de tocar nada se cancelan y se conservan. |
+| SESIONES_GYMBROT.id_cliente → CLIENTES | **RESTRICT** | Las conversaciones se preservan. |
+| MENSAJES_GYMBROT.id_sesion → SESIONES_GYMBROT | **CASCADE** | Sin sesión no hay mensajes; es una dependencia estructural (1..N con mínimo 1). |
+| MENSAJES_GYMBROT.id_cita → CITAS | **SET NULL** | La cita puede borrarse (se cancela); el mensaje que la mencionó **permanece** con la referencia en NULL. |
+| NOTIFICACIONES.id_cliente → CLIENTES | **RESTRICT** | El registro de comunicación enviada no se pierde. |
+| NOTIFICACIONES.id_plantilla → PLANTILLAS_MENSAJE | **SET NULL** | Si se elimina una plantilla, las notificaciones ya enviadas siguen existiendo (su `contenido` está copiado); solo se suelta la referencia. |
+
+### Resumen de la estrategia
+
+- **CASCADE** solo en: subtipos sin historial (ADMINISTRADORES), intersección `RUTINA_EJERCICIOS` y dependencia estructural `MENSAJES → SESIONES`.
+- **SET NULL** solo en FKs **opcionales** cuya fila hija tiene significado propio: `MENSAJES.id_cita` y `NOTIFICACIONES.id_plantilla`.
+- **RESTRICT** en todo lo demás, combinado con **borrado lógico** (`estado`) como mecanismo normal de "eliminación".

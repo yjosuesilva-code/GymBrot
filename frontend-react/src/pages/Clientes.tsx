@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
@@ -35,6 +36,8 @@ export function Clientes() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [form, setForm] = useState<FormCliente>(VACIO);
   const [error, setError] = useState("");
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     api.clientes.list().then((data) => {
@@ -151,7 +154,7 @@ export function Clientes() {
                     <td><span className={"badge-g " + utils.badgeClass(c.estado)}>{c.estado}</span></td>
                     <td>
                       <div className="cell-actions">
-                        <button className="btn-icon" title="Ver detalle">👁</button>
+                        <button className="btn-icon" title="Ver detalle" onClick={() => navigate("/clientes/" + c.numero_identificacion)}>👁</button>
                         <button className="btn-icon" title="Editar" onClick={() => abrirEdicion(c)}>✏️</button>
                         <button className="btn-icon" title={c.estado === "ACTIVO" ? "Desactivar" : "Activar"} onClick={() => cambiarEstado(c)}>
                           {c.estado === "ACTIVO" ? "🚫" : "✅"}

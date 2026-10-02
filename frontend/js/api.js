@@ -219,3 +219,79 @@ const api = {
   };
 })();
 /* ===== FIN P4 · Ejercicios ===== */
+
+/* ############################################################
+   #  ===== [P3] Instructores · Alejandro =====
+   #  Bloque propio de P3. NO modifica el objeto SEED, ni api.clientes,
+   #  ni el bloque de P4: solamente AGREGA la llave SEED.instructores
+   #  y el recurso api.instructores. Así el merge con developer no choca.
+   ############################################################ */
+
+/* Datos de ejemplo. db.read('instructores') los usa SOLO la primera vez
+   (cuando la clave gymbrot_instructores todavía no existe en localStorage). */
+SEED.instructores = [
+  { numero_identificacion:'2000000001', tipo_identificacion:'CC', nombre:'Mónica',  apellidos:'Salazar',  telefono:'3101234567', correo:'monica.salazar@gymbrot.com',  especialidad:'Entrenador personal', disponibilidad:'Lunes a Viernes 6am-2pm',  fecha_contratacion:'2025-02-03', estado:'ACTIVO'   },
+  { numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Ricardo', apellidos:'Beltrán',  telefono:'3112345678', correo:'ricardo.beltran@gymbrot.com', especialidad:'Nutrición',           disponibilidad:'Martes a Sábado 2pm-8pm', fecha_contratacion:'2025-06-17', estado:'ACTIVO'   },
+  { numero_identificacion:'2000000003', tipo_identificacion:'CE', nombre:'Paola',   apellidos:'Guerrero', telefono:'3123456789', correo:'paola.guerrero@gymbrot.com',  especialidad:'Yoga/Pilates',        disponibilidad:'Lunes, Miércoles y Viernes 5pm-9pm', fecha_contratacion:'2024-11-25', estado:'INACTIVO' }
+];
+
+/* Mismo contrato que api.clientes: todo es async y devuelve
+   { ok, mensaje, data } en las operaciones de escritura. */
+api.instructores = {
+
+  async list() {
+    await api._delay();
+    return db.read('instructores');
+  },
+
+  async get(id) {
+    await api._delay();
+    return db.read('instructores').find(i => i.numero_identificacion === id) || null;
+  },
+
+  async create(data) {
+    await api._delay();
+    const arr = db.read('instructores');
+    if (arr.some(i => i.numero_identificacion === data.numero_identificacion))
+      return { ok: false, mensaje: 'Ya existe un instructor con esa identificación' };
+
+    // Los valores por defecto van PRIMERO para que los del formulario los puedan pisar.
+    const nuevo = Object.assign({ estado: 'ACTIVO', fecha_contratacion: utils.isoDate() }, data);
+    arr.push(nuevo);
+    db.write('instructores', arr);
+    return { ok: true, mensaje: 'Instructor registrado', data: nuevo };
+  },
+
+  async update(id, data) {
+    await api._delay();
+    const arr = db.read('instructores');
+    const i = arr.find(x => x.numero_identificacion === id);
+    if (!i) return { ok: false, mensaje: 'Instructor no encontrado' };
+    Object.assign(i, data);
+    db.write('instructores', arr);
+    return { ok: true, mensaje: 'Instructor actualizado', data: i };
+  },
+
+  /* remove() no existe en api.clientes; es una adición de P3 para el botón
+     "Eliminar" de instructores.html. Coordinar con el equipo. */
+  async remove(id) {
+    await api._delay();
+    const arr = db.read('instructores');
+    const pos = arr.findIndex(x => x.numero_identificacion === id);
+    if (pos === -1) return { ok: false, mensaje: 'Instructor no encontrado' };
+    const borrado = arr.splice(pos, 1)[0];
+    db.write('instructores', arr);
+    return { ok: true, mensaje: 'Instructor eliminado', data: borrado };
+  },
+
+  async setEstado(id, estado) {
+    await api._delay();
+    const arr = db.read('instructores');
+    const i = arr.find(x => x.numero_identificacion === id);
+    if (!i) return { ok: false, mensaje: 'Instructor no encontrado' };
+    i.estado = estado;
+    db.write('instructores', arr);
+    return { ok: true, mensaje: 'Estado actualizado', data: i };
+  }
+};
+/* ===== FIN [P3] Instructores ===== */

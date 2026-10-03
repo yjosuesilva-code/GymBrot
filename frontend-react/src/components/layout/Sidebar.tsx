@@ -4,7 +4,9 @@ import { paginas } from "./paginas";
 export function Sidebar() {
   return (
     <aside className="sidebar">
-      <div className="sidebar-logo">GYMBROT</div>
+      <div className="sidebar-logo">
+        <img src="/logos/gymbrot-logo.png" alt="GYMBROT" width={348} height={180} />
+      </div>
       <nav className="nav-group">
         {paginas.map((p) => (
           <NavLink

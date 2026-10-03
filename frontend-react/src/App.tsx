@@ -3,10 +3,12 @@ import { Layout } from "./components/layout/Layout";
 import { Dashboard } from "./pages/Dashboard";
 import { Clientes } from "./pages/Clientes";
 import { ClienteDetalle } from "./pages/ClienteDetalle";
+import { Login } from "./pages/Login";
 
 function App() {
   return (
     <Routes>
+      <Route path="/login" element={<Login />} />
       <Route element={<Layout />}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/clientes" element={<Clientes />} />

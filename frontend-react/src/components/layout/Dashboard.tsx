@@ -242,7 +242,58 @@ function Demografia({ clientes, ingresos }: { clientes: Cliente[]; ingresos: Ing
   );
 }
 
+function HorasPico({ ingresos }: { ingresos: Ingreso[] }) {
+  const conteo = new Map<string, number>();
+  horasDelDia().forEach((h) => conteo.set(h, 0));
+  ingresos.forEach((i) => {
+    const h = i.hora_entrada.slice(11, 13);
+    if (conteo.has(h)) conteo.set(h, (conteo.get(h) ?? 0) + 1);
+  });
 
+  const valores = Array.from(conteo.values());
+  const maximo = Math.max(...valores);
+  const umbralAlto = maximo * 0.7;
+  const umbralModerado = maximo * 0.35;
+
+  return (
+    <div className="card-g">
+      <div className="card-head">
+        <div>
+          <h2 className="card-title">Horas pico de operacion</h2>
+          <p className="card-sub">Entradas acumuladas por hora del dia</p>
+        </div>
+      </div>
+      <div className="pico-wrap">
+        {Array.from(conteo.entries()).map(([hora, cantidad]) => {
+          const vacio = maximo === 0 || cantidad === 0;
+          const altura = vacio ? 4 : Math.max(10, Math.round((cantidad / maximo) * 100));
+          const clase = vacio
+            ? ""
+            : cantidad >= umbralAlto
+              ? "alto"
+              : cantidad >= umbralModerado
+                ? "moderado"
+                : "";
+          return (
+            <div
+              key={hora}
+              className={"pico-col " + clase}
+              style={{ height: altura + "%" }}
+              title={hora + ":00 - " + cantidad + " ingresos"}
+            ></div>
+          );
+        })}
+      </div>
+      <div className="pico-axis">
+        <span>06:00</span>
+        <span>10:00</span>
+        <span>14:00</span>
+        <span>18:00</span>
+        <span>21:00</span>
+      </div>
+    </div>
+  );
+}
 
 export function Dashboard() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -277,6 +328,7 @@ export function Dashboard() {
           <div className="col-lg-8">
             <GraficaAsistencia ingresos={ingresos} />
           </div>
+           <HorasPico ingresos={ingresos} />
           <div className="col-lg-4">
             <Demografia clientes={clientes} ingresos={ingresos} />
           </div>

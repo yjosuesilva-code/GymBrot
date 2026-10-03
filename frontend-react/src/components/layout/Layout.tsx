@@ -6,8 +6,9 @@ import { current } from "../../lib/auth";
 
 export function Layout() {
   const location = useLocation();
+  const sesion = current();
 
-  if (!current()) {
+  if (!sesion) {
     return <Navigate to="/login" replace />;
   }
 
@@ -18,7 +19,7 @@ export function Layout() {
     <div className="app-shell">
       <Sidebar />
       <div className="main-area">
-        <Topbar titulo={titulo} />
+        <Topbar titulo={titulo} nombre={sesion.nombre} />
         <main className="content" id="app-content">
           <Outlet />
         </main>

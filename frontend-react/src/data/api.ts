@@ -147,6 +147,27 @@ const SEED: Seed = {
   ejercicios: [],   // la colección de P4 arranca vacía
 };
 
+// Version del seed guardado en localStorage.
+//
+// Sin esto, cambiar el SEED no se refleja nunca en un navegador que ya
+// tenga datos: read() solo siembra cuando la clave no existe, asi que un
+// seed nuevo convive con el viejo indefinidamente. Al cambiar este numero
+// la siguiente carga regenera todas las colecciones.
+const SEED_VERSION = "2";
+const CLAVE_VERSION = "gymbrot_seed_version";
+
+function sembrarSiHaceFalta(): void {
+  if (localStorage.getItem(CLAVE_VERSION) === SEED_VERSION) return;
+
+  const registro = SEED as unknown as Record<string, unknown[]>;
+  for (const col of Object.keys(SEED)) {
+    localStorage.setItem("gymbrot_" + col, JSON.stringify(registro[col] ?? []));
+  }
+  localStorage.setItem(CLAVE_VERSION, SEED_VERSION);
+}
+
+sembrarSiHaceFalta();
+
 const db = {
   _key(col: string) {
     return "gymbrot_" + col;
@@ -154,9 +175,9 @@ const db = {
 
   read<T>(col: string): T[] {
     const guardado = localStorage.getItem(this._key(col));
-    if (guardado) return JSON.parse(guardado) as T[];
-    const semilla = ((SEED as unknown as Record<string, unknown[]>)[col] ?? []).slice() as T[];    this.write(col, semilla);
-    return semilla;
+    return guardado
+      ? (JSON.parse(guardado) as T[])
+      : (((SEED as unknown as Record<string, unknown[]>)[col] ?? []).slice() as T[]);
   },
 
   write<T>(col: string, arreglo: T[]) {

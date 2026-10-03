@@ -295,6 +295,31 @@ function HorasPico({ ingresos }: { ingresos: Ingreso[] }) {
   );
 }
 
+function AccionesRapidas() {
+  return (
+    <div className="row g-3">
+      <div className="col-md-6">
+        <Link to="/clientes" className="card-g quick-action h-100">
+          <span className="qa-badge neon">+</span>
+          <div>
+            <div className="qa-title">Agregar nuevo miembro</div>
+            <div className="qa-desc">Registro rapido de un nuevo atleta</div>
+          </div>
+        </Link>
+      </div>
+      <div className="col-md-6">
+        <Link to="/finanzas" className="card-g quick-action h-100">
+          <span className="qa-badge accent">$</span>
+          <div>
+            <div className="qa-title">Ver resumen financiero</div>
+            <div className="qa-desc">Ingresos por mes y metodos de pago</div>
+          </div>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function Dashboard() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [ingresos, setIngresos] = useState<Ingreso[]>([]);
@@ -324,11 +349,12 @@ export function Dashboard() {
   return (
     <>
       {<Kpis clientes={clientes} ingresos={ingresos} pagos={pagos} />}
-        <div className="row g-3">
-          <div className="col-lg-8">
-            <GraficaAsistencia ingresos={ingresos} />
-          </div>
-           <HorasPico ingresos={ingresos} />
+      <AccionesRapidas />
+      <div className="row g-3">
+        <div className="col-lg-8">
+          <GraficaAsistencia ingresos={ingresos} />
+        </div>
+        <HorasPico ingresos={ingresos} />
           <div className="col-lg-4">
             <Demografia clientes={clientes} ingresos={ingresos} />
           </div>

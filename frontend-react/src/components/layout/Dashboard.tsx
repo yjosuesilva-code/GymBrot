@@ -1,8 +1,14 @@
 import { useEffect, useState } from "react";
-import { api } from "../data/api";
-import type { Cliente, Ingreso, Pago } from "../types";
-
-import { useEffect, useState } from "react";
+import { Bar } from "react-chartjs-2";
+import {
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Legend,
+  LinearScale,
+  Tooltip,
+} from "chart.js";
+import type { ChartData, ChartOptions } from "chart.js";
 import { utils } from "../lib/utils";
 import { api } from "../data/api";
 import type { Cliente, Ingreso, Pago } from "../types";
@@ -71,6 +77,121 @@ function Kpis({
   );
 }
 
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+
+const HORA_INICIO = 6;
+const HORA_FIN = 21;
+
+type Rango = "diario" | "semanal";
+
+function horasDelDia(): string[] {
+  const horas: string[] = [];
+  for (let h = HORA_INICIO; h <= HORA_FIN; h++) {
+    horas.push(String(h).padStart(2, "0"));
+  }
+  return horas;
+}
+
+function ultimosDias(cantidad: number): string[] {
+  const hoy = new Date();
+  const dias: string[] = [];
+  for (let i = cantidad - 1; i >= 0; i--) {
+    const d = new Date(hoy);
+    d.setDate(hoy.getDate() - i);
+    dias.push(utils.isoDate(d));
+  }
+  return dias;
+}
+
+function etiquetaDia(iso: string): string {
+  return new Date(iso + "T12:00:00")
+    .toLocaleDateString("es-CO", { weekday: "short" })
+    .toUpperCase();
+}
+
+function GraficaAsistencia({ ingresos }: { ingresos: Ingreso[] }) {
+  const [rango, setRango] = useState<Rango>("semanal");
+
+  const conteo = new Map<string, number>();
+
+  if (rango === "semanal") {
+    ultimosDias(7).forEach((iso) => conteo.set(iso, 0));
+    ingresos.forEach((i) => {
+      if (conteo.has(i.fecha)) conteo.set(i.fecha, (conteo.get(i.fecha) ?? 0) + 1);
+    });
+  } else {
+    const hoy = utils.isoDate();
+    horasDelDia().forEach((h) => conteo.set(h, 0));
+    ingresos
+      .filter((i) => i.fecha === hoy)
+      .forEach((i) => {
+        const h = i.hora_entrada.slice(11, 13);
+        if (conteo.has(h)) conteo.set(h, (conteo.get(h) ?? 0) + 1);
+      });
+  }
+
+  const claves = Array.from(conteo.keys());
+  const valores = Array.from(conteo.values());
+  const maximo = Math.max(...valores);
+
+  const data: ChartData<"bar"> = {
+    labels: rango === "semanal" ? claves.map(etiquetaDia) : claves,
+    datasets: [
+      {
+        label: "Entradas",
+        data: valores,
+        backgroundColor: valores.map((v) => (maximo > 0 && v === maximo ? "#D4FF00" : "#2a4a50")),
+        borderRadius: 2,
+        maxBarThickness: 8,
+      },
+    ],
+  };
+
+  const options: ChartOptions<"bar"> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: "#6b7280", precision: 0 } },
+      y: {
+        beginAtZero: true,
+        grid: { color: "#1f2125" },
+        ticks: { color: "#6b7280", precision: 0 },
+      },
+    },
+  };
+
+  return (
+    <div className="card-g h-100">
+      <div className="card-head">
+        <div>
+          <h2 className="card-title">Asistencia</h2>
+          <p className="card-sub">
+            {rango === "semanal" ? "Entradas de los ultimos 7 dias" : "Entradas de hoy, por hora"}
+          </p>
+        </div>
+        <div className="d-flex gap-2">
+          <button
+            className={rango === "diario" ? "btn-neon" : "btn-dark"}
+            onClick={() => setRango("diario")}
+          >
+            Diario
+          </button>
+          <button
+            className={rango === "semanal" ? "btn-neon" : "btn-dark"}
+            onClick={() => setRango("semanal")}
+          >
+            Semanal
+          </button>
+        </div>
+      </div>
+      <div style={{ height: 210 }}>
+        <Bar data={data} options={options} />
+      </div>
+    </div>
+  );
+}
+
 export function Dashboard() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [ingresos, setIngresos] = useState<Ingreso[]>([]);
@@ -100,6 +221,11 @@ export function Dashboard() {
   return (
     <>
       {<Kpis clientes={clientes} ingresos={ingresos} pagos={pagos} />}
+        <div className="row g-3">
+          <div className="col-lg-8">
+            <GraficaAsistencia ingresos={ingresos} />
+          </div>
+        </div>
     </>
   );
 }

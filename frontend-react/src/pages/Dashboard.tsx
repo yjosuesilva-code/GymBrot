@@ -14,7 +14,7 @@ import { utils } from "../lib/utils";
 import { api } from "../data/api";
 import type { Cliente, Ingreso, Pago } from "../types";
 
-const META_INGRESOS_MENSUAL = 15000000;
+const META_INGRESOS_MENSUAL = 1200000;
 
 function esDelMesActual(fechaIso: string): boolean {
   return fechaIso.slice(0, 7) === utils.isoDate().slice(0, 7);

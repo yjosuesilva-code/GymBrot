@@ -14,7 +14,8 @@ export function Sidebar() {
             to={p.to}
             className={({ isActive }) => "nav-item" + (isActive ? " active" : "")}
           >
-            {p.label}
+            <i className={"bi " + p.icon} aria-hidden />
+            <span>{p.label}</span>
           </NavLink>
         ))}
       </nav>

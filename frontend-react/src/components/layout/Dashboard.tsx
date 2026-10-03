@@ -346,19 +346,22 @@ export function Dashboard() {
     );
   }
 
-  return (
+   return (
     <>
-      {<Kpis clientes={clientes} ingresos={ingresos} pagos={pagos} />}
-      <AccionesRapidas />
+      <Kpis clientes={clientes} ingresos={ingresos} pagos={pagos} />
+
       <div className="row g-3">
         <div className="col-lg-8">
           <GraficaAsistencia ingresos={ingresos} />
         </div>
-        <HorasPico ingresos={ingresos} />
-          <div className="col-lg-4">
-            <Demografia clientes={clientes} ingresos={ingresos} />
-          </div>
+        <div className="col-lg-4">
+          <Demografia clientes={clientes} ingresos={ingresos} />
         </div>
+      </div>
+
+      <HorasPico ingresos={ingresos} />
+
+      <AccionesRapidas />
     </>
   );
 }

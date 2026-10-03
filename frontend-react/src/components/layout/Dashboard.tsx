@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Bar } from "react-chartjs-2";
 import {
   BarElement,
@@ -192,6 +193,55 @@ function GraficaAsistencia({ ingresos }: { ingresos: Ingreso[] }) {
   );
 }
 
+function Demografia({ clientes, ingresos }: { clientes: Cliente[]; ingresos: Ingreso[] }) {
+  const idsPresentes = new Set(
+    ingresos.filter((i) => i.hora_salida === null).map((i) => i.id_cliente),
+  );
+  const presentes = clientes.filter((c) => idsPresentes.has(c.numero_identificacion));
+  const total = presentes.length || 1;
+
+  function contar(min: number, max: number): number {
+    return presentes.filter((p) => {
+      const edad = utils.edad(p.fecha_nacimiento);
+      return edad !== null && edad >= min && edad <= max;
+    }).length;
+  }
+
+  const grupos = [
+    { clave: "adulto", nombre: "Adulto", rango: "18 a 55 años", conteo: contar(18, 55) },
+    { clave: "menor", nombre: "Menor de edad", rango: "Menores de 18 años", conteo: contar(0, 17) },
+    { clave: "senior", nombre: "Senior", rango: "Mayores de 55 años", conteo: contar(56, 200) },
+  ];
+
+  return (
+    <div className="card-g h-100 d-flex flex-column">
+      <h2 className="card-title">Demografia en vivo</h2>
+      <p className="card-sub">Personas presently dentro del gimnasio</p>
+      <div className="demo-list mt-4">
+        {grupos.map((g) => (
+          <div className="demo-row" key={g.clave}>
+            <div className={"demo-badge demo-" + g.clave}>
+              {Math.round((g.conteo / total) * 100)}%
+            </div>
+            <div className="demo-info">
+              <span className="demo-name">
+                {g.nombre}
+                <span className="demo-count">{g.conteo} presentes</span>
+              </span>
+              <span className="demo-range">{g.rango}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-auto pt-3">
+        <Link to="/acceso" className="btn-neon" style={{ textDecoration: "none" }}>
+          Ver registro detallado
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function Dashboard() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [ingresos, setIngresos] = useState<Ingreso[]>([]);
@@ -224,6 +274,9 @@ export function Dashboard() {
         <div className="row g-3">
           <div className="col-lg-8">
             <GraficaAsistencia ingresos={ingresos} />
+          </div>
+          <div className="col-lg-4">
+            <Demografia clientes={clientes} ingresos={ingresos} />
           </div>
         </div>
     </>

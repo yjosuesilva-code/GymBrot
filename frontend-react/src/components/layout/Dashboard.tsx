@@ -242,6 +242,8 @@ function Demografia({ clientes, ingresos }: { clientes: Cliente[]; ingresos: Ing
   );
 }
 
+
+
 export function Dashboard() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [ingresos, setIngresos] = useState<Ingreso[]>([]);

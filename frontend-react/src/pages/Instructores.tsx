@@ -68,6 +68,12 @@ export function Instructores() {
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
 
+  // Modal de confirmación: showEliminar lo abre/cierra; aEliminar guarda a quién se va a borrar
+  // (no se limpia al cerrar, para que el nombre no desaparezca durante la animación de salida)
+  const [showEliminar, setShowEliminar] = useState(false);
+  const [aEliminar, setAEliminar] = useState<Instructor | null>(null);
+  const [errorEliminar, setErrorEliminar] = useState("");
+
   // Carga la lista una sola vez, cuando la vista aparece en pantalla
   useEffect(() => {
     api.instructores.list().then((data) => {
@@ -149,6 +155,29 @@ export function Instructores() {
     setInstructores(await api.instructores.list());
   }
 
+  async function cambiarEstado(i: Instructor) {
+    const nuevo = i.estado === "ACTIVO" ? "INACTIVO" : "ACTIVO";
+    await api.instructores.setEstado(i.numero_identificacion, nuevo);
+    setInstructores(await api.instructores.list());
+  }
+
+  function pedirEliminar(i: Instructor) {
+    setErrorEliminar("");
+    setAEliminar(i);
+    setShowEliminar(true);
+  }
+
+  async function confirmarEliminar() {
+    if (!aEliminar) return;
+    const res = await api.instructores.remove(aEliminar.numero_identificacion);
+    if (!res.ok) {
+      setErrorEliminar(res.mensaje);
+      return;
+    }
+    setShowEliminar(false);
+    setInstructores(await api.instructores.list());
+  }
+
   return (
     <div className="card-g">
       <div className="card-head">
@@ -191,6 +220,10 @@ export function Instructores() {
                   <td>
                     <div className="cell-actions">
                       <button className="btn-icon" title="Editar" onClick={() => abrirEdicion(i)}>✏️</button>
+                      <button className="btn-icon" title={i.estado === "ACTIVO" ? "Desactivar" : "Activar"} onClick={() => cambiarEstado(i)}>
+                        {i.estado === "ACTIVO" ? "🚫" : "✅"}
+                      </button>
+                      <button className="btn-icon" title="Eliminar" onClick={() => pedirEliminar(i)}>🗑️</button>
                     </div>
                   </td>
                 </tr>
@@ -266,6 +299,24 @@ export function Instructores() {
           <button className="btn-neon" onClick={guardar} disabled={guardando}>
             {guardando ? "Guardando..." : "Guardar"}
           </button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Confirmación de eliminar */}
+      <Modal show={showEliminar} onHide={() => setShowEliminar(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Eliminar instructor</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {errorEliminar && <div className="alert-g alert-error show">{errorEliminar}</div>}
+          <p>
+            ¿Seguro que quieres eliminar a <strong>{aEliminar?.nombre} {aEliminar?.apellidos}</strong>?
+            Esta acción no se puede deshacer. Si solo dejó de trabajar temporalmente, mejor desactívalo.
+          </p>
+        </Modal.Body>
+        <Modal.Footer>
+          <button className="btn-dark" onClick={() => setShowEliminar(false)}>Cancelar</button>
+          <button className="btn-neon" onClick={confirmarEliminar}>Sí, eliminar</button>
         </Modal.Footer>
       </Modal>
     </div>

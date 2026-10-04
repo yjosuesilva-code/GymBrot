@@ -52,6 +52,15 @@ export interface Ejercicio {
     recursoUrl: string;
 }
 
+export interface Progreso {
+  id_progreso: number;
+  id_cliente: string;
+  fecha: string;      // 'YYYY-MM-DD'
+  peso: number;       // kg
+  altura: number;     // metros
+  notas: string;
+}
+
 export interface ApiResp<T = unknown> {
   ok: boolean;
   mensaje: string;

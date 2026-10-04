@@ -1,5 +1,5 @@
 import { utils } from "../lib/utils";
-import type { Cliente, Membresia, Pago, Ingreso, Ejercicio, ApiResp } from "../types";
+import type { Cliente, Membresia, Pago, Ingreso, Ejercicio, Progreso, ApiResp } from "../types";
 
 interface Seed {
   clientes: Cliente[];
@@ -7,6 +7,7 @@ interface Seed {
   pagos: Pago[];
   ingresos: Ingreso[];
   ejercicios: Ejercicio[];
+  progreso: Progreso[];
 }
 
 const SEED: Seed = {
@@ -53,6 +54,12 @@ const SEED: Seed = {
     { id_ingreso:16, id_cliente:'1000000007', fecha:'2026-09-15', hora_entrada:'2026-09-15T19:00:00', hora_salida:null, metodo_verificacion:'QR' }
     ],
   ejercicios: [],   // la colección de P4 arranca vacía
+  progreso: [
+    { id_progreso:1, id_cliente:'1000000001', fecha:'2026-07-10', peso:62,   altura:1.65, notas:'Medición inicial' },
+    { id_progreso:2, id_cliente:'1000000001', fecha:'2026-08-10', peso:60.5, altura:1.65, notas:'Bajó 1.5 kg' },
+    { id_progreso:3, id_cliente:'1000000002', fecha:'2026-08-01', peso:82,   altura:1.78, notas:'Control inicial' },
+    { id_progreso:4, id_cliente:'1000000005', fecha:'2026-09-01', peso:75,   altura:1.72, notas:'' }
+  ],
 };
 
 const db = {
@@ -151,5 +158,25 @@ export const api = {
       await api._delay();
       return db.read<Ingreso>("ingresos").filter((i) => i.id_cliente === id);
     }
+  },
+
+  progreso: {
+    async list(): Promise<Progreso[]> {
+      await api._delay();
+      return db.read<Progreso>("progreso");
+    },
+    async byCliente(id: string): Promise<Progreso[]> {
+      await api._delay();
+      return db.read<Progreso>("progreso").filter((p) => p.id_cliente === id);
+    },
+    async create(data: Omit<Progreso, "id_progreso">): Promise<ApiResp<Progreso>> {
+      await api._delay();
+      const arr = db.read<Progreso>("progreso");
+      const nuevoId = arr.reduce((max, p) => Math.max(max, p.id_progreso), 0) + 1;
+      const nuevo: Progreso = { id_progreso: nuevoId, ...data };
+      arr.push(nuevo);
+      db.write("progreso", arr);
+      return { ok: true, mensaje: "Medición registrada", data: nuevo };
+    },
   }
 };

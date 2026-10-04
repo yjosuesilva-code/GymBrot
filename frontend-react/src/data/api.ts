@@ -1,6 +1,6 @@
 import { utils } from "../lib/utils";
 import type { Cliente, Membresia, Pago, Ingreso, Ejercicio, ApiResp } from "../types";
-import type { Instructor } from "../types"; // [P3]
+import type { Instructor, InstructorNuevo, EstadoInstructor } from "../types"; // [P3]
 
 interface Seed {
   clientes: Cliente[];
@@ -161,5 +161,60 @@ export const api = {
       await api._delay();
       return db.read<Ingreso>("ingresos").filter((i) => i.id_cliente === id);
     }
-  }
+  },
+
+  // ===== [P3] Instructores =====
+  instructores: {
+    async list(): Promise<Instructor[]> {
+      await api._delay();
+      return db.read<Instructor>("instructores");
+    },
+
+    async get(id: string): Promise<Instructor | null> {
+      await api._delay();
+      return db.read<Instructor>("instructores").find((i) => i.numero_identificacion === id) ?? null;
+    },
+
+    async create(data: InstructorNuevo): Promise<ApiResp<Instructor>> {
+      await api._delay();
+      const arr = db.read<Instructor>("instructores");
+      if (arr.some((i) => i.numero_identificacion === data.numero_identificacion))
+        return { ok: false, mensaje: "Ya existe un instructor con esa identificación" };
+      const nuevo: Instructor = { ...data, estado: "ACTIVO", fecha_contratacion: utils.isoDate() };
+      arr.push(nuevo);
+      db.write("instructores", arr);
+      return { ok: true, mensaje: "Instructor registrado", data: nuevo };
+    },
+
+    // La identificación es la llave: no se deja cambiar al editar
+    async update(id: string, data: Partial<Omit<Instructor, "numero_identificacion">>): Promise<ApiResp<Instructor>> {
+      await api._delay();
+      const arr = db.read<Instructor>("instructores");
+      const ins = arr.find((i) => i.numero_identificacion === id);
+      if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
+      Object.assign(ins, data, { numero_identificacion: id });
+      db.write("instructores", arr);
+      return { ok: true, mensaje: "Instructor actualizado", data: ins };
+    },
+
+    async remove(id: string): Promise<ApiResp<Instructor>> {
+      await api._delay();
+      const arr = db.read<Instructor>("instructores");
+      const ins = arr.find((i) => i.numero_identificacion === id);
+      if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
+      db.write("instructores", arr.filter((i) => i.numero_identificacion !== id));
+      return { ok: true, mensaje: "Instructor eliminado", data: ins };
+    },
+
+    async setEstado(id: string, estado: EstadoInstructor): Promise<ApiResp<Instructor>> {
+      await api._delay();
+      const arr = db.read<Instructor>("instructores");
+      const ins = arr.find((i) => i.numero_identificacion === id);
+      if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
+      ins.estado = estado;
+      db.write("instructores", arr);
+      return { ok: true, mensaje: "Estado actualizado", data: ins };
+    },
+  },
+  // ===== [/P3] Instructores =====
 };

@@ -83,7 +83,11 @@ body {
   height: 100vh;
   position: sticky;              /* se queda fijo aunque hagas scroll */
   top: 0;
-  overflow: hidden;
+  overflow-x: hidden;            /* recorta las etiquetas con el rail angosto */
+  /* Con 10 items el menu pide ~707px y no entra en el viewport real de un
+     portatil de 768px (~650px descontada la barra del navegador), asi que sin
+     scroll vertical el boton de cerrar sesion quedaria fuera de alcance. */
+  overflow-y: auto;
   transition: width .2s ease, min-width .2s ease, padding .2s ease;
 }
 .sidebar:hover,

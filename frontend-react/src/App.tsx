@@ -4,7 +4,6 @@ import { Dashboard } from "./pages/Dashboard";
 import { Clientes } from "./pages/Clientes";
 import { ClienteDetalle } from "./pages/ClienteDetalle";
 import { Login } from "./pages/Login";
-import { Pendiente } from "./pages/Pendiente";
 
 function App() {
   return (
@@ -14,17 +13,10 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/clientes" element={<Clientes />} />
         <Route path="/clientes/:id" element={<ClienteDetalle />} />
-        <Route path="/acceso" element={<Pendiente modulo="acceso" responsable="P1" />} />
-        <Route path="/finanzas" element={<Pendiente modulo="finanzas" responsable="P1" />} />
-        <Route path="/instructores" element={<Pendiente modulo="instructores" responsable="P3" />} />
-        <Route path="/rutinas" element={<Pendiente modulo="rutinas" responsable="P3" />} />
-        <Route path="/ejercicios" element={<Pendiente modulo="ejercicios" responsable="P4" />} />
-        <Route path="/membresias" element={<Pendiente modulo="membresias" responsable="P4" />} />
-        <Route path="/citas" element={<Pendiente modulo="citas" responsable="P2" />} />
-        <Route
-          path="/notificaciones"
-          element={<Pendiente modulo="notificaciones" responsable="sin asignar" />}
-        />
+        {/* Las demas secciones de paginas.ts todavia no tienen ruta. Como el
+            Layout es una ruta sin path sigue renderizando sidebar y topbar, y
+            lo unico que queda vacio es el Outlet. Registrar la ruta en
+            cuanto exista la vista. */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

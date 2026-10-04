@@ -3,6 +3,7 @@ import { Layout } from "./components/layout/Layout";
 import { Dashboard } from "./pages/Dashboard";
 import { Clientes } from "./pages/Clientes";
 import { ClienteDetalle } from "./pages/ClienteDetalle";
+import { Instructores } from "./pages/Instructores"; // [P3]
 
 function App() {
   return (
@@ -11,6 +12,8 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/clientes" element={<Clientes />} />
         <Route path="/clientes/:id" element={<ClienteDetalle />} />
+        {/* [P3] Instructores */}
+        <Route path="/instructores" element={<Instructores />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

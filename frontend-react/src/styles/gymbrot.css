@@ -121,7 +121,7 @@ body {
 .nav-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;             /* separación entre opciones del menú */
+  gap: 6px;             /* separación entre opciones del menú */
   flex-grow: 1;         /* empuja hacia abajo lo que venga después */
 }
 .nav-item {
@@ -129,16 +129,16 @@ body {
   align-items: center;   /* ícono y texto centrados verticalmente */
   justify-content: center;
   gap: 0;
-  padding: 11px 8px;
+  padding: 9px 8px;
   border-radius: var(--radius-sm);
   font-family: var(--f-title);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--nav-text);
   text-decoration: none;
   cursor: pointer;
 }
-.nav-item i { font-size: 18px; }
+.nav-item i { font-size: 16px; }
 /* Colapsado la etiqueta se colapsa a 0 de ancho pero sigue en el árbol de
    accesibilidad: el lector de pantalla sigue leyendo el nombre del enlace. */
 .nav-item span {
@@ -148,13 +148,13 @@ body {
   white-space: nowrap;
   transition: max-width .2s ease, opacity .16s ease;
 }
-/* 12px en vez de 16px: "Cerrar Sesión" mide ~86px a 14px y con 16px de
-   padding quedaban justo 86px de hueco, o sea al borde del recorte. */
+/* 12px en vez de 16px: "Cerrar Sesión" mide ~80px a 13px y con 16px de
+   padding quedaban 86px de hueco, o sea al borde del recorte. */
 .sidebar:hover .nav-item,
 .sidebar:focus-within .nav-item {
   justify-content: flex-start;
-  gap: 12px;
-  padding: 11px 12px;
+  gap: 10px;
+  padding: 9px 12px;
 }
 .sidebar:hover .nav-item span,
 .sidebar:focus-within .nav-item span { max-width: 180px; opacity: 1; }

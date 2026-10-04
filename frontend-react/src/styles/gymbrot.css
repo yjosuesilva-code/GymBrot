@@ -41,7 +41,7 @@
   --f-body:  'Inter', sans-serif;          /* Cuerpo, tablas */
 
   /* Medidas del layout */
-  --sidebar-w: 256px;   /* Ancho del sidebar */
+  --sidebar-w: 220px;   /* Ancho del sidebar */
   --topbar-h: 64px;     /* Alto de la barra superior */
   --radius: 12px;       /* Redondeo de tarjetas */
   --radius-sm: 8px;     /* Redondeo de botones */
@@ -68,7 +68,7 @@ body {
 
 /* ----- Sidebar (menú izquierdo) ----- */
 .sidebar {
-  width: var(--sidebar-w);       /* 256px, tu token */
+  width: var(--sidebar-w);       /* 220px, tu token */
   min-width: var(--sidebar-w);
   background: var(--bg-side);
   padding: 16px;
@@ -84,9 +84,12 @@ body {
 }
 .sidebar-logo img {
   display: block;
-  /* 171px = la mitad del ancho real del archivo (348px), para que salga
-     nitido en pantallas 2x sin escalarlo por software. */
-  width: 171px;
+  /* Centrado para que no dependa del ancho del sidebar. A 220px el area
+     util son 188px: con el padding de 8px quedan 172 y el logo medía
+     171px, o sea a 1px de desbordar. 160px deja 6px de margen a cada
+     lado y en 2x necesita 320px de fuente frente a los 348 que hay. */
+  margin: 0 auto;
+  width: 160px;
   height: auto;
 }
 .nav-group {

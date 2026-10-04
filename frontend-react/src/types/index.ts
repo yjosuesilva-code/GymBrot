@@ -66,3 +66,11 @@ export interface ApiResp<T = unknown> {
   mensaje: string;
   data?: T;
 }
+
+/* Sesion del mock en localStorage. Sin tenantId: el vanilla lo llevaba,
+   pero el modelo de React es de un solo gimnasio. */
+export interface Sesion {
+  usuario: string;
+  nombre: string;
+  rol: string;
+}

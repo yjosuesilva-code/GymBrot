@@ -10,6 +10,110 @@ interface Seed {
   progreso: Progreso[];
 }
 
+// --- Generadores de fechas del seed -------------------------------------
+// El seed usa fechas relativas a "hoy" para que el Dashboard nunca quede
+// obsoleto: si los datos fueran fijos, en el mes siguiente las graficas
+// volverian a mostrar cero.
+
+// dia(0) = hoy, dia(1) = ayer, dia(6) = hace 6 dias
+function dia(offset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - offset);
+  return utils.isoDate(d);
+}
+
+// Suma minutos a un datetime 'YYYY-MM-DDTHH:MM:SS' usando aritmetica de
+// strings. No usar toISOString(): convierte a UTC y correria la hora local,
+// moviendo las entradas fuera de las franjas 06-21 de la grafica.
+function sumarMinutos(iso: string, minutos: number): string {
+  const [fecha, hora] = iso.split("T");
+  const [h, m] = hora.split(":").map(Number);
+  const total = h * 60 + m + minutos;
+  const hh = Math.floor(total / 60) % 24;
+  const mm = total % 60;
+  return fecha + "T" + String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0") + ":00";
+}
+
+// Horarios tipo de un gimnasio: picos temprano (6-8) y en la tarde (18-20).
+const HORAS_LABORAL = [6, 7, 7, 8, 8, 9, 12, 13, 17, 18, 18, 19, 19, 20, 21];
+const HORAS_DOMINGO = [9, 10, 11, 12, 17, 18];
+
+// Rotacion de clientes para los dias ya cerrados.
+const RUTINA = [
+  "1000000001",
+  "1000000002",
+  "1000000003",
+  "1000000005",
+  "1000000007",
+];
+
+// Los dias pasados se generan en bucle: son volumen, no informacion.
+function ingresosPasados(): Ingreso[] {
+  const lista: Ingreso[] = [];
+  let id = 0;
+
+  for (let d = 6; d >= 1; d--) {
+    const fecha = dia(d);
+    const domingo = new Date(fecha + "T12:00:00").getDay() === 0;
+    const completo = domingo ? HORAS_DOMINGO : HORAS_LABORAL;
+    // Cada dia cierra con distinto volumen. Sin esto la grafica semanal
+    // queda en meseta y como el resaltado neon aplica a todo lo que
+    // empata con el maximo, 5 de 7 barras brillarian y no se destacaria
+    // ningun pico.
+    const horas = completo.slice(0, Math.max(6, completo.length - ((d * 2) % 5)));
+
+    horas.forEach((hora, i) => {
+      const minuto = (i * 7) % 60;
+      const entrada =
+        fecha + "T" + String(hora).padStart(2, "0") + ":" + String(minuto).padStart(2, "0") + ":00";
+      lista.push({
+        id_ingreso: ++id,
+        id_cliente: RUTINA[(i + d) % RUTINA.length],
+        fecha,
+        hora_entrada: entrada,
+        hora_salida: sumarMinutos(entrada, 60),
+        metodo_verificacion: i % 2 === 0 ? "QR" : "MANUAL",
+      });
+    });
+  }
+
+  return lista;
+}
+
+// El dia de hoy va escrito a mano porque los 5 que siguen dentro sin
+// hora_salida alimentan los KPIs "Activos ahora" y "Demografia en vivo",
+// y hay que elegir clientes que cubran los tres rangos de edad:
+//   Juan David 2009 -> 17 (menor)  |  Diego 1965 -> 61 (senior)
+//   Ana 1995, Carlos 1988, Andres 1992 -> adultos
+function ingresosDeHoy(): Ingreso[] {
+  const fecha = dia(0);
+  const base = ingresosPasados().length; // sigue la numeracion de id
+
+  const filas: [string, string, boolean][] = [
+    // [hora, id_cliente, sigueDentro]
+    ["06:30", "1000000003", true],
+    ["06:45", "1000000005", true],
+    ["07:10", "1000000001", true],
+    ["07:35", "1000000002", true],
+    ["09:00", "1000000007", true],
+    ["10:15", "1000000001", false],
+    ["11:40", "1000000003", false],
+    ["12:50", "1000000005", false],
+  ];
+
+  return filas.map(([hora, cliente, dentro], i) => {
+    const entrada = fecha + "T" + hora + ":00";
+    return {
+      id_ingreso: base + i + 1,
+      id_cliente: cliente,
+      fecha,
+      hora_entrada: entrada,
+      hora_salida: dentro ? null : sumarMinutos(entrada, 60),
+      metodo_verificacion: i % 2 === 0 ? "QR" : "MANUAL",
+    };
+  });
+}
+
 const SEED: Seed = {
   clientes: [ 
     { numero_identificacion:'1000000001', tipo_identificacion:'CC', nombre:'Ana María',    apellidos:'Ruiz',     telefono:'3001112233', correo:'ana.ruiz@mail.com',   direccion:'Cra 15 #23-40', fecha_nacimiento:'1995-03-12', estado:'ACTIVO',     fecha_registro:'2026-01-10' },
@@ -32,27 +136,15 @@ const SEED: Seed = {
     { id_pago:3, id_cliente:'1000000002', id_membresia:3, fecha_pago:'2026-09-01', valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO' },
     { id_pago:4, id_cliente:'1000000005', id_membresia:4, fecha_pago:'2026-02-15', valor:2800000, metodo_pago:'TRANSFERENCIA', estado_pago:'EXITOSO' },
     { id_pago:5, id_cliente:'1000000007', id_membresia:3, fecha_pago:'2026-09-05', valor:180000,  metodo_pago:'NEQUI',         estado_pago:'EXITOSO' },
-    { id_pago:6, id_cliente:'1000000003', id_membresia:1, fecha_pago:'2026-09-12', valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO' }
+    { id_pago:6, id_cliente:'1000000003', id_membresia:1, fecha_pago:'2026-09-12', valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO' },
+    // Pagos del mes en curso (fechas relativas) -> KPI "Ingresos este mes"
+    { id_pago:7,  id_cliente:'1000000001', id_membresia:1, fecha_pago:dia(0), valor:280000,  metodo_pago:'TARJETA',       estado_pago:'EXITOSO' },
+    { id_pago:8,  id_cliente:'1000000002', id_membresia:3, fecha_pago:dia(0), valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO' },
+    { id_pago:9,  id_cliente:'1000000007', id_membresia:3, fecha_pago:dia(1), valor:180000,  metodo_pago:'NEQUI',         estado_pago:'EXITOSO' },
+    { id_pago:10, id_cliente:'1000000004', id_membresia:3, fecha_pago:dia(1), valor:180000,  metodo_pago:'TRANSFERENCIA', estado_pago:'EXITOSO' },
   ],
 
-  ingresos: [{ id_ingreso:1,  id_cliente:'1000000001', fecha:'2026-09-09', hora_entrada:'2026-09-09T06:30:00', hora_salida:'2026-09-09T08:00:00', metodo_verificacion:'QR' },
-    { id_ingreso:2,  id_cliente:'1000000002', fecha:'2026-09-09', hora_entrada:'2026-09-09T18:00:00', hora_salida:'2026-09-09T19:15:00', metodo_verificacion:'MANUAL' },
-    { id_ingreso:3,  id_cliente:'1000000005', fecha:'2026-09-10', hora_entrada:'2026-09-10T07:00:00', hora_salida:'2026-09-10T08:30:00', metodo_verificacion:'QR' },
-    { id_ingreso:4,  id_cliente:'1000000001', fecha:'2026-09-11', hora_entrada:'2026-09-11T19:00:00', hora_salida:'2026-09-11T20:30:00', metodo_verificacion:'QR' },
-    { id_ingreso:5,  id_cliente:'1000000007', fecha:'2026-09-11', hora_entrada:'2026-09-11T06:00:00', hora_salida:'2026-09-11T07:10:00', metodo_verificacion:'MANUAL' },
-    { id_ingreso:6,  id_cliente:'1000000002', fecha:'2026-09-12', hora_entrada:'2026-09-12T18:30:00', hora_salida:'2026-09-12T20:00:00', metodo_verificacion:'QR' },
-    { id_ingreso:7,  id_cliente:'1000000003', fecha:'2026-09-12', hora_entrada:'2026-09-12T16:00:00', hora_salida:'2026-09-12T17:00:00', metodo_verificacion:'QR' },
-    { id_ingreso:8,  id_cliente:'1000000005', fecha:'2026-09-13', hora_entrada:'2026-09-13T07:30:00', hora_salida:'2026-09-13T09:00:00', metodo_verificacion:'MANUAL' },
-    { id_ingreso:9,  id_cliente:'1000000001', fecha:'2026-09-13', hora_entrada:'2026-09-13T19:00:00', hora_salida:'2026-09-13T20:15:00', metodo_verificacion:'QR' },
-    { id_ingreso:10, id_cliente:'1000000007', fecha:'2026-09-14', hora_entrada:'2026-09-14T06:30:00', hora_salida:'2026-09-14T07:45:00', metodo_verificacion:'QR' },
-    { id_ingreso:11, id_cliente:'1000000002', fecha:'2026-09-14', hora_entrada:'2026-09-14T18:00:00', hora_salida:'2026-09-14T19:30:00', metodo_verificacion:'MANUAL' },
-    // En el gimnasio AHORA (sin hora_salida) — alimentan "Activos ahora" y "Demografía en vivo"
-    { id_ingreso:12, id_cliente:'1000000001', fecha:'2026-09-15', hora_entrada:'2026-09-15T07:00:00', hora_salida:null, metodo_verificacion:'QR' },
-    { id_ingreso:13, id_cliente:'1000000003', fecha:'2026-09-15', hora_entrada:'2026-09-15T16:30:00', hora_salida:null, metodo_verificacion:'QR' },
-    { id_ingreso:14, id_cliente:'1000000005', fecha:'2026-09-15', hora_entrada:'2026-09-15T08:00:00', hora_salida:null, metodo_verificacion:'MANUAL' },
-    { id_ingreso:15, id_cliente:'1000000002', fecha:'2026-09-15', hora_entrada:'2026-09-15T18:00:00', hora_salida:null, metodo_verificacion:'QR' },
-    { id_ingreso:16, id_cliente:'1000000007', fecha:'2026-09-15', hora_entrada:'2026-09-15T19:00:00', hora_salida:null, metodo_verificacion:'QR' }
-    ],
+  ingresos: ingresosPasados().concat(ingresosDeHoy()),
   ejercicios: [],   // la colección de P4 arranca vacía
   progreso: [
     { id_progreso:1, id_cliente:'1000000001', fecha:'2026-07-10', peso:62,   altura:1.65, notas:'Medición inicial' },
@@ -62,6 +154,27 @@ const SEED: Seed = {
   ],
 };
 
+// Version del seed guardado en localStorage.
+//
+// Sin esto, cambiar el SEED no se refleja nunca en un navegador que ya
+// tenga datos: read() solo siembra cuando la clave no existe, asi que un
+// seed nuevo convive con el viejo indefinidamente. Al cambiar este numero
+// la siguiente carga regenera todas las colecciones.
+const SEED_VERSION = "2";
+const CLAVE_VERSION = "gymbrot_seed_version";
+
+function sembrarSiHaceFalta(): void {
+  if (localStorage.getItem(CLAVE_VERSION) === SEED_VERSION) return;
+
+  const registro = SEED as unknown as Record<string, unknown[]>;
+  for (const col of Object.keys(SEED)) {
+    localStorage.setItem("gymbrot_" + col, JSON.stringify(registro[col] ?? []));
+  }
+  localStorage.setItem(CLAVE_VERSION, SEED_VERSION);
+}
+
+sembrarSiHaceFalta();
+
 const db = {
   _key(col: string) {
     return "gymbrot_" + col;
@@ -69,9 +182,9 @@ const db = {
 
   read<T>(col: string): T[] {
     const guardado = localStorage.getItem(this._key(col));
-    if (guardado) return JSON.parse(guardado) as T[];
-    const semilla = ((SEED as unknown as Record<string, unknown[]>)[col] ?? []).slice() as T[];    this.write(col, semilla);
-    return semilla;
+    return guardado
+      ? (JSON.parse(guardado) as T[])
+      : (((SEED as unknown as Record<string, unknown[]>)[col] ?? []).slice() as T[]);
   },
 
   write<T>(col: string, arreglo: T[]) {

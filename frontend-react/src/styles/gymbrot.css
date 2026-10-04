@@ -41,7 +41,8 @@
   --f-body:  'Inter', sans-serif;          /* Cuerpo, tablas */
 
   /* Medidas del layout */
-  --sidebar-w: 220px;   /* Ancho del sidebar */
+  --sidebar-w: 72px;    /* Sidebar colapsado: solo iconos */
+  --sidebar-w-open: 180px; /* Sidebar expandido: iconos + textos */
   --topbar-h: 64px;     /* Alto de la barra superior */
   --radius: 12px;       /* Redondeo de tarjetas */
   --radius-sm: 8px;     /* Redondeo de botones */
@@ -66,32 +67,53 @@ body {
   min-height: 100vh;    /* 100vh = todo el alto visible de la pantalla */
 }
 
-/* ----- Sidebar (menú izquierdo) ----- */
+/* ----- Sidebar (menú izquierdo) -----
+   Dos estados: rail de 72px con solo iconos y, al pasar el mouse o al
+   entrar el foco, 180px con los textos. El contenido se recorta mientras
+   está angosto para que las etiquetas no se derramen sobre el área
+   principal. */
 .sidebar {
-  width: var(--sidebar-w);       /* 220px, tu token */
+  width: var(--sidebar-w);
   min-width: var(--sidebar-w);
   background: var(--bg-side);
-  padding: 16px;
+  padding: 16px 10px;
   display: flex;
   flex-direction: column;        /* logo arriba, menú abajo */
   border-right: 1px solid var(--border);
   height: 100vh;
   position: sticky;              /* se queda fijo aunque hagas scroll */
   top: 0;
+  overflow: hidden;
+  transition: width .2s ease, min-width .2s ease, padding .2s ease;
 }
+.sidebar:hover,
+.sidebar:focus-within {
+  width: var(--sidebar-w-open);
+  min-width: var(--sidebar-w-open);
+  padding: 16px;
+}
+
+/* Dos logos superpuestos en la misma celda: el monograma GB se ve
+   colapsado y el wordmark GYMBROT al expandirse. */
 .sidebar-logo {
-  padding: 4px 8px 32px;
+  padding: 4px 0 24px;
+  display: grid;
+  place-items: center;
 }
 .sidebar-logo img {
+  grid-area: 1 / 1;
   display: block;
-  /* Centrado para que no dependa del ancho del sidebar. A 220px el area
-     util son 188px: con el padding de 8px quedan 172 y el logo medía
-     171px, o sea a 1px de desbordar. 160px deja 6px de margen a cada
-     lado y en 2x necesita 320px de fuente frente a los 348 que hay. */
-  margin: 0 auto;
-  width: 160px;
   height: auto;
+  transition: opacity .16s ease, width .2s ease;
 }
+.sidebar-logo .logo-mini { width: 44px; opacity: 1; }
+.sidebar-logo .logo-full { width: 44px; opacity: 0; }
+
+.sidebar:hover .sidebar-logo .logo-mini,
+.sidebar:focus-within .sidebar-logo .logo-mini { opacity: 0; }
+.sidebar:hover .sidebar-logo .logo-full,
+.sidebar:focus-within .sidebar-logo .logo-full { opacity: 1; width: 140px; }
+
 .nav-group {
   display: flex;
   flex-direction: column;
@@ -101,8 +123,9 @@ body {
 .nav-item {
   display: flex;
   align-items: center;   /* ícono y texto centrados verticalmente */
-  gap: 12px;
-  padding: 11px 16px;
+  justify-content: center;
+  gap: 0;
+  padding: 11px 8px;
   border-radius: var(--radius-sm);
   font-family: var(--f-title);
   font-size: 14px;
@@ -112,16 +135,37 @@ body {
   cursor: pointer;
 }
 .nav-item i { font-size: 18px; }
+/* Colapsado la etiqueta se colapsa a 0 de ancho pero sigue en el árbol de
+   accesibilidad: el lector de pantalla sigue leyendo el nombre del enlace. */
+.nav-item span {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width .2s ease, opacity .16s ease;
+}
+/* 12px en vez de 16px: "Cerrar Sesión" mide ~86px a 14px y con 16px de
+   padding quedaban justo 86px de hueco, o sea al borde del recorte. */
+.sidebar:hover .nav-item,
+.sidebar:focus-within .nav-item {
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 11px 12px;
+}
+.sidebar:hover .nav-item span,
+.sidebar:focus-within .nav-item span { max-width: 180px; opacity: 1; }
 .nav-item:hover { color: #fff; }        /* al pasar el mouse */
 .nav-item.active {                      /* la página en la que estás */
   background: var(--neon);
   color: #000;
   font-weight: 700;
 }
+/* El outline por defecto se recortaría contra el overflow:hidden del rail. */
+.nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .sidebar-sep { border: 0; border-top: 1px solid var(--border); opacity: .4; margin: 16px 0 8px; }
 .sidebar-footer { display: flex; flex-direction: column; gap: 8px; }
 /* El <button> trae fondo y borde del navegador y .nav-item no los define. */
-.sidebar-footer .nav-item { background: none; border: none; width: 100%; text-align: left; }
+.sidebar-footer .nav-item { background: none; border: none; width: 100%; }
 
 /* ----- Área principal (derecha) ----- */
 .main-area {

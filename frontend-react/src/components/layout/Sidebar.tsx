@@ -13,13 +13,15 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <img src="/logos/gymbrot-logo.png" alt="GYMBROT" width={348} height={180} />
+        <img className="logo-mini" src="/logos/gymbrot-icono-side.png" alt="" width={176} height={98} />
+        <img className="logo-full" src="/logos/gymbrot-logo.png" alt="GYMBROT" width={348} height={180} />
       </div>
       <nav className="nav-group">
         {paginas.map((p) => (
           <NavLink
             key={p.to}
             to={p.to}
+            title={p.label}
             className={({ isActive }) => "nav-item" + (isActive ? " active" : "")}
           >
             <i className={"bi " + p.icon} aria-hidden />
@@ -31,7 +33,7 @@ export function Sidebar() {
       <hr className="sidebar-sep" />
 
       <div className="sidebar-footer">
-        <button type="button" className="nav-item" onClick={salir}>
+        <button type="button" className="nav-item" title="Cerrar Sesión" onClick={salir}>
           <i className="bi bi-box-arrow-right" aria-hidden />
           <span>Cerrar Sesión</span>
         </button>

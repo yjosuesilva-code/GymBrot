@@ -1,5 +1,6 @@
 import { utils } from "../lib/utils";
 import type { Cliente, Membresia, Pago, Ingreso, Ejercicio, ApiResp } from "../types";
+import type { Instructor } from "../types"; // [P3]
 
 interface Seed {
   clientes: Cliente[];
@@ -7,6 +8,7 @@ interface Seed {
   pagos: Pago[];
   ingresos: Ingreso[];
   ejercicios: Ejercicio[];
+  instructores: Instructor[]; // [P3]
 }
 
 const SEED: Seed = {
@@ -53,6 +55,14 @@ const SEED: Seed = {
     { id_ingreso:16, id_cliente:'1000000007', fecha:'2026-09-15', hora_entrada:'2026-09-15T19:00:00', hora_salida:null, metodo_verificacion:'QR' }
     ],
   ejercicios: [],   // la colección de P4 arranca vacía
+
+  // ===== [P3] Instructores =====
+  instructores: [
+    { numero_identificacion:'2000000001', tipo_identificacion:'CC', nombre:'Camilo',  apellidos:'Herrera Díaz', telefono:'3101234567', correo:'camilo.herrera@gymbrot.com', especialidad:'Entrenador personal', disponibilidad:'Lun-Vie 6:00-14:00',  fecha_contratacion:'2025-02-03', estado:'ACTIVO' },
+    { numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Natalia', apellidos:'Vargas Rojas', telefono:'3112345678', correo:'natalia.vargas@gymbrot.com', especialidad:'Yoga/Pilates',        disponibilidad:'Lun-Mié-Vie 16:00-21:00', fecha_contratacion:'2025-08-18', estado:'ACTIVO' },
+    { numero_identificacion:'2000000003', tipo_identificacion:'CE', nombre:'Mateo',   apellidos:'Silva Castro', telefono:'3123456789', correo:'mateo.silva@gymbrot.com',    especialidad:'Nutrición',           disponibilidad:'Mar-Jue 8:00-12:00',  fecha_contratacion:'2026-01-12', estado:'INACTIVO' },
+  ],
+  // ===== [/P3] Instructores =====
 };
 
 const db = {

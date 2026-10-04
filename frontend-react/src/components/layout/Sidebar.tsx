@@ -14,7 +14,7 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="sidebar-logo">
         <img className="logo-mini" src="/logos/gymbrot-logo.png" alt="GYMBROT" width={348} height={180} />
-        <img className="logo-full" src="/logos/gymbrot-icono-side.png" alt="" width={176} height={98} />
+        <img className="logo-full" src="/logos/gymbrot-icono.png" alt="" width={160} height={88} />
       </div>
       <nav className="nav-group">
         {paginas.map((p) => (

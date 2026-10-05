@@ -1,5 +1,5 @@
 import { utils } from "../lib/utils";
-import type { Cliente, Membresia, Pago, Ingreso, Ejercicio, Progreso, ApiResp } from "../types";
+import type { Cliente, Membresia, Pago, Ingreso, Ejercicio, Progreso, Cita, CitaNueva, ApiResp } from "../types";
 import type { Instructor, InstructorNuevo, EstadoInstructor } from "../types"; // [P3]
 
 interface Seed {
@@ -10,6 +10,7 @@ interface Seed {
   ejercicios: Ejercicio[];
   instructores: Instructor[]; // [P3]
   progreso: Progreso[]; // [P2]
+  citas: Cita[]; // [P2]
 }
 
 // --- Generadores de fechas del seed -------------------------------------
@@ -165,6 +166,14 @@ const SEED: Seed = {
     { id_progreso:4, id_cliente:'1000000005', fecha:'2026-09-01', peso:75,   altura:1.72, notas:'' }
   ],
   // ===== [/P2] Progreso =====
+
+  // ===== [P2] Citas =====
+  citas: [
+    { id_cita:1, id_cliente:'1000000001', id_instructor:'2000000001', fecha:'2026-10-06', hora:'07:00', estado:'CONFIRMADA', notas:'Rutina de fuerza' },
+    { id_cita:2, id_cliente:'1000000002', id_instructor:'2000000002', fecha:'2026-10-07', hora:'17:00', estado:'PENDIENTE',  notas:'Primera clase de yoga' },
+    { id_cita:3, id_cliente:'1000000005', id_instructor:'2000000003', fecha:'2026-10-08', hora:'09:00', estado:'CANCELADA',  notas:'Reagendar' }
+  ],
+  // ===== [/P2] Citas =====
 };
 
 // Version del seed guardado en localStorage.
@@ -173,7 +182,7 @@ const SEED: Seed = {
 // tenga datos: read() solo siembra cuando la clave no existe, asi que un
 // seed nuevo convive con el viejo indefinidamente. Al cambiar este numero
 // la siguiente carga regenera todas las colecciones.
-const SEED_VERSION = "3";
+const SEED_VERSION = "4";
 const CLAVE_VERSION = "gymbrot_seed_version";
 
 function sembrarSiHaceFalta(): void {
@@ -362,4 +371,44 @@ export const api = {
     },
   },
   // ===== [/P2] Progreso =====
+
+  // ===== [P2] Citas =====
+  citas: {
+    async list(): Promise<Cita[]> {
+      await api._delay();
+      return db.read<Cita>("citas");
+    },
+    async byCliente(id: string): Promise<Cita[]> {
+      await api._delay();
+      return db.read<Cita>("citas").filter((c) => c.id_cliente === id);
+    },
+    async create(data: CitaNueva): Promise<ApiResp<Cita>> {
+      await api._delay();
+      const arr = db.read<Cita>("citas");
+      const nuevoId = arr.reduce((max, c) => Math.max(max, c.id_cita), 0) + 1;
+      const nueva: Cita = { id_cita: nuevoId, estado: "PENDIENTE", ...data };
+      arr.push(nueva);
+      db.write("citas", arr);
+      return { ok: true, mensaje: "Cita registrada", data: nueva };
+    },
+    async update(id: number, data: Partial<Omit<Cita, "id_cita">>): Promise<ApiResp<Cita>> {
+      await api._delay();
+      const arr = db.read<Cita>("citas");
+      const cita = arr.find((c) => c.id_cita === id);
+      if (!cita) return { ok: false, mensaje: "Cita no encontrada" };
+      Object.assign(cita, data, { id_cita: id });
+      db.write("citas", arr);
+      return { ok: true, mensaje: "Cita actualizada", data: cita };
+    },
+    async setEstado(id: number, estado: Cita["estado"]): Promise<ApiResp<Cita>> {
+      await api._delay();
+      const arr = db.read<Cita>("citas");
+      const cita = arr.find((c) => c.id_cita === id);
+      if (!cita) return { ok: false, mensaje: "Cita no encontrada" };
+      cita.estado = estado;
+      db.write("citas", arr);
+      return { ok: true, mensaje: "Estado actualizado", data: cita };
+    },
+  },
+  // ===== [/P2] Citas =====
 };

@@ -58,6 +58,14 @@ export interface ApiResp<T = unknown> {
   data?: T;
 }
 
+/* Sesion del mock en localStorage. Sin tenantId: el vanilla lo llevaba,
+   pero el modelo de React es de un solo gimnasio. */
+export interface Sesion {
+  usuario: string;
+  nombre: string;
+  rol: string;
+}
+
 // ===== [P3] Instructores =====
 
 // Mismos tipos de documento que Cliente (se reutiliza su tipo en vez de repetirlo)

@@ -98,3 +98,46 @@ export interface Instructor {
 // Lo que se envía al crear: estado y fecha_contratacion los pone api.instructores.create
 export type InstructorNuevo = Omit<Instructor, 'estado' | 'fecha_contratacion'>;
 // ===== [/P3] Instructores =====
+
+// ===== [P3] Rutinas =====
+
+export type DiaSemana =
+  | 'LUNES'
+  | 'MARTES'
+  | 'MIERCOLES'
+  | 'JUEVES'
+  | 'VIERNES'
+  | 'SABADO'
+  | 'DOMINGO';
+
+export type ObjetivoRutina =
+  | 'Pérdida de peso'
+  | 'Ganancia muscular'
+  | 'Resistencia'
+  | 'Tonificación'
+  | 'Rehabilitación';
+
+export interface Rutina {
+  id_rutina: number;               // llave, autoincremental
+  id_instructor: string;           // Instructor.numero_identificacion
+  id_cliente: string;              // Cliente.numero_identificacion
+  nombre: string;
+  descripcion: string;
+  fecha_creacion: string;          // 'YYYY-MM-DD'
+  fecha_fin: string | null;        // 'YYYY-MM-DD' o null si no tiene fin
+  dias_semana: DiaSemana[];        // días en que se entrena
+  objetivo: ObjetivoRutina;
+}
+
+// Un ejercicio dentro de una rutina (tabla intermedia Rutina <-> Ejercicio del diagrama ER)
+export interface RutinaEjercicio {
+  id_rutina: number;               // Rutina.id_rutina
+  id_ejercicio: number;            // Ejercicio.idEjercicio (P4)
+  orden: number;                   // posición dentro del día: 1, 2, 3...
+  dia_semana: DiaSemana;
+  notas_instructor: string;
+}
+
+// Lo que se envía al crear: id_rutina y fecha_creacion los pone api.rutinas.create
+export type RutinaNueva = Omit<Rutina, 'id_rutina' | 'fecha_creacion'>;
+// ===== [/P3] Rutinas =====

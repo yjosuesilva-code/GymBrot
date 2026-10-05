@@ -160,12 +160,15 @@ const SEED: Seed = {
   // ===== [/P3] Instructores =====
 
   // ===== [P3] Rutinas =====
+  // Fechas relativas (dia(n) = hace n días; dia(-n) = dentro de n días) para que siempre
+  // haya una rutina vigente, una por vencer, una vencida y una sin fecha fin.
   // Instructores y clientes existen en este SEED. Sin ejercicios a propósito:
   // api.ejercicios (P4) todavía no existe y no queremos referencias falsas.
   rutinas: [
-    { id_rutina:1, id_instructor:'2000000001', id_cliente:'1000000001', nombre:'Fuerza tren superior', descripcion:'Fuerza para pecho, espalda y brazos.',     fecha_creacion:'2026-09-01', fecha_fin:'2026-12-01', dias_semana:['LUNES','MIERCOLES','VIERNES'], objetivo:'Ganancia muscular' },
-    { id_rutina:2, id_instructor:'2000000001', id_cliente:'1000000002', nombre:'Quema de grasa',       descripcion:'Circuitos de cardio y funcional.',         fecha_creacion:'2026-09-15', fecha_fin:'2026-11-15', dias_semana:['MARTES','JUEVES','SABADO'],    objetivo:'Pérdida de peso' },
-    { id_rutina:3, id_instructor:'2000000002', id_cliente:'1000000005', nombre:'Movilidad y espalda',  descripcion:'Estiramientos y fortalecimiento de core.', fecha_creacion:'2026-09-20', fecha_fin:null,         dias_semana:['LUNES','JUEVES'],              objetivo:'Rehabilitación' },
+    { id_rutina:1, id_instructor:'2000000001', id_cliente:'1000000001', nombre:'Fuerza tren superior', descripcion:'Fuerza para pecho, espalda y brazos.',     fecha_creacion:dia(35), fecha_fin:dia(-55), dias_semana:['LUNES','MIERCOLES','VIERNES'], objetivo:'Ganancia muscular' },
+    { id_rutina:2, id_instructor:'2000000001', id_cliente:'1000000002', nombre:'Quema de grasa',       descripcion:'Circuitos de cardio y funcional.',         fecha_creacion:dia(50), fecha_fin:dia(-10), dias_semana:['MARTES','JUEVES','SABADO'],    objetivo:'Pérdida de peso' },
+    { id_rutina:3, id_instructor:'2000000002', id_cliente:'1000000005', nombre:'Movilidad y espalda',  descripcion:'Estiramientos y fortalecimiento de core.', fecha_creacion:dia(15), fecha_fin:null,     dias_semana:['LUNES','JUEVES'],              objetivo:'Rehabilitación' },
+    { id_rutina:4, id_instructor:'2000000002', id_cliente:'1000000007', nombre:'Resistencia básica',   descripcion:'Base aeróbica para principiantes.',        fecha_creacion:dia(90), fecha_fin:dia(5),  dias_semana:['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES'], objetivo:'Resistencia' },
   ],
   rutina_ejercicios: [],
   // ===== [/P3] Rutinas =====

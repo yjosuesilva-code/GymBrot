@@ -223,6 +223,24 @@ function validarReferencias(idInstructor: string, idCliente: string): string | n
     return "El cliente no existe";
   return null;
 }
+
+// Vigente = sin fecha fin, o con fecha fin de hoy en adelante.
+// Las fechas 'YYYY-MM-DD' se pueden comparar como texto: el orden alfabético es el cronológico.
+function esVigente(r: Pick<Rutina, "fecha_fin">): boolean {
+  return r.fecha_fin === null || r.fecha_fin >= utils.isoDate();
+}
+
+// Regla: un cliente solo puede tener UNA rutina vigente. Si la rutina que se guarda es vigente
+// y el cliente ya tiene otra vigente (distinta de idPropio), devuelve el mensaje de error.
+function validarUnaVigente(idCliente: string, fechaFin: string | null, idPropio: number | null): string | null {
+  if (!esVigente({ fecha_fin: fechaFin })) return null;
+  const otra = db
+    .read<Rutina>("rutinas")
+    .find((r) => r.id_cliente === idCliente && r.id_rutina !== idPropio && esVigente(r));
+  return otra
+    ? "El cliente ya tiene la rutina vigente «" + otra.nombre + "». Solo puede tener una vigente a la vez."
+    : null;
+}
 // ===== [/P3] Rutinas: auxiliares =====
 
 export const api = {
@@ -383,7 +401,9 @@ export const api = {
     // id_rutina = el mayor id + 1; fecha_creacion = hoy
     async create(data: RutinaNueva): Promise<ApiResp<Rutina>> {
       await api._delay();
-      const error = validarReferencias(data.id_instructor, data.id_cliente);
+      const error =
+        validarReferencias(data.id_instructor, data.id_cliente) ??
+        validarUnaVigente(data.id_cliente, data.fecha_fin, null);
       if (error) return { ok: false, mensaje: error };
       const arr = db.read<Rutina>("rutinas");
       const id = arr.reduce((max, r) => Math.max(max, r.id_rutina), 0) + 1;
@@ -399,7 +419,11 @@ export const api = {
       const arr = db.read<Rutina>("rutinas");
       const r = arr.find((x) => x.id_rutina === id);
       if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
-      const error = validarReferencias(data.id_instructor ?? r.id_instructor, data.id_cliente ?? r.id_cliente);
+      // Cómo quedaría la rutina con los cambios, para validar con los valores finales
+      const final = { ...r, ...data };
+      const error =
+        validarReferencias(final.id_instructor, final.id_cliente) ??
+        validarUnaVigente(final.id_cliente, final.fecha_fin, id);
       if (error) return { ok: false, mensaje: error };
       Object.assign(r, data, { id_rutina: id, fecha_creacion: r.fecha_creacion });
       db.write("rutinas", arr);

@@ -1,5 +1,5 @@
 import { utils } from "../lib/utils";
-import type { Cliente, Membresia, Pago, Ingreso, Ejercicio, ApiResp } from "../types";
+import type { Cliente, Membresia, Pago, Ingreso, Ejercicio, Progreso, ApiResp } from "../types";
 import type { Instructor, InstructorNuevo, EstadoInstructor } from "../types"; // [P3]
 
 interface Seed {
@@ -9,6 +9,7 @@ interface Seed {
   ingresos: Ingreso[];
   ejercicios: Ejercicio[];
   instructores: Instructor[]; // [P3]
+  progreso: Progreso[]; // [P2]
 }
 
 // --- Generadores de fechas del seed -------------------------------------
@@ -155,6 +156,15 @@ const SEED: Seed = {
     { numero_identificacion:'2000000003', tipo_identificacion:'CE', nombre:'Mateo',   apellidos:'Silva Castro', telefono:'3123456789', correo:'mateo.silva@gymbrot.com',    especialidad:'Nutrición',           disponibilidad:'Mar-Jue 8:00-12:00',  fecha_contratacion:'2026-01-12', estado:'INACTIVO' },
   ],
   // ===== [/P3] Instructores =====
+
+  // ===== [P2] Progreso =====
+  progreso: [
+    { id_progreso:1, id_cliente:'1000000001', fecha:'2026-07-10', peso:62,   altura:1.65, notas:'Medición inicial' },
+    { id_progreso:2, id_cliente:'1000000001', fecha:'2026-08-10', peso:60.5, altura:1.65, notas:'Bajó 1.5 kg' },
+    { id_progreso:3, id_cliente:'1000000002', fecha:'2026-08-01', peso:82,   altura:1.78, notas:'Control inicial' },
+    { id_progreso:4, id_cliente:'1000000005', fecha:'2026-09-01', peso:75,   altura:1.72, notas:'' }
+  ],
+  // ===== [/P2] Progreso =====
 };
 
 // Version del seed guardado en localStorage.
@@ -163,7 +173,7 @@ const SEED: Seed = {
 // tenga datos: read() solo siembra cuando la clave no existe, asi que un
 // seed nuevo convive con el viejo indefinidamente. Al cambiar este numero
 // la siguiente carga regenera todas las colecciones.
-const SEED_VERSION = "2";
+const SEED_VERSION = "3";
 const CLAVE_VERSION = "gymbrot_seed_version";
 
 function sembrarSiHaceFalta(): void {
@@ -330,4 +340,26 @@ export const api = {
     },
   },
   // ===== [/P3] Instructores =====
+
+  // ===== [P2] Progreso =====
+  progreso: {
+    async list(): Promise<Progreso[]> {
+      await api._delay();
+      return db.read<Progreso>("progreso");
+    },
+    async byCliente(id: string): Promise<Progreso[]> {
+      await api._delay();
+      return db.read<Progreso>("progreso").filter((p) => p.id_cliente === id);
+    },
+    async create(data: Omit<Progreso, "id_progreso">): Promise<ApiResp<Progreso>> {
+      await api._delay();
+      const arr = db.read<Progreso>("progreso");
+      const nuevoId = arr.reduce((max, p) => Math.max(max, p.id_progreso), 0) + 1;
+      const nuevo: Progreso = { id_progreso: nuevoId, ...data };
+      arr.push(nuevo);
+      db.write("progreso", arr);
+      return { ok: true, mensaje: "Medición registrada", data: nuevo };
+    },
+  },
+  // ===== [/P2] Progreso =====
 };

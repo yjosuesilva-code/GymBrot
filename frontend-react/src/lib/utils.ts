@@ -1,3 +1,11 @@
+// Convierte un valor a Date. Un texto 'YYYY-MM-DD' (solo fecha) JavaScript lo
+// interpreta en UTC, y en Colombia (UTC-5) quedaria en el dia anterior; por eso
+// se le agrega "T00:00:00": una fecha con hora y sin zona se lee en hora local.
+function leerFecha(valor: string | Date): Date {
+  if (valor instanceof Date) return new Date(valor.getTime());
+  return /^\d{4}-\d{2}-\d{2}$/.test(valor) ? new Date(valor + "T00:00:00") : new Date(valor);
+}
+
 export const utils = {
   money(valor: number): string {
     const n = Number(valor) || 0;
@@ -10,7 +18,7 @@ export const utils = {
 
   fecha(valor: string): string {
     if (!valor) return "—";
-    const d = new Date(valor);
+    const d = leerFecha(valor);
     return isNaN(d.getTime())
       ? "—"
       : d.toLocaleDateString("es-CO", {
@@ -19,9 +27,14 @@ export const utils = {
           year: "numeric",
         });
   },
+  // Fecha local como 'YYYY-MM-DD' (sin valor = hoy). No usa toISOString(),
+  // que convierte a UTC: despues de las 7 p. m. en Colombia daria la de manana.
   isoDate(valor?: string | Date): string {
-    const d = valor ? new Date(valor) : new Date();
-    return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+    const d = valor ? leerFecha(valor) : new Date();
+    if (isNaN(d.getTime())) return "";
+    const mes = String(d.getMonth() + 1).padStart(2, "0");
+    const dia = String(d.getDate()).padStart(2, "0");
+    return d.getFullYear() + "-" + mes + "-" + dia;
   },
 
   hora(valor: string): string {
@@ -34,7 +47,7 @@ export const utils = {
 
   edad(FechaNacimiento: string): number | null {
     if (!FechaNacimiento) return null;
-    const nac = new Date(FechaNacimiento);
+    const nac = leerFecha(FechaNacimiento);
     if (isNaN(nac.getTime())) return null;
     const hoy = new Date();
     let edad = hoy.getFullYear() - nac.getFullYear();

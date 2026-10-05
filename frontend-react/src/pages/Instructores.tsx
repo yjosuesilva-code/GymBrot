@@ -31,9 +31,6 @@ const VACIO: FormInstructor = {
   fecha_contratacion: "",
 };
 
-// Fecha de hoy en hora local como 'YYYY-MM-DD' (en-CA usa justo ese formato)
-const hoy = () => new Date().toLocaleDateString("en-CA");
-
 // Devuelve el primer error encontrado, o "" si el formulario está bien
 function validar(f: FormInstructor, editando: boolean): string {
   const soloLetras = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]{2,}$/;
@@ -52,7 +49,7 @@ function validar(f: FormInstructor, editando: boolean): string {
     return "El correo no es válido";
   if (editando && !f.fecha_contratacion)
     return "La fecha de contratación es obligatoria";
-  if (editando && f.fecha_contratacion > hoy())
+  if (editando && f.fecha_contratacion > utils.isoDate())
     return "La fecha de contratación no puede ser futura";
   return "";
 }
@@ -300,8 +297,7 @@ export function Instructores() {
                   <td>{i.telefono}</td>
                   <td>{i.especialidad}</td>
                   <td>{i.disponibilidad}</td>
-                  {/* "T00:00:00" hace que la fecha se lea en hora local; sin eso JS la toma en UTC y en Colombia sale un día antes */}
-                  <td>{utils.fecha(i.fecha_contratacion + "T00:00:00")}</td>
+                  <td>{utils.fecha(i.fecha_contratacion)}</td>
                   <td><span className={"badge-g " + utils.badgeClass(i.estado)}>{i.estado}</span></td>
                   <td>
                     <div className="cell-actions">
@@ -373,7 +369,7 @@ export function Instructores() {
             <div className="col-md-6">
               <label className="form-label-g">Fecha de contratación</label>
               {editandoId ? (
-                <input className="form-control-dark" type="date" max={hoy()} value={form.fecha_contratacion} onChange={(e) => setCampo("fecha_contratacion", e.target.value)} />
+                <input className="form-control-dark" type="date" max={utils.isoDate()} value={form.fecha_contratacion} onChange={(e) => setCampo("fecha_contratacion", e.target.value)} />
               ) : (
                 <p className="card-sub">Se registra con la fecha de hoy y en estado ACTIVO.</p>
               )}

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
-import type { Instructor, Especialidad, TipoIdentificacion } from "../types";
+import type { Instructor, Especialidad, EstadoInstructor, TipoIdentificacion } from "../types";
 
 // El formulario tiene todos los campos del instructor menos el estado (ese se cambia con activar/desactivar)
 type FormInstructor = Omit<Instructor, "estado">;
@@ -57,9 +57,19 @@ function validar(f: FormInstructor, editando: boolean): string {
   return "";
 }
 
+// Alerta de la parte superior: tipo define el color (alert-ok verde neón, alert-error rojo)
+type Alerta = { tipo: "ok" | "error"; mensaje: string };
+
 export function Instructores() {
   const [instructores, setInstructores] = useState<Instructor[]>([]);
   const [cargando, setCargando] = useState(true);
+
+  // Búsqueda y filtros ("" significa "todas" / "todos")
+  const [busqueda, setBusqueda] = useState("");
+  const [filtroEspecialidad, setFiltroEspecialidad] = useState<Especialidad | "">("");
+  const [filtroEstado, setFiltroEstado] = useState<EstadoInstructor | "">("");
+
+  const [alerta, setAlerta] = useState<Alerta | null>(null);
 
   // Estado del modal: show lo abre/cierra; editandoId es null al crear y la cédula al editar
   const [show, setShow] = useState(false);
@@ -81,6 +91,32 @@ export function Instructores() {
       setCargando(false);
     });
   }, []);
+
+  // Cada vez que aparece una alerta, se programa que desaparezca a los 4 segundos.
+  // La función que se devuelve (cleanup) cancela el temporizador si llega otra alerta antes.
+  useEffect(() => {
+    if (!alerta) return;
+    const t = setTimeout(() => setAlerta(null), 4000);
+    return () => clearTimeout(t);
+  }, [alerta]);
+
+  // Lista filtrada: se recalcula en cada render a partir de la lista completa y los filtros
+  const texto = busqueda.trim().toLowerCase();
+  const filtrados = instructores.filter((i) => {
+    const datos = (i.nombre + " " + i.apellidos + " " + i.numero_identificacion + " " + i.correo + " " + i.especialidad).toLowerCase();
+    return (
+      datos.includes(texto) &&
+      (filtroEspecialidad === "" || i.especialidad === filtroEspecialidad) &&
+      (filtroEstado === "" || i.estado === filtroEstado)
+    );
+  });
+  const hayFiltros = texto !== "" || filtroEspecialidad !== "" || filtroEstado !== "";
+
+  function limpiarFiltros() {
+    setBusqueda("");
+    setFiltroEspecialidad("");
+    setFiltroEstado("");
+  }
 
   // Cambia un solo campo del formulario; K hace que el valor tenga el tipo correcto de ese campo
   function setCampo<K extends keyof FormInstructor>(campo: K, valor: FormInstructor[K]) {
@@ -152,12 +188,18 @@ export function Instructores() {
       return;
     }
     setShow(false);
+    setAlerta({ tipo: "ok", mensaje: res.mensaje });
     setInstructores(await api.instructores.list());
   }
 
   async function cambiarEstado(i: Instructor) {
     const nuevo = i.estado === "ACTIVO" ? "INACTIVO" : "ACTIVO";
-    await api.instructores.setEstado(i.numero_identificacion, nuevo);
+    const res = await api.instructores.setEstado(i.numero_identificacion, nuevo);
+    setAlerta(
+      res.ok
+        ? { tipo: "ok", mensaje: `${i.nombre} ${i.apellidos} ahora está ${nuevo}` }
+        : { tipo: "error", mensaje: res.mensaje }
+    );
     setInstructores(await api.instructores.list());
   }
 
@@ -175,6 +217,7 @@ export function Instructores() {
       return;
     }
     setShowEliminar(false);
+    setAlerta({ tipo: "ok", mensaje: res.mensaje });
     setInstructores(await api.instructores.list());
   }
 
@@ -188,6 +231,41 @@ export function Instructores() {
         <button className="btn-neon" onClick={abrirNuevo}>+ Nuevo instructor</button>
       </div>
 
+      {alerta && <div className={"alert-g show alert-" + alerta.tipo}>{alerta.mensaje}</div>}
+
+      <div className="toolbar" style={{ marginBottom: 20 }}>
+        <div className="search-box">
+          <span className="search-ico">🔍</span>
+          <input
+            type="text"
+            className="form-control-dark"
+            placeholder="Buscar por nombre, identificación, correo o especialidad..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+        </div>
+        <select
+          className="form-control-dark"
+          style={{ width: "auto" }}
+          value={filtroEspecialidad}
+          onChange={(e) => setFiltroEspecialidad(e.target.value as Especialidad | "")}
+        >
+          <option value="">Todas las especialidades</option>
+          {ESPECIALIDADES.map((esp) => <option key={esp} value={esp}>{esp}</option>)}
+        </select>
+        <select
+          className="form-control-dark"
+          style={{ width: "auto" }}
+          value={filtroEstado}
+          onChange={(e) => setFiltroEstado(e.target.value as EstadoInstructor | "")}
+        >
+          <option value="">Todos los estados</option>
+          <option value="ACTIVO">Activos</option>
+          <option value="INACTIVO">Inactivos</option>
+        </select>
+        {hayFiltros && <button className="btn-dark" onClick={limpiarFiltros}>Limpiar</button>}
+      </div>
+
       <div className="table-wrap">
         <table className="table-g">
           <thead>
@@ -198,8 +276,16 @@ export function Instructores() {
           <tbody>
             {cargando ? (
               <tr><td colSpan={8} className="loader"><span className="spinner-g"></span>Cargando...</td></tr>
+            ) : filtrados.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="empty-state">
+                  {instructores.length === 0
+                    ? "No hay instructores registrados. Crea el primero con «+ Nuevo instructor»."
+                    : "Ningún instructor coincide con la búsqueda o los filtros."}
+                </td>
+              </tr>
             ) : (
-              instructores.map((i) => (
+              filtrados.map((i) => (
                 <tr key={i.numero_identificacion}>
                   <td>
                     <div className="person">

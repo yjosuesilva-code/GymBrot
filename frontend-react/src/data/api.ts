@@ -1,6 +1,7 @@
 import { utils } from "../lib/utils";
 import type { Cliente, Membresia, Pago, Ingreso, Ejercicio, ApiResp } from "../types";
 import type { Instructor, InstructorNuevo, EstadoInstructor } from "../types"; // [P3]
+import type { Rutina, RutinaNueva, RutinaEjercicio, DiaSemana } from "../types"; // [P3]
 
 interface Seed {
   clientes: Cliente[];
@@ -9,6 +10,8 @@ interface Seed {
   ingresos: Ingreso[];
   ejercicios: Ejercicio[];
   instructores: Instructor[]; // [P3]
+  rutinas: Rutina[]; // [P3]
+  rutina_ejercicios: RutinaEjercicio[]; // [P3]
 }
 
 // --- Generadores de fechas del seed -------------------------------------
@@ -155,6 +158,17 @@ const SEED: Seed = {
     { numero_identificacion:'2000000003', tipo_identificacion:'CE', nombre:'Mateo',   apellidos:'Silva Castro', telefono:'3123456789', correo:'mateo.silva@gymbrot.com',    especialidad:'Nutrición',           disponibilidad:'Mar-Jue 8:00-12:00',  fecha_contratacion:'2026-01-12', estado:'INACTIVO' },
   ],
   // ===== [/P3] Instructores =====
+
+  // ===== [P3] Rutinas =====
+  // Instructores y clientes existen en este SEED. Sin ejercicios a propósito:
+  // api.ejercicios (P4) todavía no existe y no queremos referencias falsas.
+  rutinas: [
+    { id_rutina:1, id_instructor:'2000000001', id_cliente:'1000000001', nombre:'Fuerza tren superior', descripcion:'Fuerza para pecho, espalda y brazos.',     fecha_creacion:'2026-09-01', fecha_fin:'2026-12-01', dias_semana:['LUNES','MIERCOLES','VIERNES'], objetivo:'Ganancia muscular' },
+    { id_rutina:2, id_instructor:'2000000001', id_cliente:'1000000002', nombre:'Quema de grasa',       descripcion:'Circuitos de cardio y funcional.',         fecha_creacion:'2026-09-15', fecha_fin:'2026-11-15', dias_semana:['MARTES','JUEVES','SABADO'],    objetivo:'Pérdida de peso' },
+    { id_rutina:3, id_instructor:'2000000002', id_cliente:'1000000005', nombre:'Movilidad y espalda',  descripcion:'Estiramientos y fortalecimiento de core.', fecha_creacion:'2026-09-20', fecha_fin:null,         dias_semana:['LUNES','JUEVES'],              objetivo:'Rehabilitación' },
+  ],
+  rutina_ejercicios: [],
+  // ===== [/P3] Rutinas =====
 };
 
 // Version del seed guardado en localStorage.
@@ -194,6 +208,19 @@ const db = {
     localStorage.setItem(this._key(col), JSON.stringify(arreglo));
   },
 };
+
+// ===== [P3] Rutinas: auxiliares =====
+const DIAS: DiaSemana[] = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"];
+
+// Mensaje de error si el instructor o el cliente no existen; null si ambos existen
+function validarReferencias(idInstructor: string, idCliente: string): string | null {
+  if (!db.read<Instructor>("instructores").some((i) => i.numero_identificacion === idInstructor))
+    return "El instructor no existe";
+  if (!db.read<Cliente>("clientes").some((c) => c.numero_identificacion === idCliente))
+    return "El cliente no existe";
+  return null;
+}
+// ===== [/P3] Rutinas: auxiliares =====
 
 export const api = {
   _delay(ms = 200) {
@@ -330,4 +357,80 @@ export const api = {
     },
   },
   // ===== [/P3] Instructores =====
+
+  // ===== [P3] Rutinas =====
+  rutinas: {
+    async list(): Promise<Rutina[]> {
+      await api._delay();
+      return db.read<Rutina>("rutinas");
+    },
+
+    async get(id: number): Promise<Rutina | null> {
+      await api._delay();
+      return db.read<Rutina>("rutinas").find((r) => r.id_rutina === id) ?? null;
+    },
+
+    // id_rutina = el mayor id + 1; fecha_creacion = hoy
+    async create(data: RutinaNueva): Promise<ApiResp<Rutina>> {
+      await api._delay();
+      const error = validarReferencias(data.id_instructor, data.id_cliente);
+      if (error) return { ok: false, mensaje: error };
+      const arr = db.read<Rutina>("rutinas");
+      const id = arr.reduce((max, r) => Math.max(max, r.id_rutina), 0) + 1;
+      const nueva: Rutina = { ...data, id_rutina: id, fecha_creacion: utils.isoDate() };
+      arr.push(nueva);
+      db.write("rutinas", arr);
+      return { ok: true, mensaje: "Rutina creada", data: nueva };
+    },
+
+    // id_rutina y fecha_creacion no se dejan cambiar al editar
+    async update(id: number, data: Partial<RutinaNueva>): Promise<ApiResp<Rutina>> {
+      await api._delay();
+      const arr = db.read<Rutina>("rutinas");
+      const r = arr.find((x) => x.id_rutina === id);
+      if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
+      const error = validarReferencias(data.id_instructor ?? r.id_instructor, data.id_cliente ?? r.id_cliente);
+      if (error) return { ok: false, mensaje: error };
+      Object.assign(r, data, { id_rutina: id, fecha_creacion: r.fecha_creacion });
+      db.write("rutinas", arr);
+      return { ok: true, mensaje: "Rutina actualizada", data: r };
+    },
+
+    // Borra la rutina y también sus ejercicios (como un ON DELETE CASCADE)
+    async remove(id: number): Promise<ApiResp<Rutina>> {
+      await api._delay();
+      const arr = db.read<Rutina>("rutinas");
+      const r = arr.find((x) => x.id_rutina === id);
+      if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
+      db.write("rutinas", arr.filter((x) => x.id_rutina !== id));
+      const ejercicios = db.read<RutinaEjercicio>("rutina_ejercicios");
+      db.write("rutina_ejercicios", ejercicios.filter((e) => e.id_rutina !== id));
+      return { ok: true, mensaje: "Rutina eliminada", data: r };
+    },
+
+    // Ejercicios de una rutina, ordenados por día y luego por orden
+    async ejercicios(id: number): Promise<RutinaEjercicio[]> {
+      await api._delay();
+      return db
+        .read<RutinaEjercicio>("rutina_ejercicios")
+        .filter((e) => e.id_rutina === id)
+        .sort((a, b) => DIAS.indexOf(a.dia_semana) - DIAS.indexOf(b.dia_semana) || a.orden - b.orden);
+    },
+
+    // Reemplaza todos los ejercicios de la rutina por la lista recibida.
+    // Solo acepta ejercicios que existan en la colección de P4 ("ejercicios").
+    async guardarEjercicios(id: number, lista: Omit<RutinaEjercicio, "id_rutina">[]): Promise<ApiResp<RutinaEjercicio[]>> {
+      await api._delay();
+      if (!db.read<Rutina>("rutinas").some((r) => r.id_rutina === id))
+        return { ok: false, mensaje: "Rutina no encontrada" };
+      const catalogo = db.read<Ejercicio>("ejercicios");
+      const faltante = lista.find((e) => !catalogo.some((c) => c.idEjercicio === e.id_ejercicio));
+      if (faltante) return { ok: false, mensaje: "El ejercicio " + faltante.id_ejercicio + " no existe" };
+      const nuevos: RutinaEjercicio[] = lista.map((e) => ({ ...e, id_rutina: id }));
+      const otros = db.read<RutinaEjercicio>("rutina_ejercicios").filter((e) => e.id_rutina !== id);
+      db.write("rutina_ejercicios", otros.concat(nuevos));
+      return { ok: true, mensaje: "Ejercicios guardados", data: nuevos };
+    },
+  },
+  // ===== [/P3] Rutinas =====
 };

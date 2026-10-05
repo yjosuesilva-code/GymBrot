@@ -6,6 +6,7 @@ import { ClienteDetalle } from "./pages/ClienteDetalle";
 import { Login } from "./pages/Login";
 import { Instructores } from "./pages/Instructores"; // [P3]
 import { InstructorDetalle } from "./pages/InstructorDetalle"; // [P3]
+import { Rutinas } from "./pages/Rutinas"; // [P3]
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
         {/* [P3] Instructores */}
         <Route path="/instructores" element={<Instructores />} />
         <Route path="/instructores/:id" element={<InstructorDetalle />} />
+        <Route path="/rutinas" element={<Rutinas />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

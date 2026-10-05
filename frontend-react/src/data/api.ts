@@ -1,5 +1,6 @@
 import { utils } from "../lib/utils";
 import type { Cliente, Membresia, Pago, Ingreso, Ejercicio, ApiResp } from "../types";
+import type { Instructor, InstructorNuevo, EstadoInstructor } from "../types"; // [P3]
 
 interface Seed {
   clientes: Cliente[];
@@ -7,6 +8,7 @@ interface Seed {
   pagos: Pago[];
   ingresos: Ingreso[];
   ejercicios: Ejercicio[];
+  instructores: Instructor[]; // [P3]
 }
 
 // --- Generadores de fechas del seed -------------------------------------
@@ -145,6 +147,14 @@ const SEED: Seed = {
 
   ingresos: ingresosPasados().concat(ingresosDeHoy()),
   ejercicios: [],   // la colección de P4 arranca vacía
+
+  // ===== [P3] Instructores =====
+  instructores: [
+    { numero_identificacion:'2000000001', tipo_identificacion:'CC', nombre:'Camilo',  apellidos:'Herrera Díaz', telefono:'3101234567', correo:'camilo.herrera@gymbrot.com', especialidad:'Entrenador personal', disponibilidad:'Lun-Vie 6:00-14:00',  fecha_contratacion:'2025-02-03', estado:'ACTIVO' },
+    { numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Natalia', apellidos:'Vargas Rojas', telefono:'3112345678', correo:'natalia.vargas@gymbrot.com', especialidad:'Yoga/Pilates',        disponibilidad:'Lun-Mié-Vie 16:00-21:00', fecha_contratacion:'2025-08-18', estado:'ACTIVO' },
+    { numero_identificacion:'2000000003', tipo_identificacion:'CE', nombre:'Mateo',   apellidos:'Silva Castro', telefono:'3123456789', correo:'mateo.silva@gymbrot.com',    especialidad:'Nutrición',           disponibilidad:'Mar-Jue 8:00-12:00',  fecha_contratacion:'2026-01-12', estado:'INACTIVO' },
+  ],
+  // ===== [/P3] Instructores =====
 };
 
 // Version del seed guardado en localStorage.
@@ -264,5 +274,60 @@ export const api = {
       await api._delay();
       return db.read<Ingreso>("ingresos").filter((i) => i.id_cliente === id);
     }
-  }
+  },
+
+  // ===== [P3] Instructores =====
+  instructores: {
+    async list(): Promise<Instructor[]> {
+      await api._delay();
+      return db.read<Instructor>("instructores");
+    },
+
+    async get(id: string): Promise<Instructor | null> {
+      await api._delay();
+      return db.read<Instructor>("instructores").find((i) => i.numero_identificacion === id) ?? null;
+    },
+
+    async create(data: InstructorNuevo): Promise<ApiResp<Instructor>> {
+      await api._delay();
+      const arr = db.read<Instructor>("instructores");
+      if (arr.some((i) => i.numero_identificacion === data.numero_identificacion))
+        return { ok: false, mensaje: "Ya existe un instructor con esa identificación" };
+      const nuevo: Instructor = { ...data, estado: "ACTIVO", fecha_contratacion: utils.isoDate() };
+      arr.push(nuevo);
+      db.write("instructores", arr);
+      return { ok: true, mensaje: "Instructor registrado", data: nuevo };
+    },
+
+    // La identificación es la llave: no se deja cambiar al editar
+    async update(id: string, data: Partial<Omit<Instructor, "numero_identificacion">>): Promise<ApiResp<Instructor>> {
+      await api._delay();
+      const arr = db.read<Instructor>("instructores");
+      const ins = arr.find((i) => i.numero_identificacion === id);
+      if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
+      Object.assign(ins, data, { numero_identificacion: id });
+      db.write("instructores", arr);
+      return { ok: true, mensaje: "Instructor actualizado", data: ins };
+    },
+
+    async remove(id: string): Promise<ApiResp<Instructor>> {
+      await api._delay();
+      const arr = db.read<Instructor>("instructores");
+      const ins = arr.find((i) => i.numero_identificacion === id);
+      if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
+      db.write("instructores", arr.filter((i) => i.numero_identificacion !== id));
+      return { ok: true, mensaje: "Instructor eliminado", data: ins };
+    },
+
+    async setEstado(id: string, estado: EstadoInstructor): Promise<ApiResp<Instructor>> {
+      await api._delay();
+      const arr = db.read<Instructor>("instructores");
+      const ins = arr.find((i) => i.numero_identificacion === id);
+      if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
+      ins.estado = estado;
+      db.write("instructores", arr);
+      return { ok: true, mensaje: "Estado actualizado", data: ins };
+    },
+  },
+  // ===== [/P3] Instructores =====
 };

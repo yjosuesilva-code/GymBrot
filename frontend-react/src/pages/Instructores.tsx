@@ -402,7 +402,7 @@ export function Instructores() {
         </Modal.Body>
         <Modal.Footer>
           <button className="btn-dark" onClick={() => setShowEliminar(false)}>Cancelar</button>
-          <button className="btn-neon" onClick={confirmarEliminar}>Sí, eliminar</button>
+          <button className="btn-danger-g" onClick={confirmarEliminar}>Sí, eliminar</button>
         </Modal.Footer>
       </Modal>
     </div>

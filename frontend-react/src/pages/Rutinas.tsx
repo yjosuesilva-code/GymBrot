@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
-import type { Rutina, Instructor, Cliente, ObjetivoRutina, DiaSemana } from "../types";
+import type { Rutina, RutinaNueva, Instructor, Cliente, ObjetivoRutina, DiaSemana } from "../types";
 
 const OBJETIVOS: ObjetivoRutina[] = [
   "Pérdida de peso",
@@ -52,6 +53,41 @@ function calcularVigencia(r: Rutina): Vigencia {
   return { texto: "Vigente", clase: "badge-activo", avance };
 }
 
+// Vigente = sin fecha fin, o con fecha fin de hoy en adelante (la misma regla que api.rutinas)
+function esVigente(r: Rutina): boolean {
+  return r.fecha_fin === null || r.fecha_fin >= utils.isoDate();
+}
+
+// El formulario usa "" en fecha_fin cuando no hay fecha (un <input type="date"> vacío vale "");
+// al guardar se convierte a null
+type FormRutina = Omit<RutinaNueva, "fecha_fin"> & { fecha_fin: string };
+
+const VACIO: FormRutina = {
+  nombre: "",
+  objetivo: "Ganancia muscular",
+  id_cliente: "",
+  id_instructor: "",
+  dias_semana: [],
+  fecha_fin: "",
+  descripcion: "",
+};
+
+// Devuelve el primer error encontrado, o "" si el formulario es válido.
+// fechaOriginal: al editar, si la fecha fin no se cambió no se exige que sea de hoy en adelante
+// (así se puede corregir, por ejemplo, el nombre de una rutina que ya está en el historial).
+function validar(f: FormRutina, fechaOriginal: string): string {
+  if (!f.nombre) return "El nombre es obligatorio";
+  if (!f.id_cliente) return "Selecciona un cliente";
+  if (!f.id_instructor) return "Selecciona un instructor";
+  if (f.dias_semana.length === 0) return "Selecciona al menos un día";
+  if (f.fecha_fin && f.fecha_fin !== fechaOriginal && f.fecha_fin < utils.isoDate())
+    return "La fecha fin no puede ser anterior a hoy";
+  return "";
+}
+
+// Alerta de la parte superior: tipo define el color (alert-ok verde neón, alert-error rojo)
+type Alerta = { tipo: "ok" | "error"; mensaje: string };
+
 export function Rutinas() {
   const [rutinas, setRutinas] = useState<Rutina[]>([]);
   const [instructores, setInstructores] = useState<Instructor[]>([]);
@@ -63,6 +99,15 @@ export function Rutinas() {
   const [filtroObjetivo, setFiltroObjetivo] = useState<ObjetivoRutina | "">("");
   const [agrupar, setAgrupar] = useState(false);
 
+  const [alerta, setAlerta] = useState<Alerta | null>(null);
+
+  // Modal crear/editar: editandoId es null al crear y el id de la rutina al editar
+  const [show, setShow] = useState(false);
+  const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [form, setForm] = useState<FormRutina>(VACIO);
+  const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
   // Carga las tres colecciones a la vez: las rutinas solo guardan ids,
   // y los nombres salen de instructores y clientes
   useEffect(() => {
@@ -73,6 +118,13 @@ export function Rutinas() {
       setCargando(false);
     });
   }, []);
+
+  // La alerta desaparece a los 4 segundos (el cleanup cancela el temporizador anterior)
+  useEffect(() => {
+    if (!alerta) return;
+    const t = setTimeout(() => setAlerta(null), 4000);
+    return () => clearTimeout(t);
+  }, [alerta]);
 
   function buscarInstructor(id: string): Instructor | undefined {
     return instructores.find((x) => x.numero_identificacion === id);
@@ -111,6 +163,85 @@ export function Rutinas() {
   function limpiarFiltros() {
     setBusqueda("");
     setFiltroObjetivo("");
+  }
+
+  // ----- Modal crear/editar -----
+
+  // Rutina vigente de cada cliente: { idCliente: "nombre de la rutina" }.
+  // No cuenta la rutina que se está editando (si no, su propio cliente saldría como ocupado).
+  const vigentePorCliente = rutinas
+    .filter((r) => r.id_rutina !== editandoId && esVigente(r))
+    .reduce<Record<string, string>>((acc, r) => {
+      acc[r.id_cliente] = r.nombre;
+      return acc;
+    }, {});
+
+  // Solo activos; al editar se incluye el ya elegido aunque esté inactivo, para que el select lo muestre
+  const clientesSelect = clientes.filter((c) => c.estado === "ACTIVO" || c.numero_identificacion === form.id_cliente);
+  const instructoresSelect = instructores.filter(
+    (i) => i.estado === "ACTIVO" || i.numero_identificacion === form.id_instructor
+  );
+
+  // Cambia un solo campo; K hace que el valor tenga el tipo correcto de ese campo
+  function setCampo<K extends keyof FormRutina>(campo: K, valor: FormRutina[K]) {
+    setForm((f) => ({ ...f, [campo]: valor }));
+  }
+
+  // Activa o desactiva un día y deja la lista en el orden L → D
+  function alternarDia(dia: DiaSemana) {
+    setForm((f) => {
+      const marcados = f.dias_semana.includes(dia)
+        ? f.dias_semana.filter((d) => d !== dia)
+        : [...f.dias_semana, dia];
+      return { ...f, dias_semana: DIAS.map((d) => d.dia).filter((d) => marcados.includes(d)) };
+    });
+  }
+
+  function abrirNuevo() {
+    setEditandoId(null);
+    setForm(VACIO);
+    setError("");
+    setShow(true);
+  }
+
+  function abrirEdicion(r: Rutina) {
+    setEditandoId(r.id_rutina);
+    setForm({
+      nombre: r.nombre,
+      objetivo: r.objetivo,
+      id_cliente: r.id_cliente,
+      id_instructor: r.id_instructor,
+      dias_semana: r.dias_semana,
+      fecha_fin: r.fecha_fin ?? "",
+      descripcion: r.descripcion,
+    });
+    setError("");
+    setShow(true);
+  }
+
+  async function guardar() {
+    const limpio: FormRutina = { ...form, nombre: form.nombre.trim(), descripcion: form.descripcion.trim() };
+    const original = rutinas.find((r) => r.id_rutina === editandoId);
+    const msg = validar(limpio, original?.fecha_fin ?? "");
+    if (msg) {
+      setError(msg);
+      return;
+    }
+
+    // Lo que espera la api: fecha_fin vacía se guarda como null
+    const datos: RutinaNueva = { ...limpio, fecha_fin: limpio.fecha_fin || null };
+
+    setGuardando(true);
+    const res = editandoId !== null ? await api.rutinas.update(editandoId, datos) : await api.rutinas.create(datos);
+    setGuardando(false);
+
+    if (!res.ok) {
+      setError(res.mensaje);
+      return;
+    }
+    setShow(false);
+    setAlerta({ tipo: "ok", mensaje: res.mensaje });
+    setRutinas(await api.rutinas.list());
   }
 
   // Una tarjeta de rutina (se usa igual en la vista normal y en la agrupada)
@@ -166,10 +297,10 @@ export function Rutinas() {
           )}
         </div>
 
-        {/* Solo se muestran: la lógica llega en las Partes 4 y 5 */}
+        {/* Ver y eliminar solo se muestran: su lógica llega en partes siguientes */}
         <div className="cell-actions rutina-acciones">
           <button className="btn-icon" title="Ver detalle">👁</button>
-          <button className="btn-icon" title="Editar">✏️</button>
+          <button className="btn-icon" title="Editar" onClick={() => abrirEdicion(r)}>✏️</button>
           <button className="btn-icon" title="Eliminar">🗑️</button>
         </div>
       </div>
@@ -188,7 +319,7 @@ export function Rutinas() {
       <div className="card-g">
         <p className="empty-state">
           {rutinas.length === 0
-            ? "No hay rutinas registradas todavía."
+            ? "No hay rutinas registradas todavía. Crea la primera con «+ Nueva rutina»."
             : "Ninguna rutina coincide con la búsqueda o el filtro."}
         </p>
       </div>
@@ -221,7 +352,10 @@ export function Rutinas() {
             <h2 className="card-title">Rutinas</h2>
             <p className="card-sub">Planes de entrenamiento asignados a cada cliente</p>
           </div>
+          <button className="btn-neon" onClick={abrirNuevo}>+ Nueva rutina</button>
         </div>
+
+        {alerta && <div className={"alert-g show alert-" + alerta.tipo}>{alerta.mensaje}</div>}
 
         <div className="toolbar">
           <div className="search-box">
@@ -252,6 +386,101 @@ export function Rutinas() {
       </div>
 
       {contenido}
+
+      <Modal show={show} onHide={() => setShow(false)} centered size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>{editandoId !== null ? "Editar rutina" : "Nueva rutina"}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {error && <div className="alert-g alert-error show">{error}</div>}
+          <div className="row g-3">
+            <div className="col-md-8">
+              <label className="form-label-g">Nombre</label>
+              <input className="form-control-dark" value={form.nombre} onChange={(e) => setCampo("nombre", e.target.value)} />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label-g">Objetivo</label>
+              <select
+                className="form-control-dark"
+                value={form.objetivo}
+                onChange={(e) => setCampo("objetivo", e.target.value as ObjetivoRutina)}
+              >
+                {OBJETIVOS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div className="col-md-6">
+              <label className="form-label-g">Cliente</label>
+              <select className="form-control-dark" value={form.id_cliente} onChange={(e) => setCampo("id_cliente", e.target.value)}>
+                <option value="">Selecciona un cliente</option>
+                {clientesSelect.map((c) => {
+                  const vigente = vigentePorCliente[c.numero_identificacion];
+                  return (
+                    <option key={c.numero_identificacion} value={c.numero_identificacion} disabled={vigente !== undefined}>
+                      {c.nombre} {c.apellidos}
+                      {vigente !== undefined ? " — ya tiene vigente: " + vigente : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            <div className="col-md-6">
+              <label className="form-label-g">Instructor</label>
+              <select className="form-control-dark" value={form.id_instructor} onChange={(e) => setCampo("id_instructor", e.target.value)}>
+                <option value="">Selecciona un instructor</option>
+                {instructoresSelect.map((i) => (
+                  <option key={i.numero_identificacion} value={i.numero_identificacion}>
+                    {i.nombre} {i.apellidos} — {i.especialidad}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-md-6">
+              <label className="form-label-g">Días de entrenamiento</label>
+              <div className="rutina-dias">
+                {DIAS.map(({ dia, letra }) => (
+                  <button
+                    key={dia}
+                    type="button"
+                    title={dia}
+                    className={"dia-pill dia-pill-btn" + (form.dias_semana.includes(dia) ? " activo" : "")}
+                    onClick={() => alternarDia(dia)}
+                  >
+                    {letra}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="col-md-6">
+              <label className="form-label-g">Fecha fin (opcional)</label>
+              <input
+                className="form-control-dark"
+                type="date"
+                min={utils.isoDate()}
+                value={form.fecha_fin}
+                onChange={(e) => setCampo("fecha_fin", e.target.value)}
+              />
+            </div>
+            <div className="col-12">
+              <label className="form-label-g">Descripción</label>
+              <textarea
+                className="form-control-dark"
+                rows={3}
+                value={form.descripcion}
+                onChange={(e) => setCampo("descripcion", e.target.value)}
+              />
+            </div>
+            <div className="col-12">
+              <p className="card-sub">Los ejercicios se agregarán cuando esté listo el catálogo de ejercicios (P4).</p>
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <button className="btn-dark" onClick={() => setShow(false)}>Cancelar</button>
+          <button className="btn-neon" onClick={guardar} disabled={guardando}>
+            {guardando ? "Guardando..." : "Guardar"}
+          </button>
+        </Modal.Footer>
+      </Modal>
     </>
   );
 }

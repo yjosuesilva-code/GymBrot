@@ -276,6 +276,10 @@ body {
 
 
 /* ===== [P3] Estilos propios · instructores, instructor-detalle, rutinas ===== */
+/* Botón para acciones destructivas (ej. "Sí, eliminar"). Mismas medidas que .btn-neon;
+   el rojo es el mismo de .alert-error y .badge-vencida */
+.btn-danger-g { background: #ff6b6b; color: #000; border: none; padding: 8px 16px; border-radius: var(--radius-sm); font-family: var(--f-title); font-weight: 700; font-size: 13px; cursor: pointer; }
+.btn-danger-g:hover { filter: brightness(1.08); }
 
 
 /* ===== [P4] Estilos propios · ejercicios, membresias ===== */

@@ -342,6 +342,13 @@ export const api = {
       const arr = db.read<Instructor>("instructores");
       const ins = arr.find((i) => i.numero_identificacion === id);
       if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
+      // Como un FK con RESTRICT: no se borra si tiene rutinas que lo referencian
+      const rutinas = db.read<Rutina>("rutinas").filter((r) => r.id_instructor === id).length;
+      if (rutinas > 0)
+        return {
+          ok: false,
+          mensaje: "No se puede eliminar: tiene " + rutinas + " rutina(s) asignada(s). Desactívalo en su lugar.",
+        };
       db.write("instructores", arr.filter((i) => i.numero_identificacion !== id));
       return { ok: true, mensaje: "Instructor eliminado", data: ins };
     },

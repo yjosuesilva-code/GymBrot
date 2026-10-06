@@ -136,6 +136,133 @@ function ingresosDeHoy(): Ingreso[] {
   });
 }
 
+// --- Seed de finanzas ------------------------------------------------------
+//
+// Todo el historial financiero usa fechas relativas a hoy. Escribirlas fijas
+// era un error: las membresias.tenian 2026-08-15 y 2026-09-15 hardcodeadas, y
+// en cuanto paso la fecha de vencimiento las cuatro quedaron vencidas, Finanzas
+// mostro 0 membresias vigentes y el control de acceso dejo entrar a todo el
+// mundo porque el historial seguia con activa=true.
+
+let secuenciaPago = 0;
+
+function pago(
+  idCliente: string,
+  idMembresia: number,
+  haceDias: number,
+  valor: number,
+  metodo: Pago["metodo_pago"],
+  estado: Pago["estado_pago"] = "EXITOSO",
+  referencia = "",
+  observaciones = "",
+  fechaExacta?: string,
+): Pago {
+  return {
+    id_pago: ++secuenciaPago,
+    id_cliente: idCliente,
+    id_membresia: idMembresia,
+    fecha_pago: fechaExacta ?? dia(haceDias),
+    valor,
+    metodo_pago: metodo,
+    estado_pago: estado,
+    referencia_transaccion: referencia,
+    observaciones,
+  };
+}
+
+// Primer dia del mes 'mesesAtras' meses antes de hoy. Anclar por mes en vez de
+// por cantidad de dias es lo que mantiene estable la serie: con offsets fijos
+// de 30 dias la cantidad de meses con dato dependia del dia del mes en que se
+// corria el seed, y la grafica aparecia con 11 o 13 barras.
+function inicioDeMes(mesesAtras: number): string {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - mesesAtras);
+  return utils.isoDate(d);
+}
+
+// Un dia dentro del mes 'mesesAtras' atras, recortado al ultimo dia si el mes
+// es mas corto. Asi el dia de cobro de cada cliente (Ana el 20, Carlos el 8)
+// se mantiene parecido en todos los meses. Nunca devuelve una fecha futura:
+// si el dia de cobro todavia no llego en el mes corriente, se recorta a hoy.
+function diaDeMes(mesesAtras: number, diaDelMes: number): string {
+  const base = inicioDeMes(mesesAtras);
+  const [anio, mes] = base.split("-").map(Number);
+  const ultimoDelMes = new Date(anio, mes, 0).getDate();
+  const fecha = sumarDias(base, Math.min(diaDelMes, ultimoDelMes) - 1);
+  const hoy = dia(0);
+  return fecha > hoy ? hoy : fecha;
+}
+
+// Un pago por mes hacia atras, para que la grafica de ingresos tenga los 12
+// meses con dato en vez de solo el corriente.
+//
+// El pago del mes en curso usa diaDeMes(0, ...) en vez de un offset fijo de
+// dias: con offsets, "hace 16 dias" caia en el mes anterior cuando hoy era dia
+// 1 o 2, y el dia de cobro caia en el futuro cuando hoy era dia 1. Con anclaje
+// por mes la serie tiene siempre los mismos 12 meses, sea cual sea el dia.
+function pagosMensuales(
+  idCliente: string,
+  idMembresia: number,
+  valor: number,
+  metodos: Pago["metodo_pago"][],
+  diaDeCobro: number,
+  mesesAtras: number,
+  renewalHoy = false,
+): Pago[] {
+  const lista: Pago[] = [];
+  // La renovacion de hoy se ancla al dia actual para que "Recaudado hoy" tenga
+  // movimiento; las anteriores, al dia de cobro habitual del cliente.
+  const actual = renewalHoy ? dia(0) : diaDeMes(0, diaDeCobro);
+  lista.push(pago(idCliente, idMembresia, 0, valor, metodos[0], "EXITOSO", "", "", actual));
+
+  for (let mes = 1; mes <= mesesAtras; mes++) {
+    const fecha = diaDeMes(mes, diaDeCobro);
+    // Se descarta cualquier cuota que caiga en el mismo mes que la renovacion
+    // mas reciente, para no inventar dos cobros en un mismo mes.
+    if (fecha >= actual) continue;
+    lista.push(
+      pago(idCliente, idMembresia, 0, valor, metodos[mes % metodos.length], "EXITOSO", "", "", fecha),
+    );
+  }
+  return lista;
+}
+
+// Serie de cada cliente con membresia vigente. Se declaran antes que las
+// membresias porque de ellas se derivan fecha_inicio (primer pago) y
+// fecha_registro: una membresia no puede empezar antes de que el cliente
+// exista, ni antes del primer pago que la financia.
+//
+// Los dos ultimos argumentos son los meses hacia atras que se cubren (11) y si
+// la renovacion mas reciente cae hoy. Carlos y Juan renuevan hoy, que es lo que
+// alimenta "Recaudado hoy".
+const serieAna    = pagosMensuales('1000000001', 1, 280000, ['TARJETA', 'NEQUI'],    20, 11);
+const serieCarlos = pagosMensuales('1000000002', 2, 120000, ['EFECTIVO', 'NEQUI'],    8, 11, true);
+const serieJuan   = pagosMensuales('1000000003', 3, 180000, ['TARJETA', 'EFECTIVO'], 12, 11, true);
+const serieAndres = pagosMensuales('1000000007', 5, 180000, ['NEQUI', 'TARJETA'],    18, 11);
+
+// El pago anual de Diego cierra la serie de ingresos del mes 11.
+const pagoAnualDiego = pago(
+  '1000000005', 4, 0, 2800000, 'TRANSFERENCIA', 'EXITOSO', 'TR-2290',
+  'Pago anual anticipado', diaDeMes(11, 6),
+);
+
+// Pagos sin aplicar: son los unicos estados distintos de EXITOSO, y son la
+// razon de que la tabla "Pagos por aplicar" no salga vacia.
+const pagosSinAplicar = [
+  pago('1000000004', 6, 40, 180000, 'TRANSFERENCIA', 'PENDIENTE', 'TR-2299', 'Transferencia sin aplicar'),
+  pago('1000000006', 7, 25, 120000, 'EFECTIVO',      'PENDIENTE', '',          'Cobro en efectivo sin membresia activa'),
+];
+
+function inicioDe(serie: Pago[]): string {
+  return serie.reduce((menor, p) => (p.fecha_pago < menor ? p.fecha_pago : menor), serie[0].fecha_pago);
+}
+
+function finDe(serie: Pago[], diasExtra: number): string {
+  const ultimo = serie.reduce((mayor, p) => (p.fecha_pago > mayor ? p.fecha_pago : mayor), serie[0].fecha_pago);
+  return sumarDias(ultimo, diasExtra);
+}
+
 const SEED: Seed = {
   // Personal con acceso al panel. El legacy exige tipo_usuario
   // 'ADMINISTRADOR' para iniciar sesion (loginController.java:156), asi que
@@ -148,13 +275,13 @@ const SEED: Seed = {
   ],
 
   clientes: [ 
-    { numero_identificacion:'1000000001', tipo_identificacion:'CC', nombre:'Ana María',    apellidos:'Ruiz',     telefono:'3001112233', correo:'ana.ruiz@mail.com',   direccion:'Cra 15 #23-40', fecha_nacimiento:'1995-03-12', estado:'ACTIVO',     fecha_registro:'2026-01-10' },
-    { numero_identificacion:'1000000002', tipo_identificacion:'CC', nombre:'Carlos Andrés', apellidos:'Pérez',    telefono:'3012223344', correo:'carlos.perez@mail.com',direccion:'Cl 20 #5-16',   fecha_nacimiento:'1988-11-02', estado:'ACTIVO',     fecha_registro:'2026-01-18' },
-    { numero_identificacion:'1000000003', tipo_identificacion:'TI', nombre:'Juan David',    apellidos:'Gómez',    telefono:'3023334455', correo:'juan.gomez@mail.com',  direccion:'Cra 9 #10-11',  fecha_nacimiento:'2009-06-25', estado:'ACTIVO',     fecha_registro:'2026-02-01' },
-    { numero_identificacion:'1000000004', tipo_identificacion:'CC', nombre:'Laura Sofía',   apellidos:'Martínez', telefono:'3034445566', correo:'laura.m@mail.com',     direccion:'Cl 8 #1-90',    fecha_nacimiento:'1999-09-14', estado:'SUSPENDIDO', fecha_registro:'2026-02-10' },
-    { numero_identificacion:'1000000005', tipo_identificacion:'CE', nombre:'Diego Fernando',apellidos:'Ríos',     telefono:'3045556677', correo:'diego.rios@mail.com',  direccion:'Av 4 #12-30',   fecha_nacimiento:'1965-02-20', estado:'ACTIVO',     fecha_registro:'2026-02-15' },
-    { numero_identificacion:'1000000006', tipo_identificacion:'CC', nombre:'Valentina',     apellidos:'Torres',   telefono:'3056667788', correo:'valen.torres@mail.com',direccion:'Cra 19 #4-5',   fecha_nacimiento:'2001-12-01', estado:'INACTIVO',   fecha_registro:'2026-03-01' },
-    { numero_identificacion:'1000000007', tipo_identificacion:'CC', nombre:'Andrés Felipe', apellidos:'Navarro',  telefono:'3067778899', correo:'andres.nav@mail.com',  direccion:'Cl 44 #7-2',    fecha_nacimiento:'1992-07-19', estado:'ACTIVO',     fecha_registro:'2026-03-05' }
+    { numero_identificacion:'1000000001', tipo_identificacion:'CC', nombre:'Ana María',    apellidos:'Ruiz',     telefono:'3001112233', correo:'ana.ruiz@mail.com',   direccion:'Cra 15 #23-40', fecha_nacimiento:'1995-03-12', estado:'ACTIVO',     fecha_registro:inicioDe(serieAna) },
+    { numero_identificacion:'1000000002', tipo_identificacion:'CC', nombre:'Carlos Andrés', apellidos:'Pérez',    telefono:'3012223344', correo:'carlos.perez@mail.com',direccion:'Cl 20 #5-16',   fecha_nacimiento:'1988-11-02', estado:'ACTIVO',     fecha_registro:inicioDe(serieCarlos) },
+    { numero_identificacion:'1000000003', tipo_identificacion:'TI', nombre:'Juan David',    apellidos:'Gómez',    telefono:'3023334455', correo:'juan.gomez@mail.com',  direccion:'Cra 9 #10-11',  fecha_nacimiento:'2009-06-25', estado:'ACTIVO',     fecha_registro:inicioDe(serieJuan) },
+    { numero_identificacion:'1000000004', tipo_identificacion:'CC', nombre:'Laura Sofía',   apellidos:'Martínez', telefono:'3034445566', correo:'laura.m@mail.com',     direccion:'Cl 8 #1-90',    fecha_nacimiento:'1999-09-14', estado:'SUSPENDIDO', fecha_registro:dia(180) },
+    { numero_identificacion:'1000000005', tipo_identificacion:'CE', nombre:'Diego Fernando',apellidos:'Ríos',     telefono:'3045556677', correo:'diego.rios@mail.com',  direccion:'Av 4 #12-30',   fecha_nacimiento:'1965-02-20', estado:'ACTIVO',     fecha_registro:pagoAnualDiego.fecha_pago },
+    { numero_identificacion:'1000000006', tipo_identificacion:'CC', nombre:'Valentina',     apellidos:'Torres',   telefono:'3056667788', correo:'valen.torres@mail.com',direccion:'Cra 19 #4-5',   fecha_nacimiento:'2001-12-01', estado:'INACTIVO',   fecha_registro:dia(55) },
+    { numero_identificacion:'1000000007', tipo_identificacion:'CC', nombre:'Andrés Felipe', apellidos:'Navarro',  telefono:'3067778899', correo:'andres.nav@mail.com',  direccion:'Cl 44 #7-2',    fecha_nacimiento:'1992-07-19', estado:'ACTIVO',     fecha_registro:inicioDe(serieAndres) }
    ],
 
   // Catalogo de planes. Los tres precios por modalidad son los que lee
@@ -165,34 +292,46 @@ const SEED: Seed = {
     { id_plan:3, nombre:'Premium',  descripcion:'Todo lo anterior mas sauna y entrenador',  precio_mensual:280000, precio_semestral:1520000, precio_anual:2800000, estado:'ACTIVO' },
   ],
 
-  membresias: [{ id_membresia:1, id_cliente:'1000000001', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'MENSUAL', valor:280000,  fecha_inicio:'2026-08-15', fecha_vencimiento:'2026-09-15', estado:'ACTIVA' },
-    { id_membresia:2, id_cliente:'1000000001', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:'2026-07-15', fecha_vencimiento:'2026-08-15', estado:'VENCIDA' },
-    { id_membresia:3, id_cliente:'1000000002', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:'2026-09-01', fecha_vencimiento:'2026-10-01', estado:'ACTIVA' },
-    { id_membresia:4, id_cliente:'1000000005', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'ANUAL',   valor:2800000, fecha_inicio:'2026-02-15', fecha_vencimiento:'2027-02-15', estado:'ACTIVA' }
+  // Una membresia vigente por cada cliente ACTIVO (5 en total), mas dos
+  // vencidas para que existan los casos de cobro pendiente.
+  //
+  // fecha_inicio es el PRIMER pago de la serie, no el ultimo: una membresia
+  // mensual renovada no arranca de nuevo en cada renovacion. Y
+  // fecha_vencimiento se calcula con la duracion que aplica el cobro real
+  // (30 / 365 dias) a partir del ultimo pago, para que el dato nunca contradiga
+  // al reloj.
+  membresias: [
+    { id_membresia:1, id_cliente:'1000000001', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'MENSUAL', valor:280000,  fecha_inicio:inicioDe(serieAna),    fecha_vencimiento:finDe(serieAna, 30),    estado:'ACTIVA' },
+    { id_membresia:2, id_cliente:'1000000002', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:inicioDe(serieCarlos), fecha_vencimiento:finDe(serieCarlos, 30), estado:'ACTIVA' },
+    { id_membresia:3, id_cliente:'1000000003', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:inicioDe(serieJuan),   fecha_vencimiento:finDe(serieJuan, 30),   estado:'ACTIVA' },
+    { id_membresia:4, id_cliente:'1000000005', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'ANUAL',   valor:2800000, fecha_inicio:pagoAnualDiego.fecha_pago, fecha_vencimiento:sumarDias(pagoAnualDiego.fecha_pago, 365), estado:'ACTIVA' },
+    { id_membresia:5, id_cliente:'1000000007', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:inicioDe(serieAndres), fecha_vencimiento:finDe(serieAndres, 30), estado:'ACTIVA' },
+    // Membresias ya vencidas: son las que dejan pagos sin aplicar y las que
+    // el control de acceso debe rechazar.
+    { id_membresia:6, id_cliente:'1000000004', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:dia(70),  fecha_vencimiento:dia(40),  estado:'VENCIDA' },
+    { id_membresia:7, id_cliente:'1000000006', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:dia(55),  fecha_vencimiento:dia(25),  estado:'VENCIDA' },
   ],
 
-  // Marca la membresia vigente de cada socio. Los suspendidos y quien solo
-  // tiene membresia vencida quedan con activa=false, que es como el control
-  // de acceso los bloquea (RegistroEntradaController.java:319).
+  // Marca que membresia esta vigente. El control de acceso consulta esta tabla
+  // (RegistroEntradaController.java:319), asi que activa=true debe coincidir
+  // siempre con una membresia ACTIVA y no vencida: antes tres filas marcaban
+  // activa=true sobre membresias vencidas y el acceso las dejaba pasar.
   historialMembresias: [
-    { id_historial:1, id_cliente:'1000000001', id_membresia:1, fecha_asignacion:'2026-08-15', activa:true  },
-    { id_historial:2, id_cliente:'1000000001', id_membresia:2, fecha_asignacion:'2026-07-15', activa:false },
-    { id_historial:3, id_cliente:'1000000002', id_membresia:3, fecha_asignacion:'2026-09-01', activa:true  },
-    { id_historial:4, id_cliente:'1000000005', id_membresia:4, fecha_asignacion:'2026-02-15', activa:true  },
+    { id_historial:1, id_cliente:'1000000001', id_membresia:1, fecha_asignacion:inicioDe(serieAna),    activa:true  },
+    { id_historial:2, id_cliente:'1000000002', id_membresia:2, fecha_asignacion:inicioDe(serieCarlos), activa:true  },
+    { id_historial:3, id_cliente:'1000000003', id_membresia:3, fecha_asignacion:inicioDe(serieJuan),   activa:true  },
+    { id_historial:4, id_cliente:'1000000005', id_membresia:4, fecha_asignacion:pagoAnualDiego.fecha_pago, activa:true },
+    { id_historial:5, id_cliente:'1000000007', id_membresia:5, fecha_asignacion:inicioDe(serieAndres), activa:true  },
+    { id_historial:6, id_cliente:'1000000004', id_membresia:6, fecha_asignacion:dia(70),  activa:false },
+    { id_historial:7, id_cliente:'1000000006', id_membresia:7, fecha_asignacion:dia(55),  activa:false },
   ],
   
-  pagos: [{ id_pago:1, id_cliente:'1000000001', id_membresia:1, fecha_pago:'2026-08-15', valor:280000,  metodo_pago:'TARJETA',       estado_pago:'EXITOSO', referencia_transaccion:'TX-8801', observaciones:'' },
-    { id_pago:2, id_cliente:'1000000001', id_membresia:2, fecha_pago:'2026-07-15', valor:180000,  metodo_pago:'NEQUI',         estado_pago:'EXITOSO', referencia_transaccion:'N-5521',  observaciones:'' },
-    { id_pago:3, id_cliente:'1000000002', id_membresia:3, fecha_pago:'2026-09-01', valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO', referencia_transaccion:'',        observaciones:'' },
-    { id_pago:4, id_cliente:'1000000005', id_membresia:4, fecha_pago:'2026-02-15', valor:2800000, metodo_pago:'TRANSFERENCIA', estado_pago:'EXITOSO', referencia_transaccion:'TR-2290', observaciones:'Pago anual anticipado' },
-    { id_pago:5, id_cliente:'1000000007', id_membresia:3, fecha_pago:'2026-09-05', valor:180000,  metodo_pago:'NEQUI',         estado_pago:'EXITOSO', referencia_transaccion:'N-5578',  observaciones:'' },
-    { id_pago:6, id_cliente:'1000000003', id_membresia:1, fecha_pago:'2026-09-12', valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO', referencia_transaccion:'',        observaciones:'' },
-    // Pagos del mes en curso (fechas relativas) -> KPI "Ingresos este mes"
-    { id_pago:7,  id_cliente:'1000000001', id_membresia:1, fecha_pago:dia(0), valor:280000,  metodo_pago:'TARJETA',       estado_pago:'EXITOSO', referencia_transaccion:'TX-9012', observaciones:'' },
-    { id_pago:8,  id_cliente:'1000000002', id_membresia:3, fecha_pago:dia(0), valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO', referencia_transaccion:'',        observaciones:'' },
-    { id_pago:9,  id_cliente:'1000000007', id_membresia:3, fecha_pago:dia(1), valor:180000,  metodo_pago:'NEQUI',         estado_pago:'EXITOSO', referencia_transaccion:'N-5603',  observaciones:'' },
-    { id_pago:10, id_cliente:'1000000004', id_membresia:3, fecha_pago:dia(1), valor:180000,  metodo_pago:'TRANSFERENCIA', estado_pago:'EXITOSO', referencia_transaccion:'TR-2310', observaciones:'Transferencia pendiente de aplicar' },
-  ],
+  pagos: serieAna
+    .concat(serieCarlos)
+    .concat(serieJuan)
+    .concat(serieAndres)
+    .concat([pagoAnualDiego])
+    .concat(pagosSinAplicar),
 
   ingresos: ingresosPasados().concat(ingresosDeHoy()),
   ejercicios: [],   // la colección de P4 arranca vacía
@@ -204,7 +343,10 @@ const SEED: Seed = {
 // tenga datos: read() solo siembra cuando la clave no existe, asi que un
 // seed nuevo convive con el viejo indefinidamente. Al cambiar este numero
 // la siguiente carga regenera todas las colecciones.
-const SEED_VERSION = "4";
+// v5 reescribio el seed financiero con fechas relativas, 5 membresias vigentes
+// coherentes con sus pagos, y pagos PENDIENTE para que la tabla de pendientes
+// no salga vacia. El bump descarta los datos v4 que quedaron inconsistentes.
+const SEED_VERSION = "5";
 const CLAVE_VERSION = "gymbrot_seed_version";
 const CLAVE_LECTOR = "gymbrot_lector_conectado";
 
@@ -570,7 +712,7 @@ export const api = {
       return porMes.map((m) => ({ mes: m.mes, cantidad: m.total }));
     },
 
-    /* Pagos que aun no se aplican: el socio tiene membresia vencida o sin
+    /* Pagos que aun no se aplican: el cliente tiene membresia vencida o sin
        historial vigente. El legacy mira si la membresia sigue ACTIVA
        (FinanzasService.java:112), que ignora que el pago pudo quedar
        PENDIENTE aunque la membresia este bien. */

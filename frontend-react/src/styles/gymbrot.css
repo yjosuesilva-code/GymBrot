@@ -101,7 +101,7 @@ body {
    colapsado y el wordmark GYMBROT al expandirse. El padding inferior baja de
    24 a 19px para ganar 5px de alto en el rail. */
 .sidebar-logo {
-  padding: 4px 0 19px;
+  padding: 4px 0 18px;
   display: grid;
   place-items: center;
 }

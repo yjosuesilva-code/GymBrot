@@ -10,6 +10,7 @@ export const paginas = [
   // blanco. bi-lightning-charge-fill es el equivalente mas cercano.
   { to: "/ejercicios", label: "Ejercicios", icon: "bi-lightning-charge-fill" },
   { to: "/citas", label: "Citas", icon: "bi-calendar-check" },
+  { to: "/progreso", label: "Progreso", icon: "bi-activity" },
   { to: "/notificaciones", label: "Notificaciones", icon: "bi-bell" },
   { to: "/finanzas", label: "Finanzas", icon: "bi-graph-up-arrow" },
   { to: "/gymbrot-ai", label: "Gymbrot AI", icon: "bi-stars" },

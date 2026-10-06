@@ -11,6 +11,16 @@ import type {
   ApiResp,
   PlanMembresia,
   HistorialMembresia,
+  Progreso, // [P2]
+  Cita, // [P2]
+  CitaNueva, // [P2]
+  Instructor, // [P3]
+  InstructorNuevo, // [P3]
+  EstadoInstructor, // [P3]
+  Rutina, // [P3]
+  RutinaNueva, // [P3]
+  RutinaEjercicio, // [P3]
+  DiaSemana, // [P3]
 } from "../types";
 
 interface Seed {
@@ -22,6 +32,11 @@ interface Seed {
   pagos: Pago[];
   ingresos: Ingreso[];
   ejercicios: Ejercicio[];
+  instructores: Instructor[]; // [P3]
+  rutinas: Rutina[]; // [P3]
+  rutina_ejercicios: RutinaEjercicio[]; // [P3]
+  progreso: Progreso[]; // [P2]
+  citas: Cita[]; // [P2]
 }
 
 // --- Generadores de fechas del seed -------------------------------------
@@ -360,6 +375,45 @@ const SEED: Seed = {
 
   ingresos: ingresosPasados().concat(ingresosDeHoy()),
   ejercicios: [],   // la colección de P4 arranca vacía
+
+  // ===== [P3] Instructores =====
+  instructores: [
+    { numero_identificacion:'2000000001', tipo_identificacion:'CC', nombre:'Camilo',  apellidos:'Herrera Díaz', telefono:'3101234567', correo:'camilo.herrera@gymbrot.com', especialidad:'Entrenador personal', disponibilidad:'Lun-Vie 6:00-14:00',  fecha_contratacion:'2025-02-03', estado:'ACTIVO' },
+    { numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Natalia', apellidos:'Vargas Rojas', telefono:'3112345678', correo:'natalia.vargas@gymbrot.com', especialidad:'Yoga/Pilates',        disponibilidad:'Lun-Mié-Vie 16:00-21:00', fecha_contratacion:'2025-08-18', estado:'ACTIVO' },
+    { numero_identificacion:'2000000003', tipo_identificacion:'CE', nombre:'Mateo',   apellidos:'Silva Castro', telefono:'3123456789', correo:'mateo.silva@gymbrot.com',    especialidad:'Nutrición',           disponibilidad:'Mar-Jue 8:00-12:00',  fecha_contratacion:'2026-01-12', estado:'INACTIVO' },
+  ],
+  // ===== [/P3] Instructores =====
+
+  // ===== [P3] Rutinas =====
+  // Fechas relativas (dia(n) = hace n días; dia(-n) = dentro de n días) para que siempre
+  // haya una rutina vigente, una por vencer, una vencida y una sin fecha fin.
+  // Instructores y clientes existen en este SEED. Sin ejercicios a propósito:
+  // api.ejercicios (P4) todavía no existe y no queremos referencias falsas.
+  rutinas: [
+    { id_rutina:1, id_instructor:'2000000001', id_cliente:'1000000001', nombre:'Fuerza tren superior', descripcion:'Fuerza para pecho, espalda y brazos.',     fecha_creacion:dia(35), fecha_fin:dia(-55), dias_semana:['LUNES','MIERCOLES','VIERNES'], objetivo:'Ganancia muscular' },
+    { id_rutina:2, id_instructor:'2000000001', id_cliente:'1000000002', nombre:'Quema de grasa',       descripcion:'Circuitos de cardio y funcional.',         fecha_creacion:dia(50), fecha_fin:dia(-10), dias_semana:['MARTES','JUEVES','SABADO'],    objetivo:'Pérdida de peso' },
+    { id_rutina:3, id_instructor:'2000000002', id_cliente:'1000000005', nombre:'Movilidad y espalda',  descripcion:'Estiramientos y fortalecimiento de core.', fecha_creacion:dia(15), fecha_fin:null,     dias_semana:['LUNES','JUEVES'],              objetivo:'Rehabilitación' },
+    { id_rutina:4, id_instructor:'2000000002', id_cliente:'1000000007', nombre:'Resistencia básica',   descripcion:'Base aeróbica para principiantes.',        fecha_creacion:dia(90), fecha_fin:dia(5),  dias_semana:['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES'], objetivo:'Resistencia' },
+  ],
+  rutina_ejercicios: [],
+  // ===== [/P3] Rutinas =====
+
+  // ===== [P2] Progreso =====
+  progreso: [
+    { id_progreso:1, id_cliente:'1000000001', fecha:'2026-07-10', peso:62,   altura:1.65, notas:'Medición inicial' },
+    { id_progreso:2, id_cliente:'1000000001', fecha:'2026-08-10', peso:60.5, altura:1.65, notas:'Bajó 1.5 kg' },
+    { id_progreso:3, id_cliente:'1000000002', fecha:'2026-08-01', peso:82,   altura:1.78, notas:'Control inicial' },
+    { id_progreso:4, id_cliente:'1000000005', fecha:'2026-09-01', peso:75,   altura:1.72, notas:'' }
+  ],
+  // ===== [/P2] Progreso =====
+
+  // ===== [P2] Citas =====
+  citas: [
+    { id_cita:1, id_cliente:'1000000001', id_instructor:'2000000001', fecha:'2026-10-06', hora:'07:00', estado:'CONFIRMADA', notas:'Rutina de fuerza' },
+    { id_cita:2, id_cliente:'1000000002', id_instructor:'2000000002', fecha:'2026-10-07', hora:'17:00', estado:'PENDIENTE',  notas:'Primera clase de yoga' },
+    { id_cita:3, id_cliente:'1000000005', id_instructor:'2000000003', fecha:'2026-10-08', hora:'09:00', estado:'CANCELADA',  notas:'Reagendar' }
+  ],
+  // ===== [/P2] Citas =====
 };
 
 // Version del seed guardado en localStorage.
@@ -373,7 +427,10 @@ const SEED: Seed = {
 // no salga vacia. El bump descarta los datos v4 que quedaron inconsistentes.
 // v6 da fila en `usuarios` a los 7 clientes con clave propia: sin ella el
 // modo manual de control de acceso no tenia con que validar a nadie.
-const SEED_VERSION = "6";
+// v7 es la union con P3/P4: instruye el seed de instructores, rutinas,
+// progreso y citas a quien venga con el v4 de esas ramas, porque sin el bump
+// las colecciones nuevas quedarian vacias en localStorage.
+const SEED_VERSION = "7";
 const CLAVE_VERSION = "gymbrot_seed_version";
 const CLAVE_LECTOR = "gymbrot_lector_conectado";
 
@@ -512,6 +569,36 @@ function agruparPorMes<T>(
 
   return salida;
 }
+// ===== [P3] Rutinas: auxiliares =====
+const DIAS: DiaSemana[] = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"];
+
+// Mensaje de error si el instructor o el cliente no existen; null si ambos existen
+function validarReferencias(idInstructor: string, idCliente: string): string | null {
+  if (!db.read<Instructor>("instructores").some((i) => i.numero_identificacion === idInstructor))
+    return "El instructor no existe";
+  if (!db.read<Cliente>("clientes").some((c) => c.numero_identificacion === idCliente))
+    return "El cliente no existe";
+  return null;
+}
+
+// Vigente = sin fecha fin, o con fecha fin de hoy en adelante.
+// Las fechas 'YYYY-MM-DD' se pueden comparar como texto: el orden alfabético es el cronológico.
+function esVigente(r: Pick<Rutina, "fecha_fin">): boolean {
+  return r.fecha_fin === null || r.fecha_fin >= utils.isoDate();
+}
+
+// Regla: un cliente solo puede tener UNA rutina vigente. Si la rutina que se guarda es vigente
+// y el cliente ya tiene otra vigente (distinta de idPropio), devuelve el mensaje de error.
+function validarUnaVigente(idCliente: string, fechaFin: string | null, idPropio: number | null): string | null {
+  if (!esVigente({ fecha_fin: fechaFin })) return null;
+  const otra = db
+    .read<Rutina>("rutinas")
+    .find((r) => r.id_cliente === idCliente && r.id_rutina !== idPropio && esVigente(r));
+  return otra
+    ? "El cliente ya tiene la rutina vigente «" + otra.nombre + "». Solo puede tener una vigente a la vez."
+    : null;
+}
+// ===== [/P3] Rutinas: auxiliares =====
 
 export const api = {
   _delay(ms = 200) {
@@ -1041,4 +1128,229 @@ export const api = {
       return db.read<Ingreso>("ingresos").filter((i) => i.fecha === fecha);
     },
   },
+
+  // ===== [P3] Instructores =====
+  instructores: {
+    async list(): Promise<Instructor[]> {
+      await api._delay();
+      return db.read<Instructor>("instructores");
+    },
+
+    async get(id: string): Promise<Instructor | null> {
+      await api._delay();
+      return db.read<Instructor>("instructores").find((i) => i.numero_identificacion === id) ?? null;
+    },
+
+    async create(data: InstructorNuevo): Promise<ApiResp<Instructor>> {
+      await api._delay();
+      const arr = db.read<Instructor>("instructores");
+      if (arr.some((i) => i.numero_identificacion === data.numero_identificacion))
+        return { ok: false, mensaje: "Ya existe un instructor con esa identificación" };
+      const nuevo: Instructor = { ...data, estado: "ACTIVO", fecha_contratacion: utils.isoDate() };
+      arr.push(nuevo);
+      db.write("instructores", arr);
+      return { ok: true, mensaje: "Instructor registrado", data: nuevo };
+    },
+
+    // La identificación es la llave: no se deja cambiar al editar
+    async update(id: string, data: Partial<Omit<Instructor, "numero_identificacion">>): Promise<ApiResp<Instructor>> {
+      await api._delay();
+      const arr = db.read<Instructor>("instructores");
+      const ins = arr.find((i) => i.numero_identificacion === id);
+      if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
+      Object.assign(ins, data, { numero_identificacion: id });
+      db.write("instructores", arr);
+      return { ok: true, mensaje: "Instructor actualizado", data: ins };
+    },
+
+    async remove(id: string): Promise<ApiResp<Instructor>> {
+      await api._delay();
+      const arr = db.read<Instructor>("instructores");
+      const ins = arr.find((i) => i.numero_identificacion === id);
+      if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
+      // Como un FK con RESTRICT: no se borra si tiene rutinas que lo referencian
+      const rutinas = db.read<Rutina>("rutinas").filter((r) => r.id_instructor === id).length;
+      if (rutinas > 0)
+        return {
+          ok: false,
+          mensaje: "No se puede eliminar: tiene " + rutinas + " rutina(s) asignada(s). Desactívalo en su lugar.",
+        };
+      db.write("instructores", arr.filter((i) => i.numero_identificacion !== id));
+      return { ok: true, mensaje: "Instructor eliminado", data: ins };
+    },
+
+    async setEstado(id: string, estado: EstadoInstructor): Promise<ApiResp<Instructor>> {
+      await api._delay();
+      const arr = db.read<Instructor>("instructores");
+      const ins = arr.find((i) => i.numero_identificacion === id);
+      if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
+      ins.estado = estado;
+      db.write("instructores", arr);
+      return { ok: true, mensaje: "Estado actualizado", data: ins };
+    },
+  },
+  // ===== [/P3] Instructores =====
+
+  // ===== [P3] Rutinas =====
+  rutinas: {
+    async list(): Promise<Rutina[]> {
+      await api._delay();
+      return db.read<Rutina>("rutinas");
+    },
+
+    async get(id: number): Promise<Rutina | null> {
+      await api._delay();
+      return db.read<Rutina>("rutinas").find((r) => r.id_rutina === id) ?? null;
+    },
+
+    // id_rutina = el mayor id + 1; fecha_creacion = hoy
+    async create(data: RutinaNueva): Promise<ApiResp<Rutina>> {
+      await api._delay();
+      const error =
+        validarReferencias(data.id_instructor, data.id_cliente) ??
+        validarUnaVigente(data.id_cliente, data.fecha_fin, null);
+      if (error) return { ok: false, mensaje: error };
+      const arr = db.read<Rutina>("rutinas");
+      const id = arr.reduce((max, r) => Math.max(max, r.id_rutina), 0) + 1;
+      const nueva: Rutina = { ...data, id_rutina: id, fecha_creacion: utils.isoDate() };
+      arr.push(nueva);
+      db.write("rutinas", arr);
+      return { ok: true, mensaje: "Rutina creada", data: nueva };
+    },
+
+    // id_rutina y fecha_creacion no se dejan cambiar al editar
+    async update(id: number, data: Partial<RutinaNueva>): Promise<ApiResp<Rutina>> {
+      await api._delay();
+      const arr = db.read<Rutina>("rutinas");
+      const r = arr.find((x) => x.id_rutina === id);
+      if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
+      // Cómo quedaría la rutina con los cambios, para validar con los valores finales
+      const final = { ...r, ...data };
+      const error =
+        validarReferencias(final.id_instructor, final.id_cliente) ??
+        validarUnaVigente(final.id_cliente, final.fecha_fin, id);
+      if (error) return { ok: false, mensaje: error };
+      Object.assign(r, data, { id_rutina: id, fecha_creacion: r.fecha_creacion });
+      db.write("rutinas", arr);
+      return { ok: true, mensaje: "Rutina actualizada", data: r };
+    },
+
+    // Pasa una rutina vigente al historial poniendo fecha_fin = ayer, así el cliente queda libre hoy.
+    // Una rutina creada hoy no se puede finalizar: ayer quedaría antes de su fecha_creacion.
+    async finalizar(id: number): Promise<ApiResp<Rutina>> {
+      await api._delay();
+      const arr = db.read<Rutina>("rutinas");
+      const r = arr.find((x) => x.id_rutina === id);
+      if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
+      if (!esVigente(r)) return { ok: false, mensaje: "La rutina ya está en el historial" };
+      const ayer = dia(1);
+      if (ayer < r.fecha_creacion)
+        return {
+          ok: false,
+          mensaje: "Esta rutina se creó hoy y no se puede finalizar. Si quieres cambiarla, edítala.",
+        };
+      r.fecha_fin = ayer;
+      db.write("rutinas", arr);
+      return { ok: true, mensaje: "Rutina «" + r.nombre + "» finalizada", data: r };
+    },
+
+    // Borra la rutina y también sus ejercicios (como un ON DELETE CASCADE)
+    async remove(id: number): Promise<ApiResp<Rutina>> {
+      await api._delay();
+      const arr = db.read<Rutina>("rutinas");
+      const r = arr.find((x) => x.id_rutina === id);
+      if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
+      db.write("rutinas", arr.filter((x) => x.id_rutina !== id));
+      const ejercicios = db.read<RutinaEjercicio>("rutina_ejercicios");
+      db.write("rutina_ejercicios", ejercicios.filter((e) => e.id_rutina !== id));
+      return { ok: true, mensaje: "Rutina eliminada", data: r };
+    },
+
+    // Ejercicios de una rutina, ordenados por día y luego por orden
+    async ejercicios(id: number): Promise<RutinaEjercicio[]> {
+      await api._delay();
+      return db
+        .read<RutinaEjercicio>("rutina_ejercicios")
+        .filter((e) => e.id_rutina === id)
+        .sort((a, b) => DIAS.indexOf(a.dia_semana) - DIAS.indexOf(b.dia_semana) || a.orden - b.orden);
+    },
+
+    // Reemplaza todos los ejercicios de la rutina por la lista recibida.
+    // Solo acepta ejercicios que existan en la colección de P4 ("ejercicios").
+    async guardarEjercicios(id: number, lista: Omit<RutinaEjercicio, "id_rutina">[]): Promise<ApiResp<RutinaEjercicio[]>> {
+      await api._delay();
+      if (!db.read<Rutina>("rutinas").some((r) => r.id_rutina === id))
+        return { ok: false, mensaje: "Rutina no encontrada" };
+      const catalogo = db.read<Ejercicio>("ejercicios");
+      const faltante = lista.find((e) => !catalogo.some((c) => c.idEjercicio === e.id_ejercicio));
+      if (faltante) return { ok: false, mensaje: "El ejercicio " + faltante.id_ejercicio + " no existe" };
+      const nuevos: RutinaEjercicio[] = lista.map((e) => ({ ...e, id_rutina: id }));
+      const otros = db.read<RutinaEjercicio>("rutina_ejercicios").filter((e) => e.id_rutina !== id);
+      db.write("rutina_ejercicios", otros.concat(nuevos));
+      return { ok: true, mensaje: "Ejercicios guardados", data: nuevos };
+    },
+  },
+  // ===== [/P3] Rutinas =====
+
+  // ===== [P2] Progreso =====
+  progreso: {
+    async list(): Promise<Progreso[]> {
+      await api._delay();
+      return db.read<Progreso>("progreso");
+    },
+    async byCliente(id: string): Promise<Progreso[]> {
+      await api._delay();
+      return db.read<Progreso>("progreso").filter((p) => p.id_cliente === id);
+    },
+    async create(data: Omit<Progreso, "id_progreso">): Promise<ApiResp<Progreso>> {
+      await api._delay();
+      const arr = db.read<Progreso>("progreso");
+      const nuevoId = arr.reduce((max, p) => Math.max(max, p.id_progreso), 0) + 1;
+      const nuevo: Progreso = { id_progreso: nuevoId, ...data };
+      arr.push(nuevo);
+      db.write("progreso", arr);
+      return { ok: true, mensaje: "Medición registrada", data: nuevo };
+    },
+  },
+  // ===== [/P2] Progreso =====
+
+  // ===== [P2] Citas =====
+  citas: {
+    async list(): Promise<Cita[]> {
+      await api._delay();
+      return db.read<Cita>("citas");
+    },
+    async byCliente(id: string): Promise<Cita[]> {
+      await api._delay();
+      return db.read<Cita>("citas").filter((c) => c.id_cliente === id);
+    },
+    async create(data: CitaNueva): Promise<ApiResp<Cita>> {
+      await api._delay();
+      const arr = db.read<Cita>("citas");
+      const nuevoId = arr.reduce((max, c) => Math.max(max, c.id_cita), 0) + 1;
+      const nueva: Cita = { id_cita: nuevoId, estado: "PENDIENTE", ...data };
+      arr.push(nueva);
+      db.write("citas", arr);
+      return { ok: true, mensaje: "Cita registrada", data: nueva };
+    },
+    async update(id: number, data: Partial<Omit<Cita, "id_cita">>): Promise<ApiResp<Cita>> {
+      await api._delay();
+      const arr = db.read<Cita>("citas");
+      const cita = arr.find((c) => c.id_cita === id);
+      if (!cita) return { ok: false, mensaje: "Cita no encontrada" };
+      Object.assign(cita, data, { id_cita: id });
+      db.write("citas", arr);
+      return { ok: true, mensaje: "Cita actualizada", data: cita };
+    },
+    async setEstado(id: number, estado: Cita["estado"]): Promise<ApiResp<Cita>> {
+      await api._delay();
+      const arr = db.read<Cita>("citas");
+      const cita = arr.find((c) => c.id_cita === id);
+      if (!cita) return { ok: false, mensaje: "Cita no encontrada" };
+      cita.estado = estado;
+      db.write("citas", arr);
+      return { ok: true, mensaje: "Estado actualizado", data: cita };
+    },
+  },
+  // ===== [/P2] Citas =====
 };

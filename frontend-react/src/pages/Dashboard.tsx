@@ -195,15 +195,12 @@ function GraficaAsistencia({ ingresos }: { ingresos: Ingreso[] }) {
   );
 }
 
-function Demografia({ clientes, ingresos }: { clientes: Cliente[]; ingresos: Ingreso[] }) {
-  const idsPresentes = new Set(
-    ingresos.filter((i) => i.hora_salida === null).map((i) => i.id_cliente),
-  );
-  const presentes = clientes.filter((c) => idsPresentes.has(c.numero_identificacion));
-  const total = presentes.length || 1;
+function Demografia({ clientes }: { clientes: Cliente[] }) {
+  const activos = clientes.filter((c) => c.estado === "ACTIVO");
+  const total = activos.length || 1;
 
   function contar(min: number, max: number): number {
-    return presentes.filter((p) => {
+    return activos.filter((p) => {
       const edad = utils.edad(p.fecha_nacimiento);
       return edad !== null && edad >= min && edad <= max;
     }).length;
@@ -357,7 +354,7 @@ export function Dashboard() {
           <GraficaAsistencia ingresos={ingresos} />
         </div>
         <div className="col-lg-4">
-          <Demografia clientes={clientes} ingresos={ingresos} />
+          <Demografia clientes={clientes} />
         </div>
       </div>
 

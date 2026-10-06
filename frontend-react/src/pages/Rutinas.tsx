@@ -85,8 +85,9 @@ function validar(f: FormRutina, fechaOriginal: string): string {
   return "";
 }
 
-// Alerta de la parte superior: tipo define el color (alert-ok verde neón, alert-error rojo)
-type Alerta = { tipo: "ok" | "error"; mensaje: string };
+// Alerta de la parte superior: tipo define el color (alert-ok verde neón, alert-error rojo).
+// idCliente (opcional): muestra el botón "Crear la siguiente rutina" para ese cliente.
+type Alerta = { tipo: "ok" | "error"; mensaje: string; idCliente?: string };
 
 export function Rutinas() {
   const [rutinas, setRutinas] = useState<Rutina[]>([]);
@@ -108,6 +109,11 @@ export function Rutinas() {
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
 
+  // Confirmación de finalizar (aFinalizar no se limpia al cerrar, por la animación de salida)
+  const [showFinalizar, setShowFinalizar] = useState(false);
+  const [aFinalizar, setAFinalizar] = useState<Rutina | null>(null);
+  const [errorFinalizar, setErrorFinalizar] = useState("");
+
   // Carga las tres colecciones a la vez: las rutinas solo guardan ids,
   // y los nombres salen de instructores y clientes
   useEffect(() => {
@@ -119,10 +125,11 @@ export function Rutinas() {
     });
   }, []);
 
-  // La alerta desaparece a los 4 segundos (el cleanup cancela el temporizador anterior)
+  // La alerta desaparece a los 4 segundos, o a los 10 si trae un botón (para alcanzar a usarlo).
+  // El cleanup cancela el temporizador anterior si llega otra alerta antes.
   useEffect(() => {
     if (!alerta) return;
-    const t = setTimeout(() => setAlerta(null), 4000);
+    const t = setTimeout(() => setAlerta(null), alerta.idCliente ? 10000 : 4000);
     return () => clearTimeout(t);
   }, [alerta]);
 
@@ -244,6 +251,36 @@ export function Rutinas() {
     setRutinas(await api.rutinas.list());
   }
 
+  // ----- Finalizar -----
+
+  function pedirFinalizar(r: Rutina) {
+    setErrorFinalizar("");
+    setAFinalizar(r);
+    setShowFinalizar(true);
+  }
+
+  async function confirmarFinalizar() {
+    if (!aFinalizar) return;
+    const res = await api.rutinas.finalizar(aFinalizar.id_rutina);
+    if (!res.ok) {
+      setErrorFinalizar(res.mensaje);
+      return;
+    }
+    setShowFinalizar(false);
+    // La alerta lleva el cliente para ofrecer crearle la siguiente rutina
+    setAlerta({ tipo: "ok", mensaje: res.mensaje, idCliente: aFinalizar.id_cliente });
+    setRutinas(await api.rutinas.list());
+  }
+
+  // Abre el modal de nueva rutina con el cliente ya elegido
+  function crearSiguiente(idCliente: string) {
+    setAlerta(null);
+    setEditandoId(null);
+    setForm({ ...VACIO, id_cliente: idCliente });
+    setError("");
+    setShow(true);
+  }
+
   // Una tarjeta de rutina (se usa igual en la vista normal y en la agrupada)
   function tarjeta(r: Rutina) {
     const cliente = buscarCliente(r.id_cliente);
@@ -301,6 +338,10 @@ export function Rutinas() {
         <div className="cell-actions rutina-acciones">
           <button className="btn-icon" title="Ver detalle">👁</button>
           <button className="btn-icon" title="Editar" onClick={() => abrirEdicion(r)}>✏️</button>
+          {/* Finalizar solo tiene sentido si la rutina sigue vigente */}
+          {esVigente(r) && (
+            <button className="btn-icon" title="Finalizar" onClick={() => pedirFinalizar(r)}>🏁</button>
+          )}
           <button className="btn-icon" title="Eliminar">🗑️</button>
         </div>
       </div>
@@ -355,7 +396,16 @@ export function Rutinas() {
           <button className="btn-neon" onClick={abrirNuevo}>+ Nueva rutina</button>
         </div>
 
-        {alerta && <div className={"alert-g show alert-" + alerta.tipo}>{alerta.mensaje}</div>}
+        {alerta && (
+          <div className={"alert-g show alert-" + alerta.tipo + (alerta.idCliente ? " alerta-accion" : "")}>
+            <span>{alerta.mensaje}</span>
+            {alerta.idCliente && (
+              <button className="btn-dark" onClick={() => crearSiguiente(alerta.idCliente ?? "")}>
+                Crear la siguiente rutina para {nombre(buscarCliente(alerta.idCliente))}
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="toolbar">
           <div className="search-box">
@@ -479,6 +529,25 @@ export function Rutinas() {
           <button className="btn-neon" onClick={guardar} disabled={guardando}>
             {guardando ? "Guardando..." : "Guardar"}
           </button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Confirmación de finalizar */}
+      <Modal show={showFinalizar} onHide={() => setShowFinalizar(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Finalizar rutina</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {errorFinalizar && <div className="alert-g alert-error show">{errorFinalizar}</div>}
+          <p>
+            ¿Finalizar <strong>{aFinalizar?.nombre}</strong> de{" "}
+            <strong>{aFinalizar ? nombre(buscarCliente(aFinalizar.id_cliente)) : ""}</strong>?
+            Su fecha fin pasará a ser ayer y quedará en el historial del cliente, que podrá recibir una rutina nueva.
+          </p>
+        </Modal.Body>
+        <Modal.Footer>
+          <button className="btn-dark" onClick={() => setShowFinalizar(false)}>Cancelar</button>
+          <button className="btn-neon" onClick={confirmarFinalizar}>Sí, finalizar</button>
         </Modal.Footer>
       </Modal>
     </>

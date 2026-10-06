@@ -264,7 +264,7 @@ function HorasPico({ ingresos }: { ingresos: Ingreso[] }) {
       <div className="card-head">
         <div>
           <h2 className="card-title">Horas pico de operacion</h2>
-          <p className="card-sub">Entradas acumuladas por hora del dia</p>
+          <p className="card-sub">Entradas por hora del dia</p>
         </div>
       </div>
       <div className="pico-wrap">

@@ -441,6 +441,21 @@ export interface IntentoAcceso {
   contrasena?: string;
 }
 
+/* Compara la clave que escribe el operador con la del usuario del cliente.
+   Devuelve el motivo del rechazo, o null si pasa. Va aparte de
+   clienteAceptado() porque la salida tambien la usa: cerrar la sesion de alguien
+   exige identificarlo, pero no volver a pasar las reglas de entrada. */
+function claveRechazada(id: string, contrasena: string | undefined): string | null {
+  const clave = (contrasena ?? "").trim();
+  if (!clave) return "Ingresa la contraseña del cliente.";
+  const usuario = db.read<Usuario>("usuarios").find((u) => u.numero_identificacion === id);
+  // Sin fila no hay con que comparar: reportarlo como clave mala dejaria al
+  // operador reintentando algo que nunca va a funcionar.
+  if (!usuario) return "Este cliente no tiene código de acceso. Asignale uno para usar el modo manual.";
+  if (usuario.contrasena !== clave) return "Contraseña incorrecta.";
+  return null;
+}
+
 /* Validaciones de la puerta. Devuelve el motivo del rechazo, o el cliente si
    pasa. Se resuelve aqui y no en el componente para que ninguna vista pueda
    dejar entrar a alguien con la membresia vencida o el cliente suspendido. */
@@ -458,17 +473,8 @@ function clienteAceptado(
   }
 
   if (intento.metodo === "CONTRASENA") {
-    const clave = (intento.contrasena ?? "").trim();
-    if (!clave) return { error: "Ingresa la contraseña del cliente." };
-    const usuario = db
-      .read<Usuario>("usuarios")
-      .find((u) => u.numero_identificacion === id);
-    // Sin fila no hay con que comparar: reportarlo como clave mala dejaria al
-    // operador reintentando algo que nunca va a funcionar.
-    if (!usuario) {
-      return { error: "Este cliente no tiene código de acceso. Asignale uno para usar el modo manual." };
-    }
-    if (usuario.contrasena !== clave) return { error: "Contraseña incorrecta." };
+    const rechazo = claveRechazada(id, intento.contrasena);
+    if (rechazo) return { error: rechazo };
   }
 
   return { cliente };

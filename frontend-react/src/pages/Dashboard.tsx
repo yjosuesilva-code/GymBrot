@@ -12,6 +12,7 @@ import {
 import type { ChartData, ChartOptions } from "chart.js";
 import { utils } from "../lib/utils";
 import { META_INGRESOS_MENSUAL, porcentaje } from "../lib/config";
+import { useVersionDeDatos } from "../lib/datos";
 import { api } from "../data/api";
 import type { Cliente, Ingreso, Pago } from "../types";
 
@@ -348,6 +349,11 @@ export function Dashboard() {
   const [pagos, setPagos] = useState<Pago[]>([]);
   const [cargando, setCargando] = useState(true);
 
+  // "Activos ahora" depende de los ingresos, y los ingresos los escribe el
+  // control de acceso. Sin esto el KPI solo se movia al desmontar y volver a
+  // montar la vista, es decir, cuando alguien navegaba hasta aqui.
+  const version = useVersionDeDatos();
+
   useEffect(() => {
     Promise.all([api.clientes.list(), api.ingresos.list(), api.pagos.list()])
       .then(([c, i, p]) => {
@@ -356,7 +362,7 @@ export function Dashboard() {
         setPagos(p);
       })
       .finally(() => setCargando(false));
-  }, []);
+  }, [version]);
 
   if (cargando) {
     return (

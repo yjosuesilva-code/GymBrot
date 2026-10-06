@@ -252,6 +252,41 @@ export const api = {
       await api._delay();
       return db.read<Membresia>("membresias").filter((m) => m.id_cliente === id);
     },
+
+    async create(data: Omit<Membresia, "id_membresia">): Promise<ApiResp<Membresia>> {
+      await api._delay();
+      const arr = db.read<Membresia>("membresias");
+      const nuevoId = arr.length > 0
+        ? Math.max(...arr.map((m) => m.id_membresia)) + 1
+        : 1;
+      const nueva: Membresia = { ...data, id_membresia: nuevoId };
+      arr.push(nueva);
+      db.write("membresias", arr);
+      return { ok: true, mensaje: "Membresía registrada", data: nueva };
+    },
+
+    async update(
+      id: number,
+      data: Partial<Omit<Membresia, "id_membresia">>
+    ): Promise<ApiResp<Membresia>> {
+      await api._delay();
+      const arr = db.read<Membresia>("membresias");
+      const membresia = arr.find((m) => m.id_membresia === id);
+      if (!membresia) return { ok: false, mensaje: "Membresía no encontrada" };
+      Object.assign(membresia, data, { id_membresia: id });
+      db.write("membresias", arr);
+      return { ok: true, mensaje: "Membresía actualizada", data: membresia };
+    },
+
+    async setEstado(id: number, estado: Membresia["estado"]): Promise<ApiResp<Membresia>> {
+      await api._delay();
+      const arr = db.read<Membresia>("membresias");
+      const membresia = arr.find((m) => m.id_membresia === id);
+      if (!membresia) return { ok: false, mensaje: "Membresía no encontrada" };
+      membresia.estado = estado;
+      db.write("membresias", arr);
+      return { ok: true, mensaje: "Estado de membresía actualizado", data: membresia };
+    },
   },
 
   pagos: {

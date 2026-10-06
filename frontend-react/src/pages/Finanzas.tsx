@@ -16,6 +16,7 @@ import { api } from "../data/api";
 import type { NuevoPago } from "../data/api";
 import { utils } from "../lib/utils";
 import { membresiaVigente } from "../lib/membresias";
+import { useVersionDeDatos } from "../lib/datos";
 import { META_INGRESOS_MENSUAL, porcentaje } from "../lib/config";
 import type { Cliente, Membresia, Pago, PlanMembresia } from "../types";
 
@@ -624,6 +625,11 @@ export function Finanzas() {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
+  // "Membresías vigentes" cuenta lo mismo que el control de acceso: si la
+  // puerta deja de contar a alguien, esta tarjeta tiene que enterarse sin que
+  // nadie recargue la pantalla.
+  const version = useVersionDeDatos();
+
   async function cargar() {
     const [m, p, me, n, v, pg, cl, pl, mb] = await Promise.all([
       api.finanzas.ingresosPorMes(12),
@@ -674,7 +680,7 @@ export function Finanzas() {
         setMembresias(mb);
       })
       .finally(() => setCargando(false));
-  }, []);
+  }, [version]);
 
   async function registrarPago(input: NuevoPago) {
     // El boton se bloquea mientras corre la peticion. Sin esto, dos clics

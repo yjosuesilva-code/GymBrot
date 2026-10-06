@@ -1,9 +1,27 @@
 import { useEffect, useState } from "react";
+import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
 import type { Cliente, Membresia } from "../types";
 
+type FormMembresia = Omit<Membresia, "id_membresia" | "valor"> & { valor: string };
+
+const VACIO: FormMembresia = {
+  id_cliente: "",
+  tipo_membresia: "",
+  modalidad_pago: "MENSUAL",
+  valor: "",
+  fecha_inicio: "",
+  fecha_vencimiento: "",
+  estado: "ACTIVA",
+};
+
 export function Membresias() {
+  const [show, setShow] = useState(false);
+  const [form, setForm] = useState<FormMembresia>(VACIO);
+  const [guardando, setGuardando] = useState(false);
+  const [errorForm, setErrorForm] = useState("");
+  const [exito, setExito] = useState("");
   const [membresias, setMembresias] = useState<Membresia[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [busqueda, setBusqueda] = useState("");
@@ -53,6 +71,82 @@ export function Membresias() {
     setFiltroModalidad("");
   }
 
+  function abrirNueva() {
+    setForm(VACIO);
+    setErrorForm("");
+    setExito("");
+    setShow(true);
+  }
+
+  function cerrarModal() {
+    if (guardando) return;
+    setShow(false);
+    setForm(VACIO);
+    setErrorForm("");
+  }
+
+  function setCampo<K extends keyof FormMembresia>(campo: K, valor: FormMembresia[K]) {
+    setForm((actual) => ({ ...actual, [campo]: valor }));
+  }
+
+  async function guardar() {
+    if (guardando) return;
+    if (!form.id_cliente || !clientesPorId.has(form.id_cliente)) {
+      setErrorForm("Selecciona un cliente existente.");
+      return;
+    }
+    if (!form.tipo_membresia.trim()) {
+      setErrorForm("El tipo de membres\u00eda es obligatorio.");
+      return;
+    }
+    const valor = Number(form.valor);
+    if (!Number.isFinite(valor) || valor <= 0) {
+      setErrorForm("El valor debe ser un n\u00famero mayor que 0.");
+      return;
+    }
+    if (!form.fecha_inicio || !form.fecha_vencimiento) {
+      setErrorForm("Completa las fechas de inicio y vencimiento.");
+      return;
+    }
+    if (utils.isoDate(form.fecha_inicio) !== form.fecha_inicio ||
+        utils.isoDate(form.fecha_vencimiento) !== form.fecha_vencimiento) {
+      setErrorForm("Ingresa fechas v\u00e1lidas.");
+      return;
+    }
+    if (form.fecha_vencimiento <= form.fecha_inicio) {
+      setErrorForm("La fecha de vencimiento debe ser posterior a la fecha de inicio.");
+      return;
+    }
+
+    setGuardando(true);
+    setErrorForm("");
+    try {
+      const respuesta = await api.membresias.create({
+        ...form,
+        tipo_membresia: form.tipo_membresia.trim(),
+        valor,
+      });
+      if (!respuesta.ok) {
+        setErrorForm(respuesta.mensaje || "No se pudo guardar la membres\u00eda.");
+        return;
+      }
+      if (respuesta.data) {
+        const nueva = respuesta.data;
+        setMembresias((actuales) => [...actuales, nueva]);
+      } else {
+        setMembresias(await api.membresias.list());
+      }
+      setError("");
+      setShow(false);
+      setForm(VACIO);
+      setExito(respuesta.mensaje || "Membres\u00eda registrada correctamente.");
+    } catch {
+      setErrorForm("No se pudo guardar la membres\u00eda. Intenta nuevamente.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
   return (
     <section className="card-g">
       <div className="card-head">
@@ -62,44 +156,56 @@ export function Membresias() {
             Gestiona las membresías de los clientes del gimnasio
           </p>
         </div>
+        <button className="btn-neon" onClick={abrirNueva} disabled={cargando}>+ Nueva membresía</button>
       </div>
+      {exito && <div className="alert-g alert-ok show" role="status">{exito}</div>}
       {avisoClientes && !error && (
         <div className="alert-g alert-error show" role="alert">{avisoClientes}</div>
       )}
 
-      <div className="toolbar mb-3">
-        <div className="search-box">
-          <span className="search-ico" aria-hidden="true">{"\u{1F50D}"}</span>
-          <input
-            type="search"
-            className="form-control-dark"
-            aria-label="Buscar por nombre o identificación del cliente o tipo de membresía"
-            placeholder="Buscar por cliente, identificación o tipo de membresía..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-          />
+      <div className="toolbar membresias-filtros mb-3">
+        <div className="membresias-busqueda">
+          <label className="form-label-g" htmlFor="membresias-busqueda">Buscar</label>
+          <div className="search-box">
+            <span className="search-ico" aria-hidden="true"><i className="bi bi-search"></i></span>
+            <input
+              id="membresias-busqueda"
+              type="search"
+              className="form-control-dark"
+              aria-label="Buscar por nombre o identificación del cliente o tipo de membresía"
+              placeholder="Cliente, identificación o tipo de membresía..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+            />
+          </div>
         </div>
-        <select
-          className="form-control-dark w-auto"
-          aria-label="Filtrar por estado"
-          value={filtroEstado}
-          onChange={(e) => setFiltroEstado(e.target.value as Membresia["estado"] | "")}
-        >
-          <option value="">Todas (estado)</option>
-          <option value="ACTIVA">ACTIVA</option>
-          <option value="VENCIDA">VENCIDA</option>
-        </select>
-        <select
-          className="form-control-dark w-auto"
-          aria-label="Filtrar por modalidad de pago"
-          value={filtroModalidad}
-          onChange={(e) => setFiltroModalidad(e.target.value as Membresia["modalidad_pago"] | "")}
-        >
-          <option value="">Todas (modalidad de pago)</option>
-          <option value="MENSUAL">MENSUAL</option>
-          <option value="ANUAL">ANUAL</option>
-        </select>
-        {hayFiltros && <button className="btn-dark" onClick={limpiarFiltros}>Limpiar filtros</button>}
+        <div className="membresias-filtro">
+          <label className="form-label-g" htmlFor="membresias-estado">Estado</label>
+          <select
+            id="membresias-estado"
+            className="form-control-dark"
+            value={filtroEstado}
+            onChange={(e) => setFiltroEstado(e.target.value as Membresia["estado"] | "")}
+          >
+            <option value="">Todas</option>
+            <option value="ACTIVA">ACTIVA</option>
+            <option value="VENCIDA">VENCIDA</option>
+          </select>
+        </div>
+        <div className="membresias-filtro">
+          <label className="form-label-g" htmlFor="membresias-modalidad">Modalidad</label>
+          <select
+            id="membresias-modalidad"
+            className="form-control-dark"
+            value={filtroModalidad}
+            onChange={(e) => setFiltroModalidad(e.target.value as Membresia["modalidad_pago"] | "")}
+          >
+            <option value="">Todas</option>
+            <option value="MENSUAL">MENSUAL</option>
+            <option value="ANUAL">ANUAL</option>
+          </select>
+        </div>
+        {hayFiltros && <button className="btn-dark membresias-limpiar" onClick={limpiarFiltros}>Limpiar filtros</button>}
       </div>
 
       <div className="table-wrap">
@@ -149,6 +255,68 @@ export function Membresias() {
           </tbody>
         </table>
       </div>
+      <Modal show={show} onHide={cerrarModal} backdrop={guardando ? "static" : true} keyboard={!guardando} centered size="lg">
+        <Modal.Header closeButton={!guardando}>
+          <Modal.Title>Nueva membresía</Modal.Title>
+        </Modal.Header>
+        <form onSubmit={(e) => { e.preventDefault(); void guardar(); }} noValidate>
+          <Modal.Body>
+            {errorForm && <div className="alert-g alert-error show" role="alert">{errorForm}</div>}
+            <fieldset disabled={guardando} className="border-0 p-0 m-0">
+              <div className="row g-3">
+            <div className="col-12">
+              <label className="form-label-g" htmlFor="nueva-membresia-cliente">Cliente *</label>
+              <select id="nueva-membresia-cliente" className="form-control-dark" value={form.id_cliente} onChange={(e) => setCampo("id_cliente", e.target.value)} required>
+                <option value="">Selecciona un cliente</option>
+                {clientes.map((cliente) => (
+                  <option key={cliente.numero_identificacion} value={cliente.numero_identificacion}>
+                    {cliente.nombre} {cliente.apellidos} - {cliente.numero_identificacion}
+                  </option>
+                ))}
+              </select>
+              {clientes.length === 0 && <p className="card-sub mt-2">{avisoClientes || "No hay clientes disponibles para registrar una membresía."}</p>}
+            </div>
+            <div className="col-md-6">
+              <label className="form-label-g" htmlFor="nueva-membresia-tipo_membresia">Tipo de membresía *</label>
+              <input id="nueva-membresia-tipo_membresia" type="text" className="form-control-dark" value={form.tipo_membresia} onChange={(e) => setCampo("tipo_membresia", e.target.value)} required />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label-g" htmlFor="nueva-membresia-modalidad_pago">Modalidad de pago *</label>
+              <select id="nueva-membresia-modalidad_pago" className="form-control-dark" value={form.modalidad_pago} onChange={(e) => setCampo("modalidad_pago", e.target.value as Membresia["modalidad_pago"])} required>
+                  <option value="MENSUAL">MENSUAL</option>
+                  <option value="ANUAL">ANUAL</option>
+                </select>
+            </div>
+            <div className="col-md-6">
+              <label className="form-label-g" htmlFor="nueva-membresia-valor">Valor *</label>
+              <input id="nueva-membresia-valor" type="number" min="0.01" step="0.01" className="form-control-dark" value={form.valor} onChange={(e) => setCampo("valor", e.target.value)} required />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label-g" htmlFor="nueva-membresia-fecha_inicio">Fecha de inicio *</label>
+              <input id="nueva-membresia-fecha_inicio" type="date" className="form-control-dark" value={form.fecha_inicio} onChange={(e) => setCampo("fecha_inicio", e.target.value)} required />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label-g" htmlFor="nueva-membresia-fecha_vencimiento">Fecha de vencimiento *</label>
+              <input id="nueva-membresia-fecha_vencimiento" type="date" className="form-control-dark" value={form.fecha_vencimiento} onChange={(e) => setCampo("fecha_vencimiento", e.target.value)} required />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label-g" htmlFor="nueva-membresia-estado">Estado inicial *</label>
+              <select id="nueva-membresia-estado" className="form-control-dark" value={form.estado} onChange={(e) => setCampo("estado", e.target.value as Membresia["estado"])} required>
+                  <option value="ACTIVA">ACTIVA</option>
+                  <option value="VENCIDA">VENCIDA</option>
+                </select>
+            </div>
+              </div>
+            </fieldset>
+          </Modal.Body>
+          <Modal.Footer>
+            <button type="button" className="btn-dark" disabled={guardando} onClick={cerrarModal}>Cancelar</button>
+            <button type="submit" className="btn-neon" disabled={guardando || clientes.length === 0}>
+              {guardando ? "Guardando..." : "Guardar membresía"}
+            </button>
+          </Modal.Footer>
+        </form>
+      </Modal>
     </section>
   );
 }

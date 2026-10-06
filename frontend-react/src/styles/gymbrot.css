@@ -385,6 +385,19 @@ body {
 
 
 /* ===== [P4] Estilos propios · ejercicios, membresias ===== */
+
+/* Barra compacta de busqueda y filtros de Membresias. */
+.membresias-filtros { align-items: flex-end; gap: 10px; }
+.membresias-filtros .membresias-busqueda { flex: 1 1 280px; min-width: 0; }
+.membresias-filtros .search-box { min-width: 0; }
+.membresias-filtros .membresias-filtro { flex: 0 0 128px; }
+.membresias-filtros .form-control-dark { height: 36px; padding-top: 7px; padding-bottom: 7px; font-size: 13px; }
+.membresias-filtros .membresias-limpiar { height: 36px; padding: 7px 10px; background: transparent; color: var(--muted); font-size: 12px; }
+.membresias-filtros .membresias-limpiar:hover { color: var(--neon); border-color: var(--neon); }
+@media (max-width: 576px) {
+  .membresias-filtros .membresias-busqueda { flex-basis: 100%; }
+}
+
 /* Pegar UNA vez al final de css/gymbrot.css, en la sección [P4].
    Reutiliza tokens y clases de la base. Solo afecta a ejercicios.html.
    Coordinar esta adición al CSS compartido antes de integrarla. */

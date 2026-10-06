@@ -7,6 +7,8 @@ import { Login } from "./pages/Login";
 import { Instructores } from "./pages/Instructores"; // [P3]
 import { InstructorDetalle } from "./pages/InstructorDetalle"; // [P3]
 import { Rutinas } from "./pages/Rutinas"; // [P3]
+import { Progreso } from "./pages/Progreso"; // [P2]
+import { Citas } from "./pages/Citas"; // [P2]
 
 function App() {
   return (
@@ -24,6 +26,10 @@ function App() {
         <Route path="/instructores" element={<Instructores />} />
         <Route path="/instructores/:id" element={<InstructorDetalle />} />
         <Route path="/rutinas" element={<Rutinas />} />
+        {/* [P2] Progreso */}
+        <Route path="/progreso" element={<Progreso />} />
+        {/* [P2] Citas */}
+        <Route path="/citas" element={<Citas />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

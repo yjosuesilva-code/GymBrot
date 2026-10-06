@@ -229,6 +229,48 @@ const db = {
   },
 };
 
+/* Fila de la tabla "Pagos pendientes" que arma FinanzasService.pagosVencidos
+   (FinanzasService.java:18). El nombre es el del legacy: son pagos que
+   quedaron sin aplicar, no necesariamente cuotas vencidas. */
+export interface PagoVencido {
+  id_pago: number;
+  cliente: string;
+  plan: string;
+  valor: number;
+  metodo: string;
+  fecha: string;
+  estado: string;
+}
+
+/* Devuelve los ultimos 'cantidadMeses' meses en orden, desde el mas viejo,
+   incluyendo los que no tienen datos con total 0. El legacy devuelve solo los
+   meses con filas (FinanzasService.java:23), y en una grafica eso deja huecos
+   que parecen Drops en vez de meses sin facturar. */
+function agruparPorMes<T>(
+  filas: T[],
+  fechaDe: (f: T) => string,
+  valorDe: (f: T) => number,
+  cantidadMeses: number,
+): { mes: string; total: number }[] {
+  const totales = new Map<string, number>();
+
+  for (const f of filas) {
+    const mes = fechaDe(f).slice(0, 7);
+    if (!mes) continue;
+    totales.set(mes, (totales.get(mes) ?? 0) + valorDe(f));
+  }
+
+  const hoy = new Date();
+  const salida: { mes: string; total: number }[] = [];
+  for (let i = cantidadMeses - 1; i >= 0; i--) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+    const mes = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    salida.push({ mes, total: totales.get(mes) ?? 0 });
+  }
+
+  return salida;
+}
+
 export const api = {
   _delay(ms = 200) {
     return new Promise<void>((res) => setTimeout(res, ms));
@@ -310,6 +352,13 @@ export const api = {
     },
   },
 
+  planes: {
+    async list(): Promise<PlanMembresia[]> {
+      await api._delay();
+      return db.read<PlanMembresia>("planes").filter((p) => p.estado === "ACTIVO");
+    },
+  },
+
   membresias: {
     async list(): Promise<Membresia[]> {
       await api._delay();
@@ -330,6 +379,97 @@ export const api = {
       await api._delay();
       return db.read<Pago>("pagos").filter((p) => p.id_cliente === id);
     }
+  },
+
+  /* Agregados de Finanzas. Cada uno replica el GROUP BY de su consulta en el
+     legacy (FinanzasService.java) pero en memoria sobre las colecciones del
+     mock. Todos exigen estado_pago = EXITOSO: el legacy lo hace en
+     ingresosPorMes (l.23) pero se le olvida en desgloseMetodoPago (l.68), y
+     un pago anulado no es ingreso. */
+  finanzas: {
+    async ingresosPorMes(cantidadMeses = 12): Promise<{ mes: string; total: number }[]> {
+      await api._delay();
+      const pagos = db.read<Pago>("pagos").filter((p) => p.estado_pago === "EXITOSO");
+      return agruparPorMes(pagos, (p) => p.fecha_pago, (p) => p.valor, cantidadMeses);
+    },
+
+    async ingresosPorPlan(): Promise<{ plan: string; total: number }[]> {
+      await api._delay();
+      const membresias = db.read<Membresia>("membresias");
+      const porId = new Map(membresias.map((m) => [m.id_membresia, m.tipo_membresia]));
+      const totales = new Map<string, number>();
+
+      for (const p of db.read<Pago>("pagos")) {
+        if (p.estado_pago !== "EXITOSO") continue;
+        const plan = porId.get(p.id_membresia);
+        if (!plan) continue;   // pago sin membresia asociada: no se puede atribuir
+        totales.set(plan, (totales.get(plan) ?? 0) + p.valor);
+      }
+
+      return [...totales].map(([plan, total]) => ({ plan, total })).sort((a, b) => b.total - a.total);
+    },
+
+    async porMetodoPago(): Promise<{ metodo: string; total: number; cantidad: number }[]> {
+      await api._delay();
+      const totales = new Map<string, { total: number; cantidad: number }>();
+
+      for (const p of db.read<Pago>("pagos")) {
+        if (p.estado_pago !== "EXITOSO") continue;
+        const previo = totales.get(p.metodo_pago) ?? { total: 0, cantidad: 0 };
+        totales.set(p.metodo_pago, {
+          total: previo.total + p.valor,
+          cantidad: previo.cantidad + 1,
+        });
+      }
+
+      return [...totales]
+        .map(([metodo, v]) => ({ metodo, total: v.total, cantidad: v.cantidad }))
+        .sort((a, b) => b.total - a.total);
+    },
+
+    async nuevosClientes(cantidadMeses = 12): Promise<{ mes: string; cantidad: number }[]> {
+      await api._delay();
+      const porMes = agruparPorMes(
+        db.read<Cliente>("clientes"),
+        (c) => c.fecha_registro,
+        () => 1,
+        cantidadMeses,
+      );
+      return porMes.map((m) => ({ mes: m.mes, cantidad: m.total }));
+    },
+
+    /* Pagos que aun no se aplican: el socio tiene membresia vencida o sin
+       historial vigente. El legacy mira si la membresia sigue ACTIVA
+       (FinanzasService.java:112), que ignora que el pago pudo quedar
+       PENDIENTE aunque la membresia este bien. */
+    async pagosVencidos(): Promise<PagoVencido[]> {
+      await api._delay();
+      const membresias = db.read<Membresia>("membresias");
+      const porId = new Map(membresias.map((m) => [m.id_membresia, m]));
+      const clientes = new Map(db.read<Cliente>("clientes").map((c) => [c.numero_identificacion, c]));
+      const hoy = utils.isoDate();
+
+      return db
+        .read<Pago>("pagos")
+        .filter((p) => p.estado_pago !== "EXITOSO")
+        .map((p): PagoVencido | null => {
+          const m = porId.get(p.id_membresia);
+          if (!m) return null;
+          const vigente = m.estado === "ACTIVA" && m.fecha_vencimiento >= hoy;
+          if (vigente) return null;
+          const c = clientes.get(p.id_cliente);
+          return {
+            id_pago: p.id_pago,
+            cliente: c ? c.nombre + " " + c.apellidos : p.id_cliente,
+            plan: m.tipo_membresia,
+            valor: p.valor,
+            metodo: p.metodo_pago,
+            fecha: p.fecha_pago,
+            estado: p.estado_pago,
+          };
+        })
+        .filter((x): x is PagoVencido => x !== null);
+    },
   },
 
   ingresos: {

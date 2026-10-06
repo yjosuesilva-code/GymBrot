@@ -11,10 +11,9 @@ import {
 } from "chart.js";
 import type { ChartData, ChartOptions } from "chart.js";
 import { utils } from "../lib/utils";
+import { META_INGRESOS_MENSUAL, porcentaje } from "../lib/config";
 import { api } from "../data/api";
 import type { Cliente, Ingreso, Pago } from "../types";
-
-const META_INGRESOS_MENSUAL = 1200000;
 
 function esDelMesActual(fechaIso: string): boolean {
   return fechaIso.slice(0, 7) === utils.isoDate().slice(0, 7);
@@ -29,26 +28,40 @@ function Kpis({
   ingresos: Ingreso[];
   pagos: Pago[];
 }) {
-  const miembros = clientes.filter((c) => c.estado === "ACTIVO").length;
+  const activos = clientes.filter((c) => c.estado === "ACTIVO").length;
+  const total = clientes.length;
+
+  const hoy = utils.isoDate();
+  const entradasHoy = ingresos.filter((i) => i.fecha === hoy);
   const activosAhora = new Set(
-    ingresos.filter((i) => i.fecha === utils.isoDate() && i.hora_salida === null).map((i) => i.id_cliente),
+    entradasHoy.filter((i) => i.hora_salida === null).map((i) => i.id_cliente),
   ).size;
+  // Un cliente que entro y salio varias veces sigue siendo una sola persona, asi
+  // que el denominador tambien es un Set de clientes distintos.
+  const clientesConEntradaHoy = new Set(entradasHoy.map((i) => i.id_cliente)).size;
 
   const ingresosMes = pagos
     .filter((p) => p.estado_pago === "EXITOSO" && esDelMesActual(p.fecha_pago))
     .reduce((acc, p) => acc + p.valor, 0);
 
-  const avance = Math.min(100, Math.round((ingresosMes / META_INGRESOS_MENSUAL) * 100));
+  // Cada barra mide lo que su propia tarjeta anuncia. Antes las tres usaban
+  // `avance` (ingresos vs meta), asi que "Activos ahora" mostraba el % de la
+  // meta de ingresos.
+  const pctActivos = porcentaje(total, activos);
+  const pctDentro = porcentaje(clientesConEntradaHoy, activosAhora);
+  const pctIngresos = porcentaje(META_INGRESOS_MENSUAL, ingresosMes);
 
   return (
     <div className="row g-3">
       <div className="col-md-6 col-xl-4">
         <div className="card-g kpi h-100">
-          <span className="kpi-label">Total de miembros</span>
-          <span className="kpi-value neon">{utils.num(miembros)}</span>
-          <span className="kpi-sub">Clientes en estado activo</span>
+          <span className="kpi-label">Clientes activos</span>
+          <span className="kpi-value neon">{utils.num(activos)}</span>
+          <span className="kpi-sub">
+            {utils.num(total)} en total · {pctActivos}% del total
+          </span>
           <div className="kpi-bar">
-            <span style={{ width: `${avance}%` }}></span>
+            <span style={{ width: `${pctActivos}%` }}></span>
           </div>
         </div>
       </div>
@@ -60,9 +73,11 @@ function Kpis({
             Activos ahora
           </span>
           <span className="kpi-value">{utils.num(activosAhora)}</span>
-          <span className="kpi-sub">Sin registro de salida</span>
+          <span className="kpi-sub">
+            Sin registro de salida de hoy · {pctDentro}% de los que entraron
+          </span>
           <div className="kpi-bar">
-            <span className="accent" style={{ width: `${avance}%` }}></span>
+            <span className="accent" style={{ width: `${pctDentro}%` }}></span>
           </div>
         </div>
       </div>
@@ -72,8 +87,11 @@ function Kpis({
           <span className="kpi-label">Ingresos este mes</span>
           <span className="kpi-value money">{utils.money(ingresosMes)}</span>
           <span className="kpi-sub">
-            Meta: {utils.money(META_INGRESOS_MENSUAL)} · {avance}%
+            Meta: {utils.money(META_INGRESOS_MENSUAL)} · {pctIngresos}%
           </span>
+          <div className="kpi-bar">
+            <span style={{ width: `${pctIngresos}%` }}></span>
+          </div>
         </div>
       </div>
     </div>
@@ -211,16 +229,16 @@ function Demografia({ clientes }: { clientes: Cliente[] }) {
     { clave: "senior", nombre: "Senior", rango: "Mayores de 50 años", conteo: contar(51, 200) },
   ];
 
-  // El total sale de la suma de los tres grupos y no del numero de socios: un
-  // socio sin fecha de nacimiento no cae en ningun rango, y usarlo como
+  // El total sale de la suma de los tres grupos y no del numero de clientes: un
+  // cliente sin fecha de nacimiento no cae en ningun rango, y usarlo como
   // denominador haria que los porcentajes no sumen 100%. El legacy tiene el
   // mismo defecto en DashboardService.java:56.
   const total = grupos.reduce((suma, g) => suma + g.conteo, 0) || 1;
 
   return (
     <div className="card-g h-100 d-flex flex-column">
-      <h2 className="card-title">Demografia de socios</h2>
-      <p className="card-sub">Composicion por edad de los socios activos</p>
+      <h2 className="card-title">Demografía de clientes</h2>
+      <p className="card-sub">Composición por edad de los clientes activos</p>
       <div className="demo-list mt-4">
         {grupos.map((g) => (
           <div className="demo-row" key={g.clave}>
@@ -230,7 +248,7 @@ function Demografia({ clientes }: { clientes: Cliente[] }) {
             <div className="demo-info">
               <span className="demo-name">
                 {g.nombre}
-                <span className="demo-count">{g.conteo} miembros</span>
+                <span className="demo-count">{g.conteo} clientes</span>
               </span>
               <span className="demo-range">{g.rango}</span>
             </div>
@@ -306,7 +324,7 @@ function AccionesRapidas() {
         <Link to="/clientes" className="card-g quick-action h-100">
           <span className="qa-badge neon">+</span>
           <div>
-            <div className="qa-title">Agregar nuevo miembro</div>
+            <div className="qa-title">Agregar nuevo cliente</div>
             <div className="qa-desc">Registro rapido de un nuevo atleta</div>
           </div>
         </Link>

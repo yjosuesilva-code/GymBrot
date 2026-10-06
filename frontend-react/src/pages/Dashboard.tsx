@@ -35,7 +35,7 @@ function Kpis({
   ).size;
 
   const ingresosMes = pagos
-    .filter((p) => esDelMesActual(p.fecha_pago))
+    .filter((p) => p.estado_pago === "EXITOSO" && esDelMesActual(p.fecha_pago))
     .reduce((acc, p) => acc + p.valor, 0);
 
   const avance = Math.min(100, Math.round((ingresosMes / META_INGRESOS_MENSUAL) * 100));

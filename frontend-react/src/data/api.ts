@@ -1,4 +1,5 @@
 import { utils } from "../lib/utils";
+import { membresiaVigente } from "../lib/membresias";
 import type {
   Cliente,
   Membresia,
@@ -52,6 +53,17 @@ function sumarMinutos(iso: string, minutos: number): string {
   const hh = Math.floor(total / 60) % 24;
   const mm = total % 60;
   return fecha + "T" + String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0") + ":00";
+}
+
+// Reloj local en 'HH:MM:SS'. Se junta con dia(0) para escribir hora_entrada con
+// el mismo criterio que el seed: la fecha en el eje de utils.isoDate (que es el
+// que compara Dashboard) y la hora en local, que es la que reparte la grafica
+// de horas picos. Usar toISOString() pondria la hora UTC y correria cada
+// entrada una franja para atras.
+function relojLocal(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
 }
 
 // Horarios tipo de un gimnasio: picos temprano (6-8) y en la tarde (18-20).
@@ -418,6 +430,48 @@ export interface PagoVencido {
   metodo: string;
   fecha: string;
   estado: string;
+}
+
+/* Lo que manda la vista de control de acceso al registrar algo. `metodo` es
+   el mismo campo que guarda el registro: HUELLA o CONTRASENA, los dos del
+   legacy. `contrasena` solo se usa cuando metodo es CONTRASENA. */
+export interface IntentoAcceso {
+  id_cliente: string;
+  metodo: Ingreso["metodo_verificacion"];
+  contrasena?: string;
+}
+
+/* Validaciones de la puerta. Devuelve el motivo del rechazo, o el cliente si
+   pasa. Se resuelve aqui y no en el componente para que ninguna vista pueda
+   dejar entrar a alguien con la membresia vencida o el cliente suspendido. */
+function clienteAceptado(
+  intento: IntentoAcceso,
+): { error: string } | { cliente: Cliente } {
+  const id = intento.id_cliente.trim();
+  const cliente = db.read<Cliente>("clientes").find((c) => c.numero_identificacion === id);
+  if (!cliente) return { error: "No se encontró un cliente con ese número de identificación" };
+
+  // El estado va antes que la clave: no tiene sentido pedirle la contraseña a
+  // alguien que ya sabemos que esta suspendido.
+  if (cliente.estado !== "ACTIVO") {
+    return { error: `El cliente está ${cliente.estado}. Actívalo en Clientes antes de registrar su acceso.` };
+  }
+
+  if (intento.metodo === "CONTRASENA") {
+    const clave = (intento.contrasena ?? "").trim();
+    if (!clave) return { error: "Ingresa la contraseña del cliente." };
+    const usuario = db
+      .read<Usuario>("usuarios")
+      .find((u) => u.numero_identificacion === id);
+    // Sin fila no hay con que comparar: reportarlo como clave mala dejaria al
+    // operador reintentando algo que nunca va a funcionar.
+    if (!usuario) {
+      return { error: "Este cliente no tiene código de acceso. Asignale uno para usar el modo manual." };
+    }
+    if (usuario.contrasena !== clave) return { error: "Contraseña incorrecta." };
+  }
+
+  return { cliente };
 }
 
 /* Devuelve los ultimos 'cantidadMeses' meses en orden, desde el mas viejo,
@@ -841,6 +895,64 @@ export const api = {
           };
         })
         .filter((x): x is PagoVencido => x !== null);
+    },
+  },
+
+  /* Control de acceso. El legacy delega en SP_REGISTRAR_INGRESO /
+     SP_REGISTRAR_SALIDA y la validacion vive en el controller
+     (RegistroEntradaController:285-341). Aqui validacion y escritura van
+     juntas: registrar una entrada sin pasar por las reglas no deberia ser
+     posible desde ninguna vista. */
+  acceso: {
+    async registrarEntrada(intento: IntentoAcceso): Promise<ApiResp<Ingreso>> {
+      await api._delay();
+
+      const revisado = clienteAceptado(intento);
+      if ("error" in revisado) return { ok: false, mensaje: revisado.error };
+      const { cliente } = revisado;
+
+      // El mismo predicado con el que Finanzas cuenta "Membresías vigentes":
+      // si esa tarjeta no lo cuenta, la puerta no lo deja pasar.
+      const hoy = utils.isoDate();
+      const id = cliente.numero_identificacion;
+      const vigente = db.read<Membresia>("membresias").some(
+        (m) => m.id_cliente === id && membresiaVigente(m, hoy, cliente),
+      );
+      if (!vigente) {
+        return {
+          ok: false,
+          mensaje: `${cliente.nombre} ${cliente.apellidos} no tiene una membresía activa. Debe adquirir o renovar su membresía para ingresar.`,
+        };
+      }
+
+      const ingresos = db.read<Ingreso>("ingresos");
+      const abierto = ingresos.find(
+        (i) => i.id_cliente === id && i.fecha === hoy && i.hora_salida === null,
+      );
+      if (abierto) {
+        return {
+          ok: false,
+          mensaje: `Ya está dentro del gimnasio desde las ${utils.hora(abierto.hora_entrada)}.`,
+        };
+      }
+
+      const registro: Ingreso = {
+        id_ingreso: ingresos.reduce((max, i) => Math.max(max, i.id_ingreso), 0) + 1,
+        id_cliente: id,
+        fecha: hoy,
+        hora_entrada: hoy + "T" + relojLocal(),
+        hora_salida: null,
+        metodo_verificacion: intento.metodo,
+        estado_verificacion: "APROBADO",
+      };
+      ingresos.push(registro);
+      db.write("ingresos", ingresos);
+
+      return {
+        ok: true,
+        mensaje: `Entrada registrada para ${cliente.nombre} ${cliente.apellidos}`,
+        data: registro,
+      };
     },
   },
 

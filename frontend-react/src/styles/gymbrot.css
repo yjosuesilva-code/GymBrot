@@ -426,6 +426,39 @@ body {
 .acceso-contador b.neon { color: var(--neon); }
 
 
+/* ---- Gymbrot AI (chat) ----
+   Reproduce la vista #22 del legacy: hilo a pantalla completa dentro de la
+   tarjeta, burbuja del usuario en neón alineada a la derecha, burbuja del bot
+   con el avatar "G" a la izquierda e indicador de escritura. El alto de la
+   tarjeta se calcula desde el viewport porque .app-shell solo fija un
+   min-height y no estira a los hijos. */
+.ia-card { display: flex; flex-direction: column; height: calc(100vh - var(--topbar-h) - 64px); min-height: 420px; }
+.ia-hilo { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding: 4px 2px 12px; }
+
+.ia-fila { display: flex; gap: 12px; align-items: flex-end; }
+.ia-fila-usuario { justify-content: flex-end; }
+.ia-burbuja { display: flex; flex-direction: column; gap: 6px; max-width: min(72%, 660px); min-width: 0; }
+.ia-burbuja-usuario { align-items: flex-end; }
+.ia-contenido { padding: 12px 16px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ia-burbuja-usuario .ia-contenido { background: var(--neon); color: #111316; border-radius: 12px 0 12px 12px; font-weight: 500; }
+.ia-burbuja-bot .ia-contenido { background: var(--bg); color: #e2e2e6; border: 1px solid rgba(255,255,255,.05); border-radius: 0 12px 12px 12px; }
+.ia-nombre { font-family: var(--f-label); font-size: 10px; font-weight: 700; letter-spacing: .5px; color: var(--neon); }
+.ia-hora { font-family: var(--f-label); font-size: 10px; color: var(--muted); }
+
+.ia-avatar { width: 36px; height: 36px; flex: none; border-radius: 50%; background: #1e2a00; border: 1px solid var(--neon); color: var(--neon); display: flex; align-items: center; justify-content: center; font-family: var(--f-title); font-size: 14px; font-weight: 900; }
+.ia-escribiendo { color: var(--muted) !important; animation: ia-pulso 1.4s ease-in-out infinite; }
+@keyframes ia-pulso { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+
+.ia-form { display: flex; align-items: center; gap: 10px; padding-top: 14px; border-top: 1px solid var(--border); }
+.ia-form .form-control-dark { flex: 1; min-width: 0; padding: 14px 20px; border-radius: 24px; }
+.ia-enviar { width: 48px; height: 48px; flex: none; border-radius: 24px; padding: 0; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+.ia-enviar:disabled { opacity: .5; cursor: not-allowed; }
+
+@media (max-width: 576px) {
+  .ia-burbuja { max-width: 88%; }
+}
+
+
 /* ===== [P2] Estilos propios · clientes, cliente-detalle, progreso, citas ===== */
 /* (por ahora vacia: se reutilizaron los componentes de la base — asi debe ser) */
 

@@ -219,8 +219,8 @@ function Demografia({ clientes }: { clientes: Cliente[] }) {
 
   return (
     <div className="card-g h-100 d-flex flex-column">
-      <h2 className="card-title">Demografia en vivo</h2>
-      <p className="card-sub">Personas presently dentro del gimnasio</p>
+      <h2 className="card-title">Demografia de socios</h2>
+      <p className="card-sub">Composicion por edad de los socios activos</p>
       <div className="demo-list mt-4">
         {grupos.map((g) => (
           <div className="demo-row" key={g.clave}>

@@ -5,6 +5,7 @@ import { Clientes } from "./pages/Clientes";
 import { ClienteDetalle } from "./pages/ClienteDetalle";
 import { Login } from "./pages/Login";
 import { Instructores } from "./pages/Instructores"; // [P3]
+import { Ejercicios } from "./pages/Ejercicios"; // [P4]
 
 function App() {
   return (
@@ -20,6 +21,8 @@ function App() {
             cuanto exista la vista. */}
         {/* [P3] Instructores */}
         <Route path="/instructores" element={<Instructores />} />
+        {/* [P4] Ejercicios */}
+        <Route path="/ejercicios" element={<Ejercicios />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

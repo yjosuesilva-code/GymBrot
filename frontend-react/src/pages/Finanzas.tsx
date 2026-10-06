@@ -15,6 +15,7 @@ import type { ChartData, ChartOptions } from "chart.js";
 import { api } from "../data/api";
 import type { NuevoPago } from "../data/api";
 import { utils } from "../lib/utils";
+import { membresiaVigente } from "../lib/membresias";
 import { META_INGRESOS_MENSUAL, porcentaje } from "../lib/config";
 import type { Cliente, Membresia, Pago, PlanMembresia } from "../types";
 
@@ -699,13 +700,12 @@ export function Finanzas() {
   const ingresosHoy = pagos
     .filter((p) => p.estado_pago === "EXITOSO" && p.fecha_pago === hoy)
     .reduce((acc, p) => acc + p.valor, 0);
-  // Una membresia solo cuenta como vigente si ademas de estar ACTIVA y no
-  // vencida, su cliente sigue ACTIVO. Sin ese filtro, suspender o inactivar un
-  // cliente en Clientes bajaba el "Clientes activos" del Dashboard pero dejaba
-  // esta tarjeta igual: las dos pantallas contaban lo mismo con reglas distintas.
-  const activos = new Set(clientes.filter((c) => c.estado === "ACTIVO").map((c) => c.numero_identificacion));
-  const membresiasVigentes = membresias.filter(
-    (m) => m.estado === "ACTIVA" && m.fecha_vencimiento >= hoy && activos.has(m.id_cliente),
+  // La regla de vigencia vive en lib/membresias.ts y es la misma que aplica
+  // el control de acceso al dejar entrar: si esta tarjeta cuenta a alguien,
+  // la puerta lo deja pasar, y al reves.
+  const porId = new Map(clientes.map((c) => [c.numero_identificacion, c]));
+  const membresiasVigentes = membresias.filter((m) =>
+    membresiaVigente(m, hoy, porId.get(m.id_cliente)),
   ).length;
 
   if (cargando) {

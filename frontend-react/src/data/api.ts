@@ -960,6 +960,55 @@ export const api = {
         data: registro,
       };
     },
+
+    /* Cierra la entrada abierta del dia.
+
+       A diferencia de la entrada NO exige membresia vigente ni cliente ACTIVO.
+       El legacy las pedia en las dos (RegistroEntradaController:307) y el
+       resultado es que alguien suspendido o con la membresia vencida no podia
+       registrar su salida y quedaba "dentro" para siempre, inflando el KPI
+       "Activos ahora" del Dashboard.
+
+       `metodo` es opcional: el panel manual lo manda para identificar al
+       socio, el atajo de la fila del listado cierra directo. */
+    async registrarSalida(datos: {
+      id_cliente: string;
+      metodo?: Ingreso["metodo_verificacion"];
+      contrasena?: string;
+    }): Promise<ApiResp<Ingreso>> {
+      await api._delay();
+
+      const id = datos.id_cliente.trim();
+      const cliente = db.read<Cliente>("clientes").find((c) => c.numero_identificacion === id);
+      if (!cliente) return { ok: false, mensaje: "No se encontró un cliente con ese número de identificación" };
+
+      if (datos.metodo === "CONTRASENA") {
+        const rechazo = claveRechazada(id, datos.contrasena);
+        if (rechazo) return { ok: false, mensaje: rechazo };
+      }
+
+      const hoy = utils.isoDate();
+      const ingresos = db.read<Ingreso>("ingresos");
+      const abierto = ingresos.find(
+        (i) => i.id_cliente === id && i.fecha === hoy && i.hora_salida === null,
+      );
+      if (!abierto) {
+        return { ok: false, mensaje: "No hay una entrada registrada hoy para este cliente." };
+      }
+
+      const ahora = hoy + "T" + relojLocal();
+      // Las horas del seed de hoy van escritas a mano y no se mueven con el
+      // reloj, así que a primera hora puede haber una entrada "futura". Sin
+      // este tope saldria un registro con la salida antes que la entrada.
+      abierto.hora_salida = ahora < abierto.hora_entrada ? abierto.hora_entrada : ahora;
+      db.write("ingresos", ingresos);
+
+      return {
+        ok: true,
+        mensaje: `Salida registrada para ${cliente.nombre} ${cliente.apellidos}`,
+        data: abierto,
+      };
+    },
   },
 
   ingresos: {

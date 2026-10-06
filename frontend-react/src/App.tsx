@@ -7,6 +7,8 @@ import { Login } from "./pages/Login";
 import { Instructores } from "./pages/Instructores"; // [P3]
 import { Ejercicios } from "./pages/Ejercicios"; // [P4]
 import { Membresias } from "./pages/Membresias"; // [P4]
+import { Progreso } from "./pages/Progreso"; // [P2]
+import { Citas } from "./pages/Citas"; // [P2]
 
 function App() {
   return (
@@ -26,6 +28,10 @@ function App() {
         <Route path="/ejercicios" element={<Ejercicios />} />
         {/* [P4] Membresias */}
         <Route path="/membresias" element={<Membresias />} />
+        {/* [P2] Progreso */}
+        <Route path="/progreso" element={<Progreso />} />
+        {/* [P2] Citas */}
+        <Route path="/citas" element={<Citas />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

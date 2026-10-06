@@ -176,7 +176,7 @@ export function Clientes() {
         <Modal.Body>
           {error && <div className="alert-g alert-error show">{error}</div>}
           <div className="row g-3">
-            <div className="col-md-4">
+            <div className="col-md-6">
               <label className="form-label-g">Tipo</label>
               <select className="form-control-dark" value={form.tipo_identificacion} onChange={(e) => setCampo("tipo_identificacion", e.target.value)}>
                 <option value="CC">CC</option>
@@ -185,7 +185,7 @@ export function Clientes() {
                 <option value="PP">PP</option>
               </select>
             </div>
-            <div className="col-md-8">
+            <div className="col-md-6">
               <label className="form-label-g">Número de identificación</label>
               <input className="form-control-dark" value={form.numero_identificacion} disabled={editandoId !== null} onChange={(e) => setCampo("numero_identificacion", e.target.value)} />
             </div>
@@ -205,11 +205,11 @@ export function Clientes() {
               <label className="form-label-g">Correo</label>
               <input className="form-control-dark" type="email" value={form.correo} onChange={(e) => setCampo("correo", e.target.value)} />
             </div>
-            <div className="col-md-8">
+            <div className="col-md-6">
               <label className="form-label-g">Dirección</label>
               <input className="form-control-dark" value={form.direccion} onChange={(e) => setCampo("direccion", e.target.value)} />
             </div>
-            <div className="col-md-4">
+            <div className="col-md-6">
               <label className="form-label-g">Fecha de nacimiento</label>
               <input className="form-control-dark" type="date" value={form.fecha_nacimiento} onChange={(e) => setCampo("fecha_nacimiento", e.target.value)} />
             </div>

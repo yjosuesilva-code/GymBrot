@@ -52,6 +52,15 @@ export interface Ejercicio {
     recursoUrl: string;
 }
 
+export interface Progreso {
+  id_progreso: number;
+  id_cliente: string;
+  fecha: string;      // 'YYYY-MM-DD'
+  peso: number;       // kg
+  altura: number;     // metros
+  notas: string;
+}
+
 export interface ApiResp<T = unknown> {
   ok: boolean;
   mensaje: string;
@@ -98,3 +107,17 @@ export interface Instructor {
 // Lo que se envía al crear: estado y fecha_contratacion los pone api.instructores.create
 export type InstructorNuevo = Omit<Instructor, 'estado' | 'fecha_contratacion'>;
 // ===== [/P3] Instructores =====
+
+// ===== [P2] Citas =====
+export interface Cita {
+  id_cita: number;
+  id_cliente: string;
+  id_instructor: string;
+  fecha: string;   // 'YYYY-MM-DD'
+  hora: string;    // 'HH:MM'
+  estado: 'PENDIENTE' | 'CONFIRMADA' | 'CANCELADA';
+  notas: string;
+}
+// Lo que se envía al crear: el id y el estado los pone api.citas.create
+export type CitaNueva = Omit<Cita, 'id_cita' | 'estado'>;
+// ===== [/P2] Citas =====

@@ -54,7 +54,8 @@ export interface Ingreso {
     fecha: string;
     hora_entrada: string;
     hora_salida: string | null;
-    metodo_verificacion: 'QR'| 'MANUAL';
+    metodo_verificacion: 'HUELLA' | 'CONTRASENA';
+    estado_verificacion: 'APROBADO' | 'RECHAZADO';
 }
 
 export interface Ejercicio {

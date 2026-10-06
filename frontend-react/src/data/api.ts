@@ -72,7 +72,8 @@ function ingresosPasados(): Ingreso[] {
         fecha,
         hora_entrada: entrada,
         hora_salida: sumarMinutos(entrada, 60),
-        metodo_verificacion: i % 2 === 0 ? "QR" : "MANUAL",
+        metodo_verificacion: i % 2 === 0 ? "HUELLA" : "CONTRASENA",
+        estado_verificacion: "APROBADO",
       });
     });
   }
@@ -109,7 +110,8 @@ function ingresosDeHoy(): Ingreso[] {
       fecha,
       hora_entrada: entrada,
       hora_salida: dentro ? null : sumarMinutos(entrada, 60),
-      metodo_verificacion: i % 2 === 0 ? "QR" : "MANUAL",
+      metodo_verificacion: i % 2 === 0 ? "HUELLA" : "CONTRASENA",
+      estado_verificacion: "APROBADO",
     };
   });
 }

@@ -852,6 +852,13 @@ export const api = {
     async byCliente(id: string): Promise<Ingreso[]> {
       await api._delay();
       return db.read<Ingreso>("ingresos").filter((i) => i.id_cliente === id);
-    }
-  }
+    },
+    /* Lo que muestra el listado de control de acceso: un solo dia. Dashboard y
+       Finanzas usan list() con el historial completo; aqui leer los seis dias
+       anteriores solo serviria para filtrarlos en el componente. */
+    async delDia(fecha: string): Promise<Ingreso[]> {
+      await api._delay();
+      return db.read<Ingreso>("ingresos").filter((i) => i.fecha === fecha);
+    },
+  },
 };

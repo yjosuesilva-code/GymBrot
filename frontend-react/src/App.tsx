@@ -6,6 +6,7 @@ import { ClienteDetalle } from "./pages/ClienteDetalle";
 import { Login } from "./pages/Login";
 import { Instructores } from "./pages/Instructores"; // [P3]
 import { Ejercicios } from "./pages/Ejercicios"; // [P4]
+import { Membresias } from "./pages/Membresias"; // [P4]
 
 function App() {
   return (
@@ -23,6 +24,8 @@ function App() {
         <Route path="/instructores" element={<Instructores />} />
         {/* [P4] Ejercicios */}
         <Route path="/ejercicios" element={<Ejercicios />} />
+        {/* [P4] Membresias */}
+        <Route path="/membresias" element={<Membresias />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

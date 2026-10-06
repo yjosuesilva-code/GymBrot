@@ -8,18 +8,28 @@ export function Login() {
   const [usuario, setUsuario] = useState("");
   const [clave, setClave] = useState("");
   const [error, setError] = useState("");
+  const [entrando, setEntrando] = useState(false);
 
   if (auth.current()) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  function entrar(e: FormEvent<HTMLFormElement>) {
+  async function entrar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (auth.login(usuario.trim(), clave)) {
-      navigate("/dashboard", { replace: true });
-      return;
+    if (entrando) return;
+
+    setError("");
+    setEntrando(true);
+    try {
+      const res = await auth.login(usuario, clave);
+      if (res.ok) {
+        navigate("/dashboard", { replace: true });
+        return;
+      }
+      setError(res.mensaje);
+    } finally {
+      setEntrando(false);
     }
-    setError("Usuario o contraseña incorrectos");
   }
 
   return (
@@ -50,7 +60,7 @@ export function Login() {
           type="text"
           value={usuario}
           onChange={(e) => setUsuario(e.target.value)}
-          placeholder="Usuario"
+          placeholder="Usuario o correo"
           autoComplete="username"
           autoFocus
         />
@@ -68,11 +78,13 @@ export function Login() {
           autoComplete="current-password"
         />
 
-        <button className="btn-neon w-100" type="submit">
-          Entrar
+        <button className="btn-neon w-100" type="submit" disabled={entrando}>
+          {entrando ? "Entrando..." : "Entrar"}
         </button>
 
-        <p className="login-hint">Ingreso: admin / admin</p>
+        <p className="login-hint">
+          Ingreso: admin / admin &nbsp;o&nbsp; admin@gymbrot.com / admin
+        </p>
       </form>
     </div>
   );

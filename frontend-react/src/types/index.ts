@@ -7,8 +7,24 @@ export interface Cliente {
   correo: string;
   direccion: string;
   fecha_nacimiento: string;   // 'YYYY-MM-DD'
-  estado: 'ACTIVO' | 'INACTIVO' | 'SUSPENDIDO';
+  estado: 'ACTIVO' | 'INACTIVO' | 'SUSPENDIDO' | 'BLOQUEADO';
   fecha_registro: string;
+}
+
+/* USUARIOS del legacy (GYMBROT_COMPLETO.sql). El campo contrasena guarda la
+   clave en texto plano solo porque hoy no hay backend que la hashee; en la
+   columna real se llama contrasena_hash y va con BCrypt (AuthService.java:29).
+   Los socios tambien son usuarios: su contrasena es la que valida el acceso
+   con metodo CONTRASENA. */
+export interface Usuario {
+  numero_identificacion: string;
+  nombre: string;
+  apellidos: string;
+  correo: string;
+  contrasena: string;
+  estado: 'ACTIVO' | 'INACTIVO' | 'SUSPENDIDO' | 'BLOQUEADO';
+  tipo_usuario: 'ADMINISTRADOR' | 'INSTRUCTOR' | 'CLIENTE';
+  rol: string;
 }
 
 export interface Membresia {
@@ -59,9 +75,17 @@ export interface ApiResp<T = unknown> {
 }
 
 /* Sesion del mock en localStorage. Sin tenantId: el vanilla lo llevaba,
-   pero el modelo de React es de un solo gimnasio. */
+   pero el modelo de React es de un solo gimnasio.
+
+   Guarda tipo_usuario desde ya porque el login solo admite ADMINISTRADOR
+   (loginController.java:156), pero viene preparado para que cada rol entre
+   a su propio dashboard. */
 export interface Sesion {
+  numero_identificacion: string;
   usuario: string;
   nombre: string;
+  apellidos: string;
+  correo: string;
   rol: string;
+  tipo_usuario: Usuario['tipo_usuario'];
 }

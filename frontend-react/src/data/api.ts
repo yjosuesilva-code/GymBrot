@@ -1,7 +1,8 @@
 import { utils } from "../lib/utils";
-import type { Cliente, Membresia, Pago, Ingreso, Ejercicio, ApiResp } from "../types";
+import type { Cliente, Membresia, Pago, Ingreso, Ejercicio, Usuario, ApiResp } from "../types";
 
 interface Seed {
+  usuarios: Usuario[];
   clientes: Cliente[];
   membresias: Membresia[];
   pagos: Pago[];
@@ -114,6 +115,16 @@ function ingresosDeHoy(): Ingreso[] {
 }
 
 const SEED: Seed = {
+  // Personal con acceso al panel. El legacy exige tipo_usuario
+  // 'ADMINISTRADOR' para iniciar sesion (loginController.java:156), asi que
+  // instructor y cliente quedan sembrados para probar ese rechazo, no para
+  // entrar. Cuando haya roles reales, estos 3 pasan a ser los perfiles.
+  usuarios: [
+    { numero_identificacion:'1001000001', nombre:'admin', apellidos:'Administrador', correo:'admin@gymbrot.com', contrasena:'admin',      estado:'ACTIVO',     tipo_usuario:'ADMINISTRADOR', rol:'SUPERADMIN' },
+    { numero_identificacion:'2001000001', nombre:'Diego', apellidos:'Morales',       correo:'diego.morales@gymbrot.com', contrasena:'instructor', estado:'ACTIVO',     tipo_usuario:'INSTRUCTOR',   rol:'INSTRUCTOR' },
+    { numero_identificacion:'1000000004', nombre:'Laura', apellidos:'Martinez',      correo:'laura.m@mail.com',          contrasena:'cliente',    estado:'SUSPENDIDO', tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+  ],
+
   clientes: [ 
     { numero_identificacion:'1000000001', tipo_identificacion:'CC', nombre:'Ana María',    apellidos:'Ruiz',     telefono:'3001112233', correo:'ana.ruiz@mail.com',   direccion:'Cra 15 #23-40', fecha_nacimiento:'1995-03-12', estado:'ACTIVO',     fecha_registro:'2026-01-10' },
     { numero_identificacion:'1000000002', tipo_identificacion:'CC', nombre:'Carlos Andrés', apellidos:'Pérez',    telefono:'3012223344', correo:'carlos.perez@mail.com',direccion:'Cl 20 #5-16',   fecha_nacimiento:'1988-11-02', estado:'ACTIVO',     fecha_registro:'2026-01-18' },
@@ -153,7 +164,7 @@ const SEED: Seed = {
 // tenga datos: read() solo siembra cuando la clave no existe, asi que un
 // seed nuevo convive con el viejo indefinidamente. Al cambiar este numero
 // la siguiente carga regenera todas las colecciones.
-const SEED_VERSION = "2";
+const SEED_VERSION = "3";
 const CLAVE_VERSION = "gymbrot_seed_version";
 
 function sembrarSiHaceFalta(): void {
@@ -188,6 +199,22 @@ const db = {
 export const api = {
   _delay(ms = 200) {
     return new Promise<void>((res) => setTimeout(res, ms));
+  },
+
+  usuarios: {
+    // El legacy busca por nombre o correo en el mismo campo
+    // (UsuarioDAO.buscarPorNombreOCorreo, loginController.java:153), asi que
+    // 'admin' y 'admin@gymbrot.com' resuelven al mismo usuario.
+    async buscarPorNombreOCorreo(texto: string): Promise<Usuario | null> {
+      await api._delay();
+      const clave = texto.trim().toLowerCase();
+      if (!clave) return null;
+      return (
+        db.read<Usuario>("usuarios").find(
+          (u) => u.nombre.toLowerCase() === clave || u.correo.toLowerCase() === clave,
+        ) ?? null
+      );
+    },
   },
 
   clientes: {

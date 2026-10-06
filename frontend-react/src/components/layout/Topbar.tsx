@@ -6,7 +6,7 @@ export function Topbar({ titulo, nombre }: TopbarProps) {
       <div className="topbar-title">{titulo}</div>
       <div className="topbar-right">
         <span className="topbar-user">{nombre}</span>
-        <div className="avatar">{nombre.charAt(0) || "A"}</div>
+        <div className="avatar">{(nombre.charAt(0) || "A").toUpperCase()}</div>
       </div>
     </header>
   );

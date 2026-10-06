@@ -276,6 +276,42 @@ export const api = {
     }
   },
 
+  // ===== [P4] Ejercicios =====
+  ejercicios: {
+    async list(): Promise<Ejercicio[]> {
+      await api._delay();
+      return db.read<Ejercicio>("ejercicios");
+    },
+
+    async create(
+      data: Omit<Ejercicio, "idEjercicio">
+    ): Promise<ApiResp<Ejercicio>> {
+      await api._delay();
+
+      const arr = db.read<Ejercicio>("ejercicios");
+
+      const nuevoId =
+        arr.length > 0
+          ? Math.max(...arr.map((e) => e.idEjercicio)) + 1
+          : 1;
+
+      const nuevo: Ejercicio = {
+        ...data,
+        idEjercicio: nuevoId,
+      };
+
+      arr.push(nuevo);
+      db.write("ejercicios", arr);
+
+      return {
+        ok: true,
+        mensaje: "Ejercicio registrado",
+        data: nuevo,
+      };
+    },
+  },
+  // ===== [/P4] Ejercicios =====
+
   // ===== [P3] Instructores =====
   instructores: {
     async list(): Promise<Instructor[]> {

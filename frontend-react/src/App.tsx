@@ -5,6 +5,7 @@ import { Clientes } from "./pages/Clientes";
 import { ClienteDetalle } from "./pages/ClienteDetalle";
 import { Finanzas } from "./pages/Finanzas";
 import { Acceso } from "./pages/Acceso";
+import { GymbrotAI } from "./pages/GymbrotAI";
 import { Login } from "./pages/Login";
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
         <Route path="/clientes/:id" element={<ClienteDetalle />} />
         <Route path="/finanzas" element={<Finanzas />} />
         <Route path="/acceso" element={<Acceso />} />
+        <Route path="/gymbrot-ai" element={<GymbrotAI />} />
         {/* Las demas secciones de paginas.ts todavia no tienen ruta. Como el
             Layout es una ruta sin path sigue renderizando sidebar y topbar, y
             lo unico que queda vacio es el Outlet. Registrar la ruta en

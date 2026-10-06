@@ -12,4 +12,5 @@ export const paginas = [
   { to: "/citas", label: "Citas", icon: "bi-calendar-check" },
   { to: "/notificaciones", label: "Notificaciones", icon: "bi-bell" },
   { to: "/finanzas", label: "Finanzas", icon: "bi-graph-up-arrow" },
+  { to: "/gymbrot-ai", label: "Gymbrot AI", icon: "bi-stars" },
 ];

@@ -478,6 +478,60 @@ export const api = {
       if (!clave) return null;
       return db.read<Usuario>("usuarios").find((u) => u.numero_identificacion === clave) ?? null;
     },
+
+    /* Crea o actualiza la clave de un cliente. Va por `usuarios`, no por
+       `clientes`: el password vive en su propia tabla desde el legacy
+       (CLIENTE.contrasena_hash), y meterlo en Cliente romperia el esquema
+       cuando haya backend. Si el cliente no tenia fila, se crea con los datos
+       que ya estan en `clientes`. */
+    async asignar(id: string, contrasena: string): Promise<ApiResp<Usuario>> {
+      await api._delay();
+      const limpia = contrasena.trim();
+      if (!limpia) return { ok: false, mensaje: "La contraseña no puede quedar vacía" };
+
+      const cliente = db.read<Cliente>("clientes").find((c) => c.numero_identificacion === id);
+      if (!cliente) return { ok: false, mensaje: "El cliente no existe" };
+
+      const usuarios = db.read<Usuario>("usuarios");
+      let usuario = usuarios.find((u) => u.numero_identificacion === id);
+
+      if (usuario) {
+        usuario.contrasena = limpia;
+      } else {
+        usuario = {
+          numero_identificacion: id,
+          nombre: cliente.nombre,
+          apellidos: cliente.apellidos,
+          correo: cliente.correo,
+          contrasena: limpia,
+          estado: cliente.estado,
+          tipo_usuario: "CLIENTE",
+          rol: "CLIENTE",
+        };
+        usuarios.push(usuario);
+      }
+
+      db.write("usuarios", usuarios);
+      return { ok: true, mensaje: "Contraseña guardada", data: usuario };
+    },
+
+    /* Espejo de api.clientes.setEstado: el estado del usuario nunca se decide
+       solo, siempre sigue al del cliente. Sin esto, suspender a alguien en
+       Clientes dejaria su usuario ACTIVO en `usuarios`, y las dos pantallas
+       volarian a contar reglas distintas. */
+    async setEstado(id: string, estado: Usuario["estado"]): Promise<ApiResp<Usuario>> {
+      await api._delay();
+      const usuarios = db.read<Usuario>("usuarios");
+      const u = usuarios.find((x) => x.numero_identificacion === id);
+      // Un cliente todavia sin fila en `usuarios` no tiene nada que espejar:
+      // devolver error dejaria el alta como fallida por un dato cosmético. Y
+      // crear la fila aqui sin contraseña haria que el modo manual respondiera
+      // "contraseña incorrecta" en vez de "no tiene código de acceso".
+      if (!u) return { ok: true, mensaje: "Cliente sin usuario: nada que sincronizar" };
+      u.estado = estado;
+      db.write("usuarios", usuarios);
+      return { ok: true, mensaje: "Estado actualizado", data: u };
+    },
   },
 
   /* Estado del lector de huella. Va en su propia clave y no en el SEED porque

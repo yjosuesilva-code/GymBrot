@@ -564,8 +564,10 @@ export const api = {
       if (!input.metodo_pago) return { ok: false, mensaje: "Selecciona un metodo de pago" };
 
       const clientes = db.read<Cliente>("clientes");
-      if (!clientes.some((c) => c.numero_identificacion === idCliente))
-        return { ok: false, mensaje: "El socio no existe" };
+      const cliente = clientes.find((c) => c.numero_identificacion === idCliente);
+      if (!cliente) return { ok: false, mensaje: "El cliente no existe" };
+      if (cliente.estado !== "ACTIVO")
+        return { ok: false, mensaje: "El cliente no esta activo. Activalo en Clientes antes de cobrarle." };
 
       const planes = db.read<PlanMembresia>("planes");
       const plan = planes.find((p) => p.id_plan === input.id_plan);
@@ -583,6 +585,25 @@ export const api = {
       const hoy = utils.isoDate();
       const membresias = db.read<Membresia>("membresias");
       const historial = db.read<HistorialMembresia>("historialMembresias");
+
+      // El cobro solo renueva la membresia vigente: si el cliente ya tiene una,
+      // el plan y la modalidad van dados y cambiar alguno exige cancelar antes
+      // en Clientes. Antes se aceptaba el cambio aqui y la renovacion apagaba
+      // sola la membresia anterior (linea "anterior.estado = CANCELADA"), con
+      // lo que un simple cobro dejaba al cliente sin plan.
+      const vigente = membresias.find(
+        (m) => m.id_cliente === idCliente && m.estado === "ACTIVA" && m.fecha_vencimiento >= hoy,
+      );
+      if (vigente) {
+        if (vigente.id_plan !== plan.id_plan || vigente.modalidad_pago !== input.modalidad_pago)
+          return {
+            ok: false,
+            mensaje:
+              "El cliente ya tiene una membresia vigente " +
+              (vigente.tipo_membresia + " " + vigente.modalidad_pago) +
+              ". Cancela esa membresia en Clientes antes de activar otra.",
+          };
+      }
 
       // Copias para poder deshacer: se escriben todas o ninguna.
       const membresiasPrevias = membresias.map((m) => ({ ...m }));
@@ -605,10 +626,9 @@ export const api = {
         };
 
         // Renovar apaga la membresia anterior en vez de dejarla vigente.
-        const anterior = membresias.find(
-          (m) => m.id_cliente === idCliente && m.estado === "ACTIVA" && m.fecha_vencimiento >= hoy,
-        );
-        if (anterior) anterior.estado = "CANCELADA";
+        // Es `vigente`, ya resuelto mas arriba: se cancela porque el cobro es
+        // su renovacion, nunca porque se este cambiando de plan.
+        if (vigente) vigente.estado = "CANCELADA";
 
         historial.forEach((h) => {
           if (h.id_cliente === idCliente && h.activa) h.activa = false;

@@ -309,6 +309,53 @@ export const api = {
         data: nuevo,
       };
     },
+    async update(
+  id: number,
+  data: Partial<Omit<Ejercicio, "idEjercicio">>
+): Promise<ApiResp<Ejercicio>> {
+  await api._delay();
+
+  const arr = db.read<Ejercicio>("ejercicios");
+  const ejercicio = arr.find((e) => e.idEjercicio === id);
+
+  if (!ejercicio) {
+    return { ok: false, mensaje: "Ejercicio no encontrado" };
+  }
+
+  Object.assign(ejercicio, data);
+
+  db.write("ejercicios", arr);
+
+  return {
+    ok: true,
+    mensaje: "Ejercicio actualizado",
+    data: ejercicio,
+  };
+},
+
+async remove(id: number): Promise<ApiResp<Ejercicio>> {
+  await api._delay();
+
+  const arr = db.read<Ejercicio>("ejercicios");
+  const ejercicio = arr.find((e) => e.idEjercicio === id);
+
+  if (!ejercicio) {
+    return { ok: false, mensaje: "Ejercicio no encontrado" };
+  }
+
+  db.write(
+    "ejercicios",
+    arr.filter((e) => e.idEjercicio !== id)
+  );
+
+  return {
+    ok: true,
+    mensaje: "Ejercicio eliminado",
+    data: ejercicio,
+  };
+},
+    
+
   },
   // ===== [/P4] Ejercicios =====
 

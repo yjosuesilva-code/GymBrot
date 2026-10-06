@@ -197,7 +197,6 @@ function GraficaAsistencia({ ingresos }: { ingresos: Ingreso[] }) {
 
 function Demografia({ clientes }: { clientes: Cliente[] }) {
   const activos = clientes.filter((c) => c.estado === "ACTIVO");
-  const total = activos.length || 1;
 
   function contar(min: number, max: number): number {
     return activos.filter((p) => {
@@ -211,6 +210,12 @@ function Demografia({ clientes }: { clientes: Cliente[] }) {
     { clave: "menor", nombre: "Menor de edad", rango: "Menores de 18 años", conteo: contar(0, 17) },
     { clave: "senior", nombre: "Senior", rango: "Mayores de 50 años", conteo: contar(51, 200) },
   ];
+
+  // El total sale de la suma de los tres grupos y no del numero de socios: un
+  // socio sin fecha de nacimiento no cae en ningun rango, y usarlo como
+  // denominador haria que los porcentajes no sumen 100%. El legacy tiene el
+  // mismo defecto en DashboardService.java:56.
+  const total = grupos.reduce((suma, g) => suma + g.conteo, 0) || 1;
 
   return (
     <div className="card-g h-100 d-flex flex-column">

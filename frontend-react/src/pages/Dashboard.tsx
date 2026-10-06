@@ -208,9 +208,9 @@ function Demografia({ clientes, ingresos }: { clientes: Cliente[]; ingresos: Ing
   }
 
   const grupos = [
-    { clave: "adulto", nombre: "Adulto", rango: "18 a 55 años", conteo: contar(18, 55) },
+    { clave: "adulto", nombre: "Adulto", rango: "18 a 50 años", conteo: contar(18, 50) },
     { clave: "menor", nombre: "Menor de edad", rango: "Menores de 18 años", conteo: contar(0, 17) },
-    { clave: "senior", nombre: "Senior", rango: "Mayores de 55 años", conteo: contar(56, 200) },
+    { clave: "senior", nombre: "Senior", rango: "Mayores de 50 años", conteo: contar(51, 200) },
   ];
 
   return (

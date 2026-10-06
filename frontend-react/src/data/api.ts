@@ -468,6 +468,16 @@ export const api = {
         ) ?? null
       );
     },
+
+    // El modo manual de control de acceso busca por el numero de documento,
+    // no por nombre ni correo: es lo que escribe el socio en la puerta
+    // (RegistroEntradaController.handleValidarIngreso, ClienteDAO.buscarPorId).
+    async byIdentificacion(id: string): Promise<Usuario | null> {
+      await api._delay();
+      const clave = id.trim();
+      if (!clave) return null;
+      return db.read<Usuario>("usuarios").find((u) => u.numero_identificacion === clave) ?? null;
+    },
   },
 
   /* Estado del lector de huella. Va en su propia clave y no en el SEED porque

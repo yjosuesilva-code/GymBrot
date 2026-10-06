@@ -4,7 +4,7 @@ import { api } from "../data/api";
 import { utils } from "../lib/utils";
 import type { Cliente, Membresia } from "../types";
 
-type FormMembresia = Omit<Membresia, "id_membresia" | "valor"> & { valor: string };
+type FormMembresia = Omit<Membresia, "id_membresia" | "valor" | "estado"> & { valor: string };
 
 const VACIO: FormMembresia = {
   id_cliente: "",
@@ -13,11 +13,11 @@ const VACIO: FormMembresia = {
   valor: "",
   fecha_inicio: "",
   fecha_vencimiento: "",
-  estado: "ACTIVA",
 };
 
 export function Membresias() {
   const [show, setShow] = useState(false);
+  const [editandoId, setEditandoId] = useState<number | null>(null);
   const [form, setForm] = useState<FormMembresia>(VACIO);
   const [guardando, setGuardando] = useState(false);
   const [errorForm, setErrorForm] = useState("");
@@ -72,7 +72,23 @@ export function Membresias() {
   }
 
   function abrirNueva() {
+    setEditandoId(null);
     setForm(VACIO);
+    setErrorForm("");
+    setExito("");
+    setShow(true);
+  }
+
+  function abrirEdicion(membresia: Membresia) {
+    setEditandoId(membresia.id_membresia);
+    setForm({
+      id_cliente: membresia.id_cliente,
+      tipo_membresia: membresia.tipo_membresia,
+      modalidad_pago: membresia.modalidad_pago,
+      valor: String(membresia.valor),
+      fecha_inicio: membresia.fecha_inicio,
+      fecha_vencimiento: membresia.fecha_vencimiento,
+    });
     setErrorForm("");
     setExito("");
     setShow(true);
@@ -80,6 +96,7 @@ export function Membresias() {
 
   function cerrarModal() {
     if (guardando) return;
+    setEditandoId(null);
     setShow(false);
     setForm(VACIO);
     setErrorForm("");
@@ -121,25 +138,33 @@ export function Membresias() {
     setGuardando(true);
     setErrorForm("");
     try {
-      const respuesta = await api.membresias.create({
+      const estado: Membresia["estado"] = form.fecha_vencimiento < utils.isoDate() ? "VENCIDA" : "ACTIVA";
+      const datos = {
         ...form,
         tipo_membresia: form.tipo_membresia.trim(),
         valor,
-      });
+        estado,
+      };
+      const respuesta = editandoId === null
+        ? await api.membresias.create(datos)
+        : await api.membresias.update(editandoId, datos);
       if (!respuesta.ok) {
         setErrorForm(respuesta.mensaje || "No se pudo guardar la membres\u00eda.");
         return;
       }
       if (respuesta.data) {
-        const nueva = respuesta.data;
-        setMembresias((actuales) => [...actuales, nueva]);
+        const guardada = respuesta.data;
+        setMembresias((actuales) => editandoId === null
+          ? [...actuales, guardada]
+          : actuales.map((membresia) => membresia.id_membresia === editandoId ? guardada : membresia));
       } else {
         setMembresias(await api.membresias.list());
       }
       setError("");
       setShow(false);
       setForm(VACIO);
-      setExito(respuesta.mensaje || "Membres\u00eda registrada correctamente.");
+      setEditandoId(null);
+      setExito(respuesta.mensaje || (editandoId === null ? "Membres\u00eda registrada correctamente." : "Membres\u00eda actualizada correctamente."));
     } catch {
       setErrorForm("No se pudo guardar la membres\u00eda. Intenta nuevamente.");
     } finally {
@@ -220,21 +245,22 @@ export function Membresias() {
               <th scope="col">Fecha de inicio</th>
               <th scope="col">Fecha de vencimiento</th>
               <th scope="col">Estado</th>
+              <th scope="col">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {cargando ? (
               <tr>
-                <td colSpan={8} className="loader" role="status">
+                <td colSpan={9} className="loader" role="status">
                   <span className="spinner-g" aria-hidden="true"></span>Cargando...
                 </td>
               </tr>
             ) : error ? (
-              <tr><td colSpan={8}><div className="alert-g alert-error show" role="alert">{error}</div></td></tr>
+              <tr><td colSpan={9}><div className="alert-g alert-error show" role="alert">{error}</div></td></tr>
             ) : membresias.length === 0 ? (
-              <tr><td colSpan={8} className="empty-state">No hay membresías registradas.</td></tr>
+              <tr><td colSpan={9} className="empty-state">No hay membresías registradas.</td></tr>
             ) : filtradas.length === 0 ? (
-              <tr><td colSpan={8} className="empty-state">No hay membresías que coincidan con los filtros.</td></tr>
+              <tr><td colSpan={9} className="empty-state">No hay membresías que coincidan con los filtros.</td></tr>
             ) : (
               filtradas.map((membresia) => {
                 const cliente = clientesPorId.get(membresia.id_cliente);
@@ -248,6 +274,19 @@ export function Membresias() {
                     <td>{utils.fecha(membresia.fecha_inicio)}</td>
                     <td>{utils.fecha(membresia.fecha_vencimiento)}</td>
                     <td><span className={"badge-g " + utils.badgeClass(membresia.estado)}>{membresia.estado}</span></td>
+                    <td>
+                      <div className="cell-actions">
+                      <button
+                        type="button"
+                        className="btn-icon"
+                        title="Editar"
+                        aria-label={`Editar membresía ${membresia.id_membresia}`}
+                        onClick={() => abrirEdicion(membresia)}
+                      >
+                        <i className="bi bi-pencil" aria-hidden="true"></i>
+                      </button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })
@@ -257,7 +296,7 @@ export function Membresias() {
       </div>
       <Modal show={show} onHide={cerrarModal} backdrop={guardando ? "static" : true} keyboard={!guardando} centered size="lg">
         <Modal.Header closeButton={!guardando}>
-          <Modal.Title>Nueva membresía</Modal.Title>
+          <Modal.Title>{editandoId === null ? "Nueva membresía" : "Editar membresía"}</Modal.Title>
         </Modal.Header>
         <form onSubmit={(e) => { e.preventDefault(); void guardar(); }} noValidate>
           <Modal.Body>
@@ -299,20 +338,13 @@ export function Membresias() {
               <label className="form-label-g" htmlFor="nueva-membresia-fecha_vencimiento">Fecha de vencimiento *</label>
               <input id="nueva-membresia-fecha_vencimiento" type="date" className="form-control-dark" value={form.fecha_vencimiento} onChange={(e) => setCampo("fecha_vencimiento", e.target.value)} required />
             </div>
-            <div className="col-md-6">
-              <label className="form-label-g" htmlFor="nueva-membresia-estado">Estado inicial *</label>
-              <select id="nueva-membresia-estado" className="form-control-dark" value={form.estado} onChange={(e) => setCampo("estado", e.target.value as Membresia["estado"])} required>
-                  <option value="ACTIVA">ACTIVA</option>
-                  <option value="VENCIDA">VENCIDA</option>
-                </select>
-            </div>
               </div>
             </fieldset>
           </Modal.Body>
           <Modal.Footer>
             <button type="button" className="btn-dark" disabled={guardando} onClick={cerrarModal}>Cancelar</button>
             <button type="submit" className="btn-neon" disabled={guardando || clientes.length === 0}>
-              {guardando ? "Guardando..." : "Guardar membresía"}
+              {guardando ? "Guardando..." : editandoId === null ? "Guardar membresía" : "Guardar cambios"}
             </button>
           </Modal.Footer>
         </form>

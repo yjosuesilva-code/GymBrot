@@ -238,7 +238,7 @@ function Demografia({ clientes }: { clientes: Cliente[] }) {
         ))}
       </div>
       <div className="mt-auto pt-3">
-        <Link to="/acceso" className="btn-neon" style={{ textDecoration: "none" }}>
+        <Link to="/clientes" className="btn-neon" style={{ textDecoration: "none" }}>
           Ver registro detallado
         </Link>
       </div>

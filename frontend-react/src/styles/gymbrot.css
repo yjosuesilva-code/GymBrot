@@ -122,7 +122,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;             /* separación entre opciones del menú */
-  flex-grow: 1;         /* empuja hacia abajo lo que venga después */
 }
 .nav-item {
   display: flex;

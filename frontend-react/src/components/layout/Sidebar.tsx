@@ -30,8 +30,6 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <hr className="sidebar-sep" />
-
       <div className="sidebar-footer">
         <button type="button" className="nav-item" title="Cerrar Sesión" onClick={salir}>
           <i className="bi bi-box-arrow-right" aria-hidden />

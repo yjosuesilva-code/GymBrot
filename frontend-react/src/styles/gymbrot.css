@@ -165,11 +165,8 @@ body {
 }
 /* El outline por defecto se recortaría contra el overflow:hidden del rail. */
 .nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-/* Medida para que la linea NO añada hueco: entre dos opciones del menú hay
-   6px de caja a caja (gap de .nav-group) y el separador ocupaba 13px, por eso
-   "Gymbrot AI" y "Cerrar Sesion" se veían despegados. Con 3+1+2 la distancia
-   caja a caja vuelve a ser 6px y solo queda la linea. */
-.sidebar-sep { border: 0; border-top: 1px solid var(--border); opacity: .4; margin: 3px 0 2px; }
+/* El <hr class="sidebar-sep"> se quito: con 11 opciones el menu ya pide todo el
+   alto del rail y el separador empujaba "Cerrar Sesion" fuera del viewport. */
 .sidebar-footer { display: flex; flex-direction: column; gap: 8px; }
 /* El <button> trae fondo y borde del navegador y .nav-item no los define. */
 .sidebar-footer .nav-item { background: none; border: none; width: 100%; }

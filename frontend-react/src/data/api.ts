@@ -34,6 +34,14 @@ function dia(offset: number): string {
   return utils.isoDate(d);
 }
 
+// Suma dias a una fecha 'YYYY-MM-DD' sin pasar por UTC: usar toISOString()
+// correria la fecha un dia en zonas a poniente.
+function sumarDias(iso: string, dias: number): string {
+  const [anio, mes, diaNum] = iso.split("-").map(Number);
+  const d = new Date(anio, mes - 1, diaNum + dias);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
 // Suma minutos a un datetime 'YYYY-MM-DDTHH:MM:SS' usando aritmetica de
 // strings. No usar toISOString(): convierte a UTC y correria la hora local,
 // moviendo las entradas fuera de las franjas 06-21 de la grafica.
@@ -229,6 +237,20 @@ const db = {
   },
 };
 
+/* Datos que pide el modal de cobro. El monto va aparte del precio del plan a
+   proposito: el legacy lo deja editable (PagoMembresiaController.java:185) y
+   asi se pueden aplicar descuentos o cobros parciales. */
+export interface NuevoPago {
+  id_cliente: string;
+  id_plan: number | null;
+  modalidad_pago: Membresia["modalidad_pago"];
+  valor: number;
+  metodo_pago: Pago["metodo_pago"] | "";
+  fecha_pago: string;
+  referencia_transaccion: string;
+  observaciones: string;
+}
+
 /* Fila de la tabla "Pagos pendientes" que arma FinanzasService.pagosVencidos
    (FinanzasService.java:18). El nombre es el del legacy: son pagos que
    quedaron sin aplicar, no necesariamente cuotas vencidas. */
@@ -378,6 +400,116 @@ export const api = {
     async byCliente(id: string): Promise<Pago[]> {
       await api._delay();
       return db.read<Pago>("pagos").filter((p) => p.id_cliente === id);
+    },
+
+    /* Registra un cobro y activa la membresia. El orden importa y es el que
+       sigue PagoMembresiaController.java:205-247: membresia, historial, pago.
+       Si algo falla, se revierte lo que se haya escrito en lugar de dejar
+       membresia sin historial o sin pago. */
+    async crear(input: NuevoPago): Promise<ApiResp<Pago>> {
+      await api._delay();
+
+      const idCliente = input.id_cliente.trim();
+      const monto = Number(input.valor);
+
+      if (!idCliente) return { ok: false, mensaje: "Selecciona un socio" };
+      if (!input.id_plan) return { ok: false, mensaje: "Selecciona un plan" };
+      // El legacy solo valida que el monto no este vacio y que se pueda
+      // parsear (PagoMembresiaController.java:181-191), asi que acepta 0 y
+      // negativos, y queda una membresia activa sin cobrar nada.
+      if (!Number.isFinite(monto) || monto <= 0)
+        return { ok: false, mensaje: "El monto debe ser mayor que cero" };
+      if (!input.metodo_pago) return { ok: false, mensaje: "Selecciona un metodo de pago" };
+
+      const clientes = db.read<Cliente>("clientes");
+      if (!clientes.some((c) => c.numero_identificacion === idCliente))
+        return { ok: false, mensaje: "El socio no existe" };
+
+      const planes = db.read<PlanMembresia>("planes");
+      const plan = planes.find((p) => p.id_plan === input.id_plan);
+      if (!plan) return { ok: false, mensaje: "El plan no existe" };
+
+      // Idempotencia por referencia: la misma transaccion no se cobra dos
+      // veces. El legacy no lo hace, asi que un doble clic en Procesar cobra
+      // dos veces y crea dos membresias (PagoMembresiaController.java:215).
+      const referencia = input.referencia_transaccion.trim().toUpperCase();
+      const pagos = db.read<Pago>("pagos");
+
+      if (referencia && pagos.some((p) => p.referencia_transaccion.toUpperCase() === referencia))
+        return { ok: false, mensaje: "Esa referencia ya tiene un pago registrado" };
+
+      const hoy = utils.isoDate();
+      const membresias = db.read<Membresia>("membresias");
+      const historial = db.read<HistorialMembresia>("historialMembresias");
+
+      // Copias para poder deshacer: se escriben todas o ninguna.
+      const membresiasPrevias = membresias.map((m) => ({ ...m }));
+      const historialPrevio = historial.map((h) => ({ ...h }));
+
+      try {
+        // Duracion segun modalidad (PagoMembresiaController.java:198).
+        const dias = input.modalidad_pago === "SEMESTRAL" ? 180 : input.modalidad_pago === "ANUAL" ? 365 : 30;
+
+        const membresia: Membresia = {
+          id_membresia: membresias.reduce((max, m) => Math.max(max, m.id_membresia), 0) + 1,
+          id_cliente: idCliente,
+          id_plan: plan.id_plan,
+          tipo_membresia: plan.nombre,
+          modalidad_pago: input.modalidad_pago,
+          valor: monto,
+          fecha_inicio: hoy,
+          fecha_vencimiento: sumarDias(hoy, dias),
+          estado: "ACTIVA",
+        };
+
+        // Renovar apaga la membresia anterior en vez de dejarla vigente.
+        const anterior = membresias.find(
+          (m) => m.id_cliente === idCliente && m.estado === "ACTIVA" && m.fecha_vencimiento >= hoy,
+        );
+        if (anterior) anterior.estado = "CANCELADA";
+
+        historial.forEach((h) => {
+          if (h.id_cliente === idCliente && h.activa) h.activa = false;
+        });
+
+        historial.push({
+          id_historial: historial.reduce((max, h) => Math.max(max, h.id_historial), 0) + 1,
+          id_cliente: idCliente,
+          id_membresia: membresia.id_membresia,
+          fecha_asignacion: hoy,
+          activa: true,
+        });
+
+        const pago: Pago = {
+          id_pago: pagos.reduce((max, p) => Math.max(max, p.id_pago), 0) + 1,
+          id_cliente: idCliente,
+          id_membresia: membresia.id_membresia,
+          fecha_pago: input.fecha_pago || hoy,
+          valor: monto,
+          metodo_pago: input.metodo_pago,
+          estado_pago: "EXITOSO",
+          referencia_transaccion: referencia,
+          observaciones: input.observaciones.trim(),
+        };
+
+        pagos.push(pago);
+        membresias.push(membresia);
+
+        db.write("membresias", membresias);
+        db.write("historialMembresias", historial);
+        db.write("pagos", pagos);
+
+        return { ok: true, mensaje: "Pago registrado y membresia activada", data: pago };
+      } catch (e) {
+        // Atraso de las tres escrituras: sin esto, un fallo a medias deja
+        // una membresia activa sin pago registrado.
+        db.write("membresias", membresiasPrevias);
+        db.write("historialMembresias", historialPrevio);
+        return {
+          ok: false,
+          mensaje: "No se pudo registrar el pago. Revisa el historial. (" + (e instanceof Error ? e.message : "error") + ")",
+        };
+      }
     }
   },
 

@@ -430,6 +430,25 @@ export const api = {
       return { ok: true, mensaje: "Rutina actualizada", data: r };
     },
 
+    // Pasa una rutina vigente al historial poniendo fecha_fin = ayer, así el cliente queda libre hoy.
+    // Una rutina creada hoy no se puede finalizar: ayer quedaría antes de su fecha_creacion.
+    async finalizar(id: number): Promise<ApiResp<Rutina>> {
+      await api._delay();
+      const arr = db.read<Rutina>("rutinas");
+      const r = arr.find((x) => x.id_rutina === id);
+      if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
+      if (!esVigente(r)) return { ok: false, mensaje: "La rutina ya está en el historial" };
+      const ayer = dia(1);
+      if (ayer < r.fecha_creacion)
+        return {
+          ok: false,
+          mensaje: "Esta rutina se creó hoy y no se puede finalizar. Si quieres cambiarla, edítala.",
+        };
+      r.fecha_fin = ayer;
+      db.write("rutinas", arr);
+      return { ok: true, mensaje: "Rutina «" + r.nombre + "» finalizada", data: r };
+    },
+
     // Borra la rutina y también sus ejercicios (como un ON DELETE CASCADE)
     async remove(id: number): Promise<ApiResp<Rutina>> {
       await api._delay();

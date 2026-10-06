@@ -1,10 +1,22 @@
 import { utils } from "../lib/utils";
-import type { Cliente, Membresia, Pago, Ingreso, Ejercicio, Usuario, ApiResp } from "../types";
+import type {
+  Cliente,
+  Membresia,
+  Pago,
+  Ingreso,
+  Ejercicio,
+  Usuario,
+  ApiResp,
+  PlanMembresia,
+  HistorialMembresia,
+} from "../types";
 
 interface Seed {
   usuarios: Usuario[];
   clientes: Cliente[];
+  planes: PlanMembresia[];
   membresias: Membresia[];
+  historialMembresias: HistorialMembresia[];
   pagos: Pago[];
   ingresos: Ingreso[];
   ejercicios: Ejercicio[];
@@ -137,23 +149,41 @@ const SEED: Seed = {
     { numero_identificacion:'1000000007', tipo_identificacion:'CC', nombre:'Andrés Felipe', apellidos:'Navarro',  telefono:'3067778899', correo:'andres.nav@mail.com',  direccion:'Cl 44 #7-2',    fecha_nacimiento:'1992-07-19', estado:'ACTIVO',     fecha_registro:'2026-03-05' }
    ],
 
-  membresias: [{ id_membresia:1, id_cliente:'1000000001', tipo_membresia:'Premium',  modalidad_pago:'MENSUAL', valor:280000,  fecha_inicio:'2026-08-15', fecha_vencimiento:'2026-09-15', estado:'ACTIVA' },
-    { id_membresia:2, id_cliente:'1000000001', tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:'2026-07-15', fecha_vencimiento:'2026-08-15', estado:'VENCIDA' },
-    { id_membresia:3, id_cliente:'1000000002', tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:'2026-09-01', fecha_vencimiento:'2026-10-01', estado:'ACTIVA' },
-    { id_membresia:4, id_cliente:'1000000005', tipo_membresia:'Premium',  modalidad_pago:'ANUAL',   valor:2800000, fecha_inicio:'2026-02-15', fecha_vencimiento:'2027-02-15', estado:'ACTIVA' }
+  // Catalogo de planes. Los tres precios por modalidad son los que lee
+  // PagoMembresiaController.java:148 al abrir el cobro.
+  planes: [
+    { id_plan:1, nombre:'Básico',   descripcion:'Acceso a sala de maquinas y area cardio',   precio_mensual:120000, precio_semestral:650000,  precio_anual:1200000, estado:'ACTIVO' },
+    { id_plan:2, nombre:'Estándar', descripcion:'Básico mas clases grupales',                precio_mensual:180000, precio_semestral:980000,  precio_anual:1900000, estado:'ACTIVO' },
+    { id_plan:3, nombre:'Premium',  descripcion:'Todo lo anterior mas sauna y entrenador',  precio_mensual:280000, precio_semestral:1520000, precio_anual:2800000, estado:'ACTIVO' },
+  ],
+
+  membresias: [{ id_membresia:1, id_cliente:'1000000001', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'MENSUAL', valor:280000,  fecha_inicio:'2026-08-15', fecha_vencimiento:'2026-09-15', estado:'ACTIVA' },
+    { id_membresia:2, id_cliente:'1000000001', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:'2026-07-15', fecha_vencimiento:'2026-08-15', estado:'VENCIDA' },
+    { id_membresia:3, id_cliente:'1000000002', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:'2026-09-01', fecha_vencimiento:'2026-10-01', estado:'ACTIVA' },
+    { id_membresia:4, id_cliente:'1000000005', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'ANUAL',   valor:2800000, fecha_inicio:'2026-02-15', fecha_vencimiento:'2027-02-15', estado:'ACTIVA' }
+  ],
+
+  // Marca la membresia vigente de cada socio. Los suspendidos y quien solo
+  // tiene membresia vencida quedan con activa=false, que es como el control
+  // de acceso los bloquea (RegistroEntradaController.java:319).
+  historialMembresias: [
+    { id_historial:1, id_cliente:'1000000001', id_membresia:1, fecha_asignacion:'2026-08-15', activa:true  },
+    { id_historial:2, id_cliente:'1000000001', id_membresia:2, fecha_asignacion:'2026-07-15', activa:false },
+    { id_historial:3, id_cliente:'1000000002', id_membresia:3, fecha_asignacion:'2026-09-01', activa:true  },
+    { id_historial:4, id_cliente:'1000000005', id_membresia:4, fecha_asignacion:'2026-02-15', activa:true  },
   ],
   
-  pagos: [{ id_pago:1, id_cliente:'1000000001', id_membresia:1, fecha_pago:'2026-08-15', valor:280000,  metodo_pago:'TARJETA',       estado_pago:'EXITOSO' },
-    { id_pago:2, id_cliente:'1000000001', id_membresia:2, fecha_pago:'2026-07-15', valor:180000,  metodo_pago:'NEQUI',         estado_pago:'EXITOSO' },
-    { id_pago:3, id_cliente:'1000000002', id_membresia:3, fecha_pago:'2026-09-01', valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO' },
-    { id_pago:4, id_cliente:'1000000005', id_membresia:4, fecha_pago:'2026-02-15', valor:2800000, metodo_pago:'TRANSFERENCIA', estado_pago:'EXITOSO' },
-    { id_pago:5, id_cliente:'1000000007', id_membresia:3, fecha_pago:'2026-09-05', valor:180000,  metodo_pago:'NEQUI',         estado_pago:'EXITOSO' },
-    { id_pago:6, id_cliente:'1000000003', id_membresia:1, fecha_pago:'2026-09-12', valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO' },
+  pagos: [{ id_pago:1, id_cliente:'1000000001', id_membresia:1, fecha_pago:'2026-08-15', valor:280000,  metodo_pago:'TARJETA',       estado_pago:'EXITOSO', referencia_transaccion:'TX-8801', observaciones:'' },
+    { id_pago:2, id_cliente:'1000000001', id_membresia:2, fecha_pago:'2026-07-15', valor:180000,  metodo_pago:'NEQUI',         estado_pago:'EXITOSO', referencia_transaccion:'N-5521',  observaciones:'' },
+    { id_pago:3, id_cliente:'1000000002', id_membresia:3, fecha_pago:'2026-09-01', valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO', referencia_transaccion:'',        observaciones:'' },
+    { id_pago:4, id_cliente:'1000000005', id_membresia:4, fecha_pago:'2026-02-15', valor:2800000, metodo_pago:'TRANSFERENCIA', estado_pago:'EXITOSO', referencia_transaccion:'TR-2290', observaciones:'Pago anual anticipado' },
+    { id_pago:5, id_cliente:'1000000007', id_membresia:3, fecha_pago:'2026-09-05', valor:180000,  metodo_pago:'NEQUI',         estado_pago:'EXITOSO', referencia_transaccion:'N-5578',  observaciones:'' },
+    { id_pago:6, id_cliente:'1000000003', id_membresia:1, fecha_pago:'2026-09-12', valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO', referencia_transaccion:'',        observaciones:'' },
     // Pagos del mes en curso (fechas relativas) -> KPI "Ingresos este mes"
-    { id_pago:7,  id_cliente:'1000000001', id_membresia:1, fecha_pago:dia(0), valor:280000,  metodo_pago:'TARJETA',       estado_pago:'EXITOSO' },
-    { id_pago:8,  id_cliente:'1000000002', id_membresia:3, fecha_pago:dia(0), valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO' },
-    { id_pago:9,  id_cliente:'1000000007', id_membresia:3, fecha_pago:dia(1), valor:180000,  metodo_pago:'NEQUI',         estado_pago:'EXITOSO' },
-    { id_pago:10, id_cliente:'1000000004', id_membresia:3, fecha_pago:dia(1), valor:180000,  metodo_pago:'TRANSFERENCIA', estado_pago:'EXITOSO' },
+    { id_pago:7,  id_cliente:'1000000001', id_membresia:1, fecha_pago:dia(0), valor:280000,  metodo_pago:'TARJETA',       estado_pago:'EXITOSO', referencia_transaccion:'TX-9012', observaciones:'' },
+    { id_pago:8,  id_cliente:'1000000002', id_membresia:3, fecha_pago:dia(0), valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO', referencia_transaccion:'',        observaciones:'' },
+    { id_pago:9,  id_cliente:'1000000007', id_membresia:3, fecha_pago:dia(1), valor:180000,  metodo_pago:'NEQUI',         estado_pago:'EXITOSO', referencia_transaccion:'N-5603',  observaciones:'' },
+    { id_pago:10, id_cliente:'1000000004', id_membresia:3, fecha_pago:dia(1), valor:180000,  metodo_pago:'TRANSFERENCIA', estado_pago:'EXITOSO', referencia_transaccion:'TR-2310', observaciones:'Transferencia pendiente de aplicar' },
   ],
 
   ingresos: ingresosPasados().concat(ingresosDeHoy()),
@@ -166,7 +196,7 @@ const SEED: Seed = {
 // tenga datos: read() solo siembra cuando la clave no existe, asi que un
 // seed nuevo convive con el viejo indefinidamente. Al cambiar este numero
 // la siguiente carga regenera todas las colecciones.
-const SEED_VERSION = "3";
+const SEED_VERSION = "4";
 const CLAVE_VERSION = "gymbrot_seed_version";
 const CLAVE_LECTOR = "gymbrot_lector_conectado";
 

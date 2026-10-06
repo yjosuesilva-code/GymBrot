@@ -27,15 +27,31 @@ export interface Usuario {
   rol: string;
 }
 
+/* PLANES_MEMBRESIAS. id_plan es la clave que el legacy separa del nombre:
+   PagoMembresiaController.java:207 guarda el id en la membresia y el nombre
+   aparte, asi que renombrar un plan no reescribe el historial. */
+export interface PlanMembresia {
+    id_plan: number;
+    nombre: string;
+    descripcion: string;
+    precio_mensual: number;
+    precio_semestral: number;
+    precio_anual: number;
+    estado: 'ACTIVO' | 'INACTIVO';
+}
+
 export interface Membresia {
     id_membresia: number;
     id_cliente: string;
+    id_plan: number | null;   // null en las sembradas a mano, que no tienen plan
     tipo_membresia: string;
-    modalidad_pago: 'MENSUAL' | 'ANUAL';
+    modalidad_pago: 'MENSUAL' | 'SEMESTRAL' | 'ANUAL';
     valor: number;
     fecha_inicio: string;
     fecha_vencimiento: string;
-    estado: 'ACTIVA' | 'VENCIDA';
+    // CANCELADA la agrega el flujo de pago, que es el unico que puede
+    // desactivar una membresia vigente al renewarla.
+    estado: 'ACTIVA' | 'VENCIDA' | 'CANCELADA';
 }
 
 export interface Pago {
@@ -46,6 +62,19 @@ export interface Pago {
     valor: number;
     metodo_pago: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA' | 'NEQUI';
     estado_pago: string;
+    referencia_transaccion: string;
+    observaciones: string;
+}
+
+/* HISTORIAL_MEMBRESIAS. Marca que membresia esta vigente ahora; es lo que
+   consulta el control de acceso (RegistroEntradaController.java:319) y la
+   consulta de pagos vencidos. */
+export interface HistorialMembresia {
+    id_historial: number;
+    id_cliente: string;
+    id_membresia: number;
+    fecha_asignacion: string;
+    activa: boolean;
 }
 
 export interface Ingreso {

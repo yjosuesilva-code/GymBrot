@@ -114,6 +114,11 @@ export function Rutinas() {
   const [aFinalizar, setAFinalizar] = useState<Rutina | null>(null);
   const [errorFinalizar, setErrorFinalizar] = useState("");
 
+  // Confirmación de eliminar (mismo patrón que finalizar)
+  const [showEliminar, setShowEliminar] = useState(false);
+  const [aEliminar, setAEliminar] = useState<Rutina | null>(null);
+  const [errorEliminar, setErrorEliminar] = useState("");
+
   // Carga las tres colecciones a la vez: las rutinas solo guardan ids,
   // y los nombres salen de instructores y clientes
   useEffect(() => {
@@ -272,6 +277,33 @@ export function Rutinas() {
     setRutinas(await api.rutinas.list());
   }
 
+  // ----- Eliminar -----
+
+  function pedirEliminar(r: Rutina) {
+    setErrorEliminar("");
+    setAEliminar(r);
+    setShowEliminar(true);
+  }
+
+  async function confirmarEliminar() {
+    if (!aEliminar) return;
+    const res = await api.rutinas.remove(aEliminar.id_rutina);
+    if (!res.ok) {
+      setErrorEliminar(res.mensaje);
+      return;
+    }
+    setShowEliminar(false);
+    setAlerta({ tipo: "ok", mensaje: "Rutina «" + aEliminar.nombre + "» eliminada" });
+    setRutinas(await api.rutinas.list());
+  }
+
+  // Desde el modal de eliminar: cambia a la confirmación de finalizar con la misma rutina
+  function finalizarEnLugarDeEliminar() {
+    if (!aEliminar) return;
+    setShowEliminar(false);
+    pedirFinalizar(aEliminar);
+  }
+
   // Abre el modal de nueva rutina con el cliente ya elegido
   function crearSiguiente(idCliente: string) {
     setAlerta(null);
@@ -334,7 +366,7 @@ export function Rutinas() {
           )}
         </div>
 
-        {/* Ver y eliminar solo se muestran: su lógica llega en partes siguientes */}
+        {/* Ver solo se muestra: su lógica llega con el modal "Ver" */}
         <div className="cell-actions rutina-acciones">
           <button className="btn-icon" title="Ver detalle">👁</button>
           <button className="btn-icon" title="Editar" onClick={() => abrirEdicion(r)}>✏️</button>
@@ -342,11 +374,18 @@ export function Rutinas() {
           {esVigente(r) && (
             <button className="btn-icon" title="Finalizar" onClick={() => pedirFinalizar(r)}>🏁</button>
           )}
-          <button className="btn-icon" title="Eliminar">🗑️</button>
+          <button className="btn-icon" title="Eliminar" onClick={() => pedirEliminar(r)}>🗑️</button>
         </div>
       </div>
     );
   }
+
+  // Para el modal de eliminar: ¿la rutina tiene historial que valga la pena conservar?
+  // Si se creó hoy no hay nada que conservar; si no, se sugiere finalizarla (vigente)
+  // o se avisa que forma parte del historial (vencida).
+  const eliminarCreadaHoy = aEliminar !== null && aEliminar.fecha_creacion >= utils.isoDate();
+  const eliminarVigente = aEliminar !== null && esVigente(aEliminar);
+  const sugerirFinalizar = !eliminarCreadaHoy && eliminarVigente;
 
   let contenido;
   if (cargando) {
@@ -548,6 +587,39 @@ export function Rutinas() {
         <Modal.Footer>
           <button className="btn-dark" onClick={() => setShowFinalizar(false)}>Cancelar</button>
           <button className="btn-neon" onClick={confirmarFinalizar}>Sí, finalizar</button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Confirmación de eliminar */}
+      <Modal show={showEliminar} onHide={() => setShowEliminar(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Eliminar rutina</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {errorEliminar && <div className="alert-g alert-error show">{errorEliminar}</div>}
+          <p>
+            ¿Seguro que quieres eliminar <strong>{aEliminar?.nombre}</strong> de{" "}
+            <strong>{aEliminar ? nombre(buscarCliente(aEliminar.id_cliente)) : ""}</strong>? Esta acción no se puede
+            deshacer.
+          </p>
+          {sugerirFinalizar && (
+            <p className="card-sub">
+              Esta rutina ya está en uso desde el {aEliminar ? utils.fecha(aEliminar.fecha_creacion) : ""}. Si el
+              cliente solo terminó con ella, mejor <strong>finalízala</strong>: queda en su historial y el cliente
+              puede recibir una rutina nueva.
+            </p>
+          )}
+          {!eliminarCreadaHoy && !eliminarVigente && (
+            <p className="card-sub">Esta rutina forma parte del historial del cliente: al eliminarla se pierde ese registro.</p>
+          )}
+          {eliminarCreadaHoy && <p className="card-sub">Se creó hoy, así que no hay historial que conservar.</p>}
+        </Modal.Body>
+        <Modal.Footer>
+          <button className="btn-dark" onClick={() => setShowEliminar(false)}>Cancelar</button>
+          {sugerirFinalizar && (
+            <button className="btn-neon" onClick={finalizarEnLugarDeEliminar}>Finalizar en su lugar</button>
+          )}
+          <button className="btn-danger-g" onClick={confirmarEliminar}>Sí, eliminar</button>
         </Modal.Footer>
       </Modal>
     </>

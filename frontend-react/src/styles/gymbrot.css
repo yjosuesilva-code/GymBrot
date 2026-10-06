@@ -166,7 +166,10 @@ body {
 }
 /* El outline por defecto se recortaría contra el overflow:hidden del rail. */
 .nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.sidebar-sep { border: 0; border-top: 1px solid var(--border); opacity: .4; margin: 16px 0 8px; }
+/* 16/8 separaban demasiado "Gymbrot AI" del separador: con 11 opciones el
+   ultimo item y "Cerrar Sesion" quedaban con el doble de hueco que entre dos
+   items del menu (6px). */
+.sidebar-sep { border: 0; border-top: 1px solid var(--border); opacity: .4; margin: 8px 0 4px; }
 .sidebar-footer { display: flex; flex-direction: column; gap: 8px; }
 /* El <button> trae fondo y borde del navegador y .nav-item no los define. */
 .sidebar-footer .nav-item { background: none; border: none; width: 100%; }

@@ -30,7 +30,9 @@ function Kpis({
   pagos: Pago[];
 }) {
   const miembros = clientes.filter((c) => c.estado === "ACTIVO").length;
-  const activosAhora = ingresos.filter((i) => i.hora_salida === null).length;
+  const activosAhora = new Set(
+    ingresos.filter((i) => i.fecha === utils.isoDate() && i.hora_salida === null).map((i) => i.id_cliente),
+  ).size;
 
   const ingresosMes = pagos
     .filter((p) => esDelMesActual(p.fecha_pago))

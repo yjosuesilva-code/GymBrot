@@ -98,9 +98,10 @@ body {
 }
 
 /* Dos logos superpuestos en la misma celda: el monograma GB se ve
-   colapsado y el wordmark GYMBROT al expandirse. */
+   colapsado y el wordmark GYMBROT al expandirse. El padding inferior baja de
+   24 a 19px para ganar 5px de alto en el rail. */
 .sidebar-logo {
-  padding: 4px 0 24px;
+  padding: 4px 0 19px;
   display: grid;
   place-items: center;
 }

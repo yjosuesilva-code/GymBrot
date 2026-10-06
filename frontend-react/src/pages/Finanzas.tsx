@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Modal } from "react-bootstrap";
 import { Bar, Doughnut } from "react-chartjs-2";
 import {
   ArcElement,
@@ -12,8 +13,9 @@ import {
 } from "chart.js";
 import type { ChartData, ChartOptions } from "chart.js";
 import { api } from "../data/api";
+import type { NuevoPago } from "../data/api";
 import { utils } from "../lib/utils";
-import type { Cliente, Pago } from "../types";
+import type { Cliente, Membresia, Pago, PlanMembresia } from "../types";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
@@ -389,6 +391,171 @@ function HistorialPagos({
 
 const META_MENSUAL = 4500000;
 
+const METODOS: Pago["metodo_pago"][] = ["EFECTIVO", "TRANSFERENCIA", "TARJETA", "NEQUI"];
+const MODALIDADES: Membresia["modalidad_pago"][] = ["MENSUAL", "SEMESTRAL", "ANUAL"];
+
+function precioDe(plan: PlanMembresia, modalidad: Membresia["modalidad_pago"]): number {
+  if (modalidad === "SEMESTRAL") return plan.precio_semestral;
+  if (modalidad === "ANUAL") return plan.precio_anual;
+  return plan.precio_mensual;
+}
+
+function ModalPago({
+  show,
+  planes,
+  clientes,
+  bloqueado,
+  alCerrar,
+  alGuardar,
+}: {
+  show: boolean;
+  planes: PlanMembresia[];
+  clientes: Cliente[];
+  bloqueado: boolean;
+  alCerrar: () => void;
+  alGuardar: (p: NuevoPago) => void;
+}) {
+  const [busqueda, setBusqueda] = useState("");
+  const [idCliente, setIdCliente] = useState("");
+  const [idPlan, setIdPlan] = useState<number | null>(null);
+  const [modalidad, setModalidad] = useState<Membresia["modalidad_pago"]>("MENSUAL");
+  const [montoEditado, setMontoEditado] = useState<string | null>(null);
+  const [metodo, setMetodo] = useState<Pago["metodo_pago"] | "">("");
+  const [referencia, setReferencia] = useState("");
+
+  const plan = planes.find((p) => p.id_plan === idPlan) ?? null;
+
+  // El monto se deriva del plan y la modalidad en vez de copiarse con un
+  // efecto, como hace setPlan en el legacy (PagoMembresiaController.java:148).
+  // montoEditado guarda lo que el usuario escriba, para aplicar descuentos:
+  // mientras no escriba nada, el campo sigue el precio del plan.
+  const monto = montoEditado ?? (plan ? String(precioDe(plan, modalidad)) : "");
+
+  const texto = busqueda.trim().toLowerCase();
+  const candidatos = clientes
+    .filter((c) => c.estado === "ACTIVO")
+    .filter((c) => !texto || (c.nombre + " " + c.apellidos + " " + c.numero_identificacion).toLowerCase().includes(texto))
+    .slice(0, 8);
+
+  return (
+    <Modal show={show} onHide={alCerrar} centered size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>Registrar pago</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <label className="form-label-g">Socio</label>
+        <input
+          className="form-control-dark"
+          style={{ marginBottom: 8 }}
+          placeholder="Buscar por nombre o identificación"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+        />
+        <div className="table-wrap" style={{ maxHeight: 180, overflowY: "auto", marginBottom: 16 }}>
+          <table className="table-g">
+            <tbody>
+              {candidatos.map((c) => (
+                <tr
+                  key={c.numero_identificacion}
+                  onClick={() => setIdCliente(c.numero_identificacion)}
+                  style={{ cursor: "pointer", background: idCliente === c.numero_identificacion ? "rgba(198,255,0,.08)" : undefined }}
+                >
+                  <td>{c.nombre} {c.apellidos}</td>
+                  <td style={{ color: "var(--muted)" }}>{c.numero_identificacion}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="row g-3">
+          <div className="col-md-7">
+            <label className="form-label-g">Plan</label>
+            <select
+              className="form-control-dark"
+              value={idPlan ?? ""}
+              onChange={(e) => {
+                setIdPlan(e.target.value ? Number(e.target.value) : null);
+                setMontoEditado(null);   // al cambiar de plan vuelve el precio de lista
+              }}
+            >
+              <option value="">Selecciona un plan</option>
+              {planes.map((p) => (
+                <option key={p.id_plan} value={p.id_plan}>{p.nombre}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-md-5">
+            <label className="form-label-g">Modalidad</label>
+            <select
+              className="form-control-dark"
+              value={modalidad}
+              onChange={(e) => {
+                setModalidad(e.target.value as Membresia["modalidad_pago"]);
+                setMontoEditado(null);
+              }}
+            >
+              {MODALIDADES.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-md-6">
+            <label className="form-label-g">Monto</label>
+            <input
+              className="form-control-dark"
+              type="number"
+              min={1}
+              value={monto}
+              onChange={(e) => setMontoEditado(e.target.value)}
+            />
+          </div>
+          <div className="col-md-6">
+            <label className="form-label-g">Metodo de pago</label>
+            <select className="form-control-dark" value={metodo} onChange={(e) => setMetodo(e.target.value as Pago["metodo_pago"])}>
+              <option value="">Selecciona</option>
+              {METODOS.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-md-12">
+            <label className="form-label-g">Referencia de transaccion</label>
+            <input
+              className="form-control-dark"
+              placeholder="Opcional, pero evita cobros duplicados si la escribes"
+              value={referencia}
+              onChange={(e) => setReferencia(e.target.value)}
+            />
+          </div>
+        </div>
+      </Modal.Body>
+      <Modal.Footer>
+        <button className="btn-dark" onClick={alCerrar} disabled={bloqueado}>Cancelar</button>
+        <button
+          className="btn-neon"
+          disabled={bloqueado || !idCliente || !plan || !metodo}
+          style={{ opacity: bloqueado || !idCliente || !plan || !metodo ? .5 : 1 }}
+          onClick={() =>
+            alGuardar({
+              id_cliente: idCliente,
+              id_plan: idPlan,
+              modalidad_pago: modalidad,
+              valor: Number(monto),
+              metodo_pago: metodo,
+              fecha_pago: utils.isoDate(),
+              referencia_transaccion: referencia,
+              observaciones: "",
+            })
+          }
+        >
+          Procesar
+        </button>
+      </Modal.Footer>
+    </Modal>
+  );
+}
+
 export function Finanzas() {
   const [cargando, setCargando] = useState(true);
   const [porMes, setPorMes] = useState<IngresoMes[]>([]);
@@ -398,10 +565,41 @@ export function Finanzas() {
   const [pendientes, setPendientes] = useState<Vencido[]>([]);
   const [pagos, setPagos] = useState<Pago[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [planes, setPlanes] = useState<PlanMembresia[]>([]);
   const [membresias, setMembresias] = useState<{ estado: string; fecha_vencimiento: string }[]>([]);
   const [filtro, setFiltro] = useState("");
 
+  const [showPago, setShowPago] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+
+  async function cargar() {
+    const [m, p, me, n, v, pg, cl, pl, mb] = await Promise.all([
+      api.finanzas.ingresosPorMes(12),
+      api.finanzas.ingresosPorPlan(),
+      api.finanzas.porMetodoPago(),
+      api.finanzas.nuevosClientes(12),
+      api.finanzas.pagosVencidos(),
+      api.pagos.list(),
+      api.clientes.list(),
+      api.planes.list(),
+      api.membresias.list(),
+    ]);
+    setPorMes(m);
+    setPorPlan(p);
+    setMetodos(me);
+    setAltas(n);
+    setPendientes(v);
+    setPagos(pg);
+    setClientes(cl);
+    setPlanes(pl);
+    setMembresias(mb);
+  }
+
   useEffect(() => {
+    // Carga inicial en linea, igual que Dashboard. La regla de lint del
+    // proyecto marca como setState en efecto cualquier llamada a una funcion
+    // que la contenga, asi que no se puede delegar en cargar().
     Promise.all([
       api.finanzas.ingresosPorMes(12),
       api.finanzas.ingresosPorPlan(),
@@ -410,9 +608,10 @@ export function Finanzas() {
       api.finanzas.pagosVencidos(),
       api.pagos.list(),
       api.clientes.list(),
+      api.planes.list(),
       api.membresias.list(),
     ])
-      .then(([m, p, me, n, v, pg, cl, mb]) => {
+      .then(([m, p, me, n, v, pg, cl, pl, mb]) => {
         setPorMes(m);
         setPorPlan(p);
         setMetodos(me);
@@ -420,10 +619,30 @@ export function Finanzas() {
         setPendientes(v);
         setPagos(pg);
         setClientes(cl);
+        setPlanes(pl);
         setMembresias(mb);
       })
       .finally(() => setCargando(false));
   }, []);
+
+  async function registrarPago(input: NuevoPago) {
+    // El boton se bloquea mientras corre la peticion. Sin esto, dos clics
+    // seguidos generan dos membresias: la comprobacion por referencia del
+    // commit anterior solo salva si el usuario escribio una.
+    setGuardando(true);
+    setError("");
+    try {
+      const resp = await api.pagos.crear(input);
+      if (!resp.ok) {
+        setError(resp.mensaje);
+        return;
+      }
+      setShowPago(false);
+      await cargar();
+    } finally {
+      setGuardando(false);
+    }
+  }
 
   const hoy = utils.isoDate();
   const ingresosMes = porMes.length ? porMes[porMes.length - 1].total : 0;
@@ -446,6 +665,20 @@ export function Finanzas() {
 
   return (
     <div className="d-flex flex-column gap-3">
+      {error && <div className="alert-g alert-error show">{error}</div>}
+
+      <div className="card-g">
+        <div className="card-head">
+          <div>
+            <h2 className="card-title">Finanzas</h2>
+            <p className="card-sub">Recaudo, distribucion por plan y pagos por aplicar</p>
+          </div>
+          <button className="btn-neon" onClick={() => { setError(""); setShowPago(true); }}>
+            Registrar pago
+          </button>
+        </div>
+      </div>
+
       <Kpis
         ingresosMes={ingresosMes}
         ingresosHoy={ingresosHoy}
@@ -475,6 +708,15 @@ export function Finanzas() {
       <PagosPendientes datos={pendientes} />
 
       <HistorialPagos pagos={pagos} clientes={clientes} filtro={filtro} setFiltro={setFiltro} />
+
+      <ModalPago
+        show={showPago}
+        planes={planes}
+        clientes={clientes}
+        bloqueado={guardando}
+        alCerrar={() => !guardando && setShowPago(false)}
+        alGuardar={registrarPago}
+      />
     </div>
   );
 }

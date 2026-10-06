@@ -268,10 +268,22 @@ const SEED: Seed = {
   // 'ADMINISTRADOR' para iniciar sesion (loginController.java:156), asi que
   // instructor y cliente quedan sembrados para probar ese rechazo, no para
   // entrar. Cuando haya roles reales, estos 3 pasan a ser los perfiles.
+  //
+  // Los 7 clientes tienen fila propia con su clave: es la que compara el modo
+  // manual de control de acceso (RegistroEntradaController.handleValidarIngreso
+  // -> AuthService.validarContrasena). Sin fila no hay clave y ese socio solo
+  // podria entrar por huella. El estado espeja el del cliente, asi que
+  // suspenderlo en Clientes lo suspende aqui tambien.
   usuarios: [
     { numero_identificacion:'1001000001', nombre:'admin', apellidos:'Administrador', correo:'admin@gymbrot.com', contrasena:'admin',      estado:'ACTIVO',     tipo_usuario:'ADMINISTRADOR', rol:'SUPERADMIN' },
     { numero_identificacion:'2001000001', nombre:'Diego', apellidos:'Morales',       correo:'diego.morales@gymbrot.com', contrasena:'instructor', estado:'ACTIVO',     tipo_usuario:'INSTRUCTOR',   rol:'INSTRUCTOR' },
-    { numero_identificacion:'1000000004', nombre:'Laura', apellidos:'Martinez',      correo:'laura.m@mail.com',          contrasena:'cliente',    estado:'SUSPENDIDO', tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { numero_identificacion:'1000000001', nombre:'Ana María',    apellidos:'Ruiz',     correo:'ana.ruiz@mail.com',   contrasena:'ana123',    estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { numero_identificacion:'1000000002', nombre:'Carlos Andrés', apellidos:'Pérez',    correo:'carlos.perez@mail.com', contrasena:'carlos123', estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { numero_identificacion:'1000000003', nombre:'Juan David',    apellidos:'Gómez',    correo:'juan.gomez@mail.com',  contrasena:'juan123',   estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { numero_identificacion:'1000000004', nombre:'Laura Sofía',   apellidos:'Martínez', correo:'laura.m@mail.com',     contrasena:'laura123',  estado:'SUSPENDIDO', tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { numero_identificacion:'1000000005', nombre:'Diego Fernando',apellidos:'Ríos',     correo:'diego.rios@mail.com',  contrasena:'diego123',  estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { numero_identificacion:'1000000006', nombre:'Valentina',     apellidos:'Torres',   correo:'valen.torres@mail.com',contrasena:'valen123',  estado:'INACTIVO',   tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { numero_identificacion:'1000000007', nombre:'Andrés Felipe', apellidos:'Navarro',  correo:'andres.nav@mail.com',  contrasena:'andres123', estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
   ],
 
   clientes: [ 
@@ -346,7 +358,9 @@ const SEED: Seed = {
 // v5 reescribio el seed financiero con fechas relativas, 5 membresias vigentes
 // coherentes con sus pagos, y pagos PENDIENTE para que la tabla de pendientes
 // no salga vacia. El bump descarta los datos v4 que quedaron inconsistentes.
-const SEED_VERSION = "5";
+// v6 da fila en `usuarios` a los 7 clientes con clave propia: sin ella el
+// modo manual de control de acceso no tenia con que validar a nadie.
+const SEED_VERSION = "6";
 const CLAVE_VERSION = "gymbrot_seed_version";
 const CLAVE_LECTOR = "gymbrot_lector_conectado";
 

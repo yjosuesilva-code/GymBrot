@@ -104,7 +104,7 @@ export function Clientes() {
       <div className="card-head">
         <div>
           <h2 className="card-title">Clientes</h2>
-          <p className="card-sub">Gestiona los miembros del gimnasio</p>
+          <p className="card-sub">Gestiona los clientes del gimnasio</p>
         </div>
         <button className="btn-neon" onClick={abrirNuevo}>+ Nuevo cliente</button>
       </div>

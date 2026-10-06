@@ -15,6 +15,7 @@ import type { ChartData, ChartOptions } from "chart.js";
 import { api } from "../data/api";
 import type { NuevoPago } from "../data/api";
 import { utils } from "../lib/utils";
+import { META_INGRESOS_MENSUAL, porcentaje } from "../lib/config";
 import type { Cliente, Membresia, Pago, PlanMembresia } from "../types";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
@@ -67,17 +68,17 @@ const OPCIONES_EJE: ChartOptions<"bar"> = {
 function Kpis({
   ingresosMes,
   ingresosHoy,
-  miembrosActivos,
+  membresiasVigentes,
   pendientes,
   meta,
 }: {
   ingresosMes: number;
   ingresosHoy: number;
-  miembrosActivos: number;
+  membresiasVigentes: number;
   pendientes: number;
   meta: number;
 }) {
-  const avance = Math.min(100, Math.round((ingresosMes / meta) * 100));
+  const avance = porcentaje(meta, ingresosMes);
 
   return (
     <div className="row g-3">
@@ -102,10 +103,10 @@ function Kpis({
 
       <div className="col-md-6 col-xl-3">
         <div className="card-g kpi h-100">
-          <span className="kpi-label">Membresías activas</span>
-          <span className="kpi-value">{utils.num(miembrosActivos)}</span>
+          <span className="kpi-label">Membresías vigentes</span>
+          <span className="kpi-value">{utils.num(membresiasVigentes)}</span>
           <span className="kpi-sub">
-            <Link to="/clientes" style={{ color: "inherit" }}>Ver socios</Link>
+            <Link to="/clientes" style={{ color: "inherit" }}>Ver clientes</Link>
           </span>
         </div>
       </div>
@@ -238,7 +239,7 @@ function IngresosPorPlan({ datos }: { datos: IngresoPlan[] }) {
   );
 }
 
-function NuevosSocios({ datos }: { datos: NuevosClientes[] }) {
+function NuevosClientes({ datos }: { datos: NuevosClientes[] }) {
   const config: ChartData<"bar"> = {
     labels: datos.map((d) => etiquetaMes(d.mes)),
     datasets: [{ data: datos.map((d) => d.cantidad), backgroundColor: "#00d9c0", borderRadius: 3 }],
@@ -260,7 +261,7 @@ function NuevosSocios({ datos }: { datos: NuevosClientes[] }) {
     <div className="card-g h-100">
       <div className="card-head">
         <div>
-          <h2 className="card-title">Nuevos socios</h2>
+          <h2 className="card-title">Nuevos clientes</h2>
           <p className="card-sub">Altas por mes de registro</p>
         </div>
       </div>
@@ -287,7 +288,7 @@ function PagosPendientes({ datos }: { datos: Vencido[] }) {
           <table className="table-g">
             <thead>
               <tr>
-                <th>Socio</th>
+                <th>Cliente</th>
                 <th>Plan</th>
                 <th>Monto</th>
                 <th>Método</th>
@@ -352,7 +353,7 @@ function HistorialPagos({
         <input
           className="form-control-dark"
           style={{ maxWidth: 260 }}
-          placeholder="Buscar socio, método o referencia"
+          placeholder="Buscar cliente, método o referencia"
           value={filtro}
           onChange={(e) => setFiltro(e.target.value)}
         />
@@ -361,7 +362,7 @@ function HistorialPagos({
         <table className="table-g">
           <thead>
             <tr>
-              <th>Socio</th>
+              <th>Cliente</th>
               <th>Fecha</th>
               <th>Monto</th>
               <th>Método</th>
@@ -388,8 +389,6 @@ function HistorialPagos({
     </div>
   );
 }
-
-const META_MENSUAL = 4500000;
 
 const METODOS: Pago["metodo_pago"][] = ["EFECTIVO", "TRANSFERENCIA", "TARJETA", "NEQUI"];
 const MODALIDADES: Membresia["modalidad_pago"][] = ["MENSUAL", "SEMESTRAL", "ANUAL"];
@@ -443,7 +442,7 @@ function ModalPago({
         <Modal.Title>Registrar pago</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        <label className="form-label-g">Socio</label>
+        <label className="form-label-g">Cliente</label>
         <input
           className="form-control-dark"
           style={{ marginBottom: 8 }}
@@ -649,7 +648,10 @@ export function Finanzas() {
   const ingresosHoy = pagos
     .filter((p) => p.estado_pago === "EXITOSO" && p.fecha_pago === hoy)
     .reduce((acc, p) => acc + p.valor, 0);
-  const miembrosActivos = membresias.filter(
+  // Vigente = ACTIVA y no vencida. Debe coincidir con el historial
+  // (historialMembresias.activa=true) y con el conteo de clientes activos del
+  // Dashboard; antes las tres pantallas mostraban numeros distintos.
+  const membresiasVigentes = membresias.filter(
     (m) => m.estado === "ACTIVA" && m.fecha_vencimiento >= hoy,
   ).length;
 
@@ -682,9 +684,9 @@ export function Finanzas() {
       <Kpis
         ingresosMes={ingresosMes}
         ingresosHoy={ingresosHoy}
-        miembrosActivos={miembrosActivos}
+        membresiasVigentes={membresiasVigentes}
         pendientes={pendientes.length}
-        meta={META_MENSUAL}
+        meta={META_INGRESOS_MENSUAL}
       />
 
       <div className="row g-3">
@@ -701,7 +703,7 @@ export function Finanzas() {
           <IngresosPorPlan datos={porPlan} />
         </div>
         <div className="col-lg-8">
-          <NuevosSocios datos={altas} />
+          <NuevosClientes datos={altas} />
         </div>
       </div>
 

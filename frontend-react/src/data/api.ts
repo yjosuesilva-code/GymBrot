@@ -1,5 +1,6 @@
 import { utils } from "../lib/utils";
 import { membresiaVigente } from "../lib/membresias";
+import { notificarCambioDeDatos } from "../lib/datos";
 import type {
   Cliente,
   Membresia,
@@ -402,6 +403,9 @@ const db = {
 
   write<T>(col: string, arreglo: T[]) {
     localStorage.setItem(this._key(col), JSON.stringify(arreglo));
+    // db.write es el unico punto de escritura del mock: avisar aqui hace que
+    // cualquier vista suscrita se refresque sin que tenga que recordarlo.
+    notificarCambioDeDatos();
   },
 };
 

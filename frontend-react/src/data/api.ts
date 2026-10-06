@@ -519,6 +519,15 @@ export const api = {
   },
 
   usuarios: {
+    /* Todas las filas, para que Clientes sepa de un vistazo quien tiene ya
+       codigo de acceso. byIdentificacion resuelve un solo cliente y cuesta un
+       delay por fila: en una tabla de siete socios serian siete idas y vueltas
+       para lo que es un conjunto de identificaciones. */
+    async list(): Promise<Usuario[]> {
+      await api._delay();
+      return db.read<Usuario>("usuarios");
+    },
+
     // El legacy busca por nombre o correo en el mismo campo
     // (UsuarioDAO.buscarPorNombreOCorreo, loginController.java:153), asi que
     // 'admin' y 'admin@gymbrot.com' resuelven al mismo usuario.

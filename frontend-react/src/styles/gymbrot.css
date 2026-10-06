@@ -286,6 +286,21 @@ body {
 
 /* ===== [P1] Estilos propios · dashboard, acceso, finanzas ===== */
 
+/* ---- Lector de huella en el login ----
+   Colores y textos copiados del legacy (loginController.java:73-83): verde
+   #72e06a conectado, rojo #ff6b6b desconectado. El pulso es el mismo que ya
+   usa .live-dot en el dashboard. */
+.reader-status { display: flex; align-items: center; justify-content: center; gap: 6px; font-family: var(--f-label); font-size: 10px; font-weight: 700; letter-spacing: .5px; color: var(--muted); margin: 0 0 4px; }
+.reader-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff6b6b; flex: none; }
+.reader-status.ok { color: #72e06a; }
+.reader-status.ok .reader-dot { background: #72e06a; animation: pulse 1.6s infinite; }
+.reader-status.off { color: #ff6b6b; }
+/* Andamiaje del mock: en el navegador no hay lector fisico, asi que este
+   boton es la unica forma de ver los dos estados. Se borra cuando exista
+   el puente real con HuellaService. */
+.reader-toggle { align-self: center; background: none; border: none; padding: 0; font-family: var(--f-body); font-size: 11px; color: var(--muted); text-decoration: underline; cursor: pointer; }
+.reader-toggle:hover { color: var(--neon); }
+
 /* ---- KPIs del dashboard ---- */
 .kpi { min-height: 150px; display: flex; flex-direction: column; gap: 8px; padding: 20px; }
 .kpi-accent { border-left: 4px solid var(--accent); }

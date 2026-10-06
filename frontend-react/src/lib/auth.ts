@@ -10,7 +10,8 @@ const CLAVE = "gymbrot_session";
 
 export type MotivoFallo =
   | "CAMPOS_VACIOS"
-  | "CREDENCIALES"
+  | "USUARIO_DESCONOCIDO"
+  | "CONTRASENA_INCORRECTA"
   | "ESTADO"
   | "SIN_ACCESO";
 
@@ -18,13 +19,9 @@ export type ResultadoLogin =
   | { ok: true; sesion: Sesion }
   | { ok: false; motivo: MotivoFallo; mensaje: string };
 
-const MOTIVOS: Record<MotivoFallo, string> = {
-  CAMPOS_VACIOS: "Ingresa tu usuario y contraseña.",
-  CREDENCIALES: "Usuario o contraseña incorrectos.",
-  ESTADO: "El usuario no está activo.",
-  // loginController.java:157
-  SIN_ACCESO: "Acceso denegado: solo los administradores pueden iniciar sesión.",
-};
+function fallo(motivo: MotivoFallo, mensaje: string): ResultadoLogin {
+  return { ok: false, motivo, mensaje };
+}
 
 function esSesion(datos: unknown): datos is Sesion {
   if (datos === null || typeof datos !== "object") return false;
@@ -75,21 +72,37 @@ function sesionDe(u: Usuario, escrito: string): Sesion {
   };
 }
 
-function fallo(motivo: MotivoFallo): ResultadoLogin {
-  return { ok: false, motivo, mensaje: MOTIVOS[motivo] };
-}
-
 export async function login(identificador: string, contrasena: string): Promise<ResultadoLogin> {
   const escrito = identificador.trim();
-  if (!escrito || !contrasena.trim()) return fallo("CAMPOS_VACIOS");
+  const clave = contrasena.trim();
+
+  // El legacy revisa los dos campos juntos y responde un unico "Campos
+  // vacios" (loginController.java:147). Aqui se separan para que el formulario
+  // diga cual de los dos falta.
+  if (!escrito && !clave) return fallo("CAMPOS_VACIOS", "Ingresa tu usuario y tu contraseña.");
+  if (!escrito) return fallo("CAMPOS_VACIOS", "Ingresa tu usuario.");
+  if (!clave) return fallo("CAMPOS_VACIOS", "Ingresa tu contraseña.");
 
   const usuario = await api.usuarios.buscarPorNombreOCorreo(escrito);
-  // El legacy no distingue usuario inexistente de clave erronea: el mismo
-  // "Credenciales invalidas" para los dos casos (loginController.java:163).
-  if (!usuario || usuario.contrasena !== contrasena) return fallo("CREDENCIALES");
 
-  if (usuario.estado !== "ACTIVO") return fallo("ESTADO");
-  if (usuario.tipo_usuario !== "ADMINISTRADOR") return fallo("SIN_ACCESO");
+  // Usuario inexistente y clave erronea se reportan por separado porque el
+  // formulario lo pide, pero OJO: eso revela que correos estan registrados.
+  // Cuando exista backend hay que volver al unico "Credenciales invalidas"
+  // del legacy (loginController.java:163) y que sea el servidor quien
+  // responda, porque en el navegador la distincion es solo de fachada.
+  if (!usuario) return fallo("USUARIO_DESCONOCIDO", "No hay ningún usuario con ese nombre o correo.");
+  if (usuario.contrasena !== clave) return fallo("CONTRASENA_INCORRECTA", "La contraseña es incorrecta.");
+
+  // AuthService.java:73-74
+  if (usuario.estado !== "ACTIVO") return fallo("ESTADO", `El usuario está ${usuario.estado}.`);
+
+  // loginController.java:156-158
+  if (usuario.tipo_usuario !== "ADMINISTRADOR") {
+    return fallo(
+      "SIN_ACCESO",
+      "Acceso denegado: solo los administradores pueden iniciar sesión.",
+    );
+  }
 
   const sesion = sesionDe(usuario, escrito);
   localStorage.setItem(CLAVE, JSON.stringify(sesion));

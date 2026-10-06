@@ -168,6 +168,7 @@ const SEED: Seed = {
 // la siguiente carga regenera todas las colecciones.
 const SEED_VERSION = "3";
 const CLAVE_VERSION = "gymbrot_seed_version";
+const CLAVE_LECTOR = "gymbrot_lector_conectado";
 
 function sembrarSiHaceFalta(): void {
   if (localStorage.getItem(CLAVE_VERSION) === SEED_VERSION) return;
@@ -216,6 +217,23 @@ export const api = {
           (u) => u.nombre.toLowerCase() === clave || u.correo.toLowerCase() === clave,
         ) ?? null
       );
+    },
+  },
+
+  /* Estado del lector de huella. Va en su propia clave y no en el SEED porque
+     describe hardware, no datos de dominio: sembrarlo con el resto lo
+     reiniciaria en cada bump de SEED_VERSION, que es justo lo contrario de
+     lo que se quiere (el fallo de conexion debe persistir). El legacy lo
+     sondea desde HuellaService con su listener de estado
+     (HuellaService.java:120-170, loginController.java:59). */
+  lector: {
+    estaConectado(): boolean {
+      const guardado = localStorage.getItem(CLAVE_LECTOR);
+      return guardado === null ? true : guardado === "true";
+    },
+
+    setConectado(conectado: boolean): void {
+      localStorage.setItem(CLAVE_LECTOR, String(conectado));
     },
   },
 

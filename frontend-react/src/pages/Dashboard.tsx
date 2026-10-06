@@ -230,7 +230,7 @@ function Demografia({ clientes }: { clientes: Cliente[] }) {
             <div className="demo-info">
               <span className="demo-name">
                 {g.nombre}
-                <span className="demo-count">{g.conteo} presentes</span>
+                <span className="demo-count">{g.conteo} miembros</span>
               </span>
               <span className="demo-range">{g.rango}</span>
             </div>

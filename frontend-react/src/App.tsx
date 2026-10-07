@@ -18,6 +18,7 @@ import { Citas } from "./pages/Citas"; // [P2]
 function App() {
   return (
     <Routes>
+      <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Login />} />
       <Route element={<Layout />}>
         <Route path="/dashboard" element={<Dashboard />} />
@@ -42,7 +43,6 @@ function App() {
         <Route path="/progreso" element={<Progreso />} />
         {/* [P2] Citas */}
         <Route path="/citas" element={<Citas />} />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>
   );

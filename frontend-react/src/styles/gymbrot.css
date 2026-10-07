@@ -84,9 +84,9 @@ body {
   position: sticky;              /* se queda fijo aunque hagas scroll */
   top: 0;
   overflow-x: hidden;            /* recorta las etiquetas con el rail angosto */
-  /* Con 10 items el menu pide ~707px y no entra en el viewport real de un
-     portatil de 768px (~650px descontada la barra del navegador), asi que sin
-     scroll vertical el boton de cerrar sesion quedaria fuera de alcance. */
+  /* Con 11 opciones el menu pide ~707px y no entra en el viewport real de un
+     portatil de 768px (~650px descontada la barra del navegador), asi que el
+     rail necesita scroll vertical para llegar a las últimas opciones. */
   overflow-y: auto;
   transition: width .2s ease, min-width .2s ease, padding .2s ease;
 }
@@ -101,7 +101,7 @@ body {
    colapsado y el wordmark GYMBROT al expandirse. El padding inferior baja de
    24 a 19px para ganar 5px de alto en el rail. */
 .sidebar-logo {
-  padding: 4px 0 18px;
+  padding: -3px 0 18px;
   display: grid;
   place-items: center;
 }
@@ -148,8 +148,8 @@ body {
   white-space: nowrap;
   transition: max-width .2s ease, opacity .16s ease;
 }
-/* 12px en vez de 16px: "Cerrar Sesión" mide ~80px a 13px y con 16px de
-   padding quedaban 86px de hueco, o sea al borde del recorte. */
+/* El span guarda el ancho justo para que el estado colapsado quepa en el
+   rail angosto y se despliegue al expandir el hover del sidebar. */
 .sidebar:hover .nav-item,
 .sidebar:focus-within .nav-item {
   justify-content: flex-start;
@@ -167,10 +167,7 @@ body {
 /* El outline por defecto se recortaría contra el overflow:hidden del rail. */
 .nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* El <hr class="sidebar-sep"> se quito: con 11 opciones el menu ya pide todo el
-   alto del rail y el separador empujaba "Cerrar Sesion" fuera del viewport. */
-.sidebar-footer { display: flex; flex-direction: column; gap: 8px; }
-/* El <button> trae fondo y borde del navegador y .nav-item no los define. */
-.sidebar-footer .nav-item { background: none; border: none; width: 100%; }
+   alto del rail y el separador empujaba el cierre fuera del viewport. */
 
 /* ----- Área principal (derecha) ----- */
 .main-area {
@@ -214,6 +211,23 @@ body {
   display: flex; align-items: center; justify-content: center;
   font-family: var(--f-title); font-weight: 800; font-size: 14px;
 }
+/* Cerrar sesión vive en el topbar (esquina derecha), no en el rail. */
+.topbar-logout {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid var(--border-btn);
+  color: var(--nav-text);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-family: var(--f-title);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.topbar-logout:hover { color: #fff; border-color: var(--neon); }
+.topbar-logout:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* ===== Tarjetas de contenido ===== */
 .card-g { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }

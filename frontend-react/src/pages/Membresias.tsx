@@ -4,7 +4,7 @@ import { api } from "../data/api";
 import { utils } from "../lib/utils";
 import type { Cliente, Membresia } from "../types";
 
-type FormMembresia = Omit<Membresia, "id_membresia" | "valor" | "estado"> & { valor: string };
+type FormMembresia = Omit<Membresia, "id_membresia" | "valor" | "estado" | "id_plan"> & { valor: string; id_plan: number | null };
 
 const VACIO: FormMembresia = {
   id_cliente: "",
@@ -13,6 +13,7 @@ const VACIO: FormMembresia = {
   valor: "",
   fecha_inicio: "",
   fecha_vencimiento: "",
+  id_plan: null,
 };
 
 export function Membresias() {
@@ -88,6 +89,7 @@ export function Membresias() {
       valor: String(membresia.valor),
       fecha_inicio: membresia.fecha_inicio,
       fecha_vencimiento: membresia.fecha_vencimiento,
+      id_plan: membresia.id_plan,
     });
     setErrorForm("");
     setExito("");

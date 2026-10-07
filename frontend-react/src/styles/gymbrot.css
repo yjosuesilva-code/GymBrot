@@ -383,6 +383,23 @@ body {
 .btn-danger-g { background: #ff6b6b; color: #000; border: none; padding: 8px 16px; border-radius: var(--radius-sm); font-family: var(--f-title); font-weight: 700; font-size: 13px; cursor: pointer; }
 .btn-danger-g:hover { filter: brightness(1.08); }
 
+/* Rutinas: cuadrícula de tarjetas. min(300px, 100%) evita desbordar en celulares angostos */
+.rutinas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 20px; }
+.rutina-card { display: flex; flex-direction: column; gap: 16px; padding: 20px; }
+.rutina-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.rutina-nombre { font-family: var(--f-title); font-size: 16px; font-weight: 600; color: #fff; }
+.rutina-personas { display: flex; flex-direction: column; gap: 10px; }
+.rutina-dias { display: flex; gap: 6px; }
+.dia-pill { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--f-label); font-size: 11px; font-weight: 700; background: var(--bg-input); color: var(--muted); border: 1px solid var(--border-btn); }
+.dia-pill.activo { background: var(--neon); color: #000; border-color: var(--neon); }
+.dia-pill-btn { padding: 0; cursor: pointer; }  /* versión botón (en el modal): se activa con clic */
+.dia-pill-btn:hover { border-color: var(--neon); }
+.rutina-fechas { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); }
+.rutina-acciones { margin-top: auto; justify-content: flex-end; padding-top: 14px; border-top: 1px solid var(--border); }
+.rutina-grupo-head { margin-bottom: 16px; }
+/* Alerta con un botón al lado del mensaje (ej. "Crear la siguiente rutina") */
+.alert-g.alerta-accion.show { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
 
 /* ===== [P4] Estilos propios · ejercicios, membresias ===== */
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
@@ -58,6 +59,7 @@ function validar(f: FormInstructor, editando: boolean): string {
 type Alerta = { tipo: "ok" | "error"; mensaje: string };
 
 export function Instructores() {
+  const navigate = useNavigate();
   const [instructores, setInstructores] = useState<Instructor[]>([]);
   const [cargando, setCargando] = useState(true);
 
@@ -301,6 +303,7 @@ export function Instructores() {
                   <td><span className={"badge-g " + utils.badgeClass(i.estado)}>{i.estado}</span></td>
                   <td>
                     <div className="cell-actions">
+                      <button className="btn-icon" title="Ver perfil" onClick={() => navigate("/instructores/" + i.numero_identificacion)}>👁</button>
                       <button className="btn-icon" title="Editar" onClick={() => abrirEdicion(i)}>✏️</button>
                       <button className="btn-icon" title={i.estado === "ACTIVO" ? "Desactivar" : "Activar"} onClick={() => cambiarEstado(i)}>
                         {i.estado === "ACTIVO" ? "🚫" : "✅"}

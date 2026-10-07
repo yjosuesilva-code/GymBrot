@@ -319,6 +319,41 @@ export const api = {
       await api._delay();
       return db.read<Membresia>("membresias").filter((m) => m.id_cliente === id);
     },
+
+    async create(data: Omit<Membresia, "id_membresia">): Promise<ApiResp<Membresia>> {
+      await api._delay();
+      const arr = db.read<Membresia>("membresias");
+      const nuevoId = arr.length > 0
+        ? Math.max(...arr.map((m) => m.id_membresia)) + 1
+        : 1;
+      const nueva: Membresia = { ...data, id_membresia: nuevoId };
+      arr.push(nueva);
+      db.write("membresias", arr);
+      return { ok: true, mensaje: "Membresía registrada", data: nueva };
+    },
+
+    async update(
+      id: number,
+      data: Partial<Omit<Membresia, "id_membresia">>
+    ): Promise<ApiResp<Membresia>> {
+      await api._delay();
+      const arr = db.read<Membresia>("membresias");
+      const membresia = arr.find((m) => m.id_membresia === id);
+      if (!membresia) return { ok: false, mensaje: "Membresía no encontrada" };
+      Object.assign(membresia, data, { id_membresia: id });
+      db.write("membresias", arr);
+      return { ok: true, mensaje: "Membresía actualizada", data: membresia };
+    },
+
+    async setEstado(id: number, estado: Membresia["estado"]): Promise<ApiResp<Membresia>> {
+      await api._delay();
+      const arr = db.read<Membresia>("membresias");
+      const membresia = arr.find((m) => m.id_membresia === id);
+      if (!membresia) return { ok: false, mensaje: "Membresía no encontrada" };
+      membresia.estado = estado;
+      db.write("membresias", arr);
+      return { ok: true, mensaje: "Estado de membresía actualizado", data: membresia };
+    },
   },
 
   pagos: {
@@ -342,6 +377,89 @@ export const api = {
       return db.read<Ingreso>("ingresos").filter((i) => i.id_cliente === id);
     }
   },
+
+  // ===== [P4] Ejercicios =====
+  ejercicios: {
+    async list(): Promise<Ejercicio[]> {
+      await api._delay();
+      return db.read<Ejercicio>("ejercicios");
+    },
+
+    async create(
+      data: Omit<Ejercicio, "idEjercicio">
+    ): Promise<ApiResp<Ejercicio>> {
+      await api._delay();
+
+      const arr = db.read<Ejercicio>("ejercicios");
+
+      const nuevoId =
+        arr.length > 0
+          ? Math.max(...arr.map((e) => e.idEjercicio)) + 1
+          : 1;
+
+      const nuevo: Ejercicio = {
+        ...data,
+        idEjercicio: nuevoId,
+      };
+
+      arr.push(nuevo);
+      db.write("ejercicios", arr);
+
+      return {
+        ok: true,
+        mensaje: "Ejercicio registrado",
+        data: nuevo,
+      };
+    },
+    async update(
+  id: number,
+  data: Partial<Omit<Ejercicio, "idEjercicio">>
+): Promise<ApiResp<Ejercicio>> {
+  await api._delay();
+
+  const arr = db.read<Ejercicio>("ejercicios");
+  const ejercicio = arr.find((e) => e.idEjercicio === id);
+
+  if (!ejercicio) {
+    return { ok: false, mensaje: "Ejercicio no encontrado" };
+  }
+
+  Object.assign(ejercicio, data);
+
+  db.write("ejercicios", arr);
+
+  return {
+    ok: true,
+    mensaje: "Ejercicio actualizado",
+    data: ejercicio,
+  };
+},
+
+async remove(id: number): Promise<ApiResp<Ejercicio>> {
+  await api._delay();
+
+  const arr = db.read<Ejercicio>("ejercicios");
+  const ejercicio = arr.find((e) => e.idEjercicio === id);
+
+  if (!ejercicio) {
+    return { ok: false, mensaje: "Ejercicio no encontrado" };
+  }
+
+  db.write(
+    "ejercicios",
+    arr.filter((e) => e.idEjercicio !== id)
+  );
+
+  return {
+    ok: true,
+    mensaje: "Ejercicio eliminado",
+    data: ejercicio,
+  };
+},
+    
+
+  },
+  // ===== [/P4] Ejercicios =====
 
   // ===== [P3] Instructores =====
   instructores: {

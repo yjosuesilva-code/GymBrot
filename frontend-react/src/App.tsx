@@ -5,6 +5,8 @@ import { Clientes } from "./pages/Clientes";
 import { ClienteDetalle } from "./pages/ClienteDetalle";
 import { Login } from "./pages/Login";
 import { Instructores } from "./pages/Instructores"; // [P3]
+import { Ejercicios } from "./pages/Ejercicios"; // [P4]
+import { Membresias } from "./pages/Membresias"; // [P4]
 import { InstructorDetalle } from "./pages/InstructorDetalle"; // [P3]
 import { Rutinas } from "./pages/Rutinas"; // [P3]
 import { Progreso } from "./pages/Progreso"; // [P2]
@@ -24,6 +26,10 @@ function App() {
             cuanto exista la vista. */}
         {/* [P3] Instructores */}
         <Route path="/instructores" element={<Instructores />} />
+        {/* [P4] Ejercicios */}
+        <Route path="/ejercicios" element={<Ejercicios />} />
+        {/* [P4] Membresias */}
+        <Route path="/membresias" element={<Membresias />} />
         <Route path="/instructores/:id" element={<InstructorDetalle />} />
         <Route path="/rutinas" element={<Rutinas />} />
         {/* [P2] Progreso */}

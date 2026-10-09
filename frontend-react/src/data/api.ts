@@ -14,6 +14,7 @@ import type {
   PlanMembresia,
   HistorialMembresia,
   Progreso, // [P2]
+  ProgresoNuevo, // [P2]
   Cita, // [P2]
   CitaNueva, // [P2]
   Instructor, // [P3]
@@ -419,18 +420,21 @@ const SEED: Seed = {
 
   // ===== [P2] Progreso =====
   progreso: [
-    { id_progreso:1, id_cliente:'1000000001', fecha:'2026-07-10', peso:62,   altura:1.65, notas:'Medición inicial' },
-    { id_progreso:2, id_cliente:'1000000001', fecha:'2026-08-10', peso:60.5, altura:1.65, notas:'Bajó 1.5 kg' },
-    { id_progreso:3, id_cliente:'1000000002', fecha:'2026-08-01', peso:82,   altura:1.78, notas:'Control inicial' },
-    { id_progreso:4, id_cliente:'1000000005', fecha:'2026-09-01', peso:75,   altura:1.72, notas:'' }
+    { gimnasio_id:'gym-centro', id_progreso:1, id_cliente:'1000000001', fecha:'2026-07-10', peso:62,   altura:1.65, notas:'Medición inicial' },
+    { gimnasio_id:'gym-centro', id_progreso:2, id_cliente:'1000000001', fecha:'2026-08-10', peso:60.5, altura:1.65, notas:'Bajó 1.5 kg' },
+    { gimnasio_id:'gym-centro', id_progreso:3, id_cliente:'1000000002', fecha:'2026-08-01', peso:82,   altura:1.78, notas:'Control inicial' },
+    { gimnasio_id:'gym-centro', id_progreso:4, id_cliente:'1000000005', fecha:'2026-09-01', peso:75,   altura:1.72, notas:'' },
+    // gym-titan: misma cedula que la Ana de gym-centro. Si su medicion aparece
+    // en el progreso de la Ana de Centro, el filtro por gimnasio fallo.
+    { gimnasio_id:'gym-titan',  id_progreso:5, id_cliente:'1000000001', fecha:'2026-09-20', peso:63,   altura:1.65, notas:'Medición inicial en Titan' }
   ],
   // ===== [/P2] Progreso =====
 
   // ===== [P2] Citas =====
   citas: [
-    { id_cita:1, id_cliente:'1000000001', id_instructor:'2000000001', fecha:'2026-10-06', hora:'07:00', estado:'CONFIRMADA', notas:'Rutina de fuerza' },
-    { id_cita:2, id_cliente:'1000000002', id_instructor:'2000000002', fecha:'2026-10-07', hora:'17:00', estado:'PENDIENTE',  notas:'Primera clase de yoga' },
-    { id_cita:3, id_cliente:'1000000005', id_instructor:'2000000003', fecha:'2026-10-08', hora:'09:00', estado:'CANCELADA',  notas:'Reagendar' }
+    { gimnasio_id:'gym-centro', id_cita:1, id_cliente:'1000000001', id_instructor:'2000000001', fecha:'2026-10-06', hora:'07:00', estado:'CONFIRMADA', notas:'Rutina de fuerza' },
+    { gimnasio_id:'gym-centro', id_cita:2, id_cliente:'1000000002', id_instructor:'2000000002', fecha:'2026-10-07', hora:'17:00', estado:'PENDIENTE',  notas:'Primera clase de yoga' },
+    { gimnasio_id:'gym-centro', id_cita:3, id_cliente:'1000000005', id_instructor:'2000000003', fecha:'2026-10-08', hora:'09:00', estado:'CANCELADA',  notas:'Reagendar' }
   ],
   // ===== [/P2] Citas =====
 };
@@ -451,7 +455,8 @@ const SEED: Seed = {
 // las colecciones nuevas quedarian vacias en localStorage.
 // v8 agrega gimnasios y gimnasio_id en usuarios/clientes (multitenant), con un
 // segundo gimnasio que solapa datos para que una fuga de aislamiento se note.
-const SEED_VERSION = "8";
+// v9 lleva gimnasio_id a progreso y citas, con una medicion de la Ana de Titan.
+const SEED_VERSION = "9";
 const CLAVE_VERSION = "gymbrot_seed_version";
 const CLAVE_LECTOR = "gymbrot_lector_conectado";
 
@@ -1516,19 +1521,21 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
   progreso: {
     async list(): Promise<Progreso[]> {
       await api._delay();
-      return db.read<Progreso>("progreso");
+      return db.readTenant<Progreso>("progreso");
     },
     async byCliente(id: string): Promise<Progreso[]> {
       await api._delay();
-      return db.read<Progreso>("progreso").filter((p) => p.id_cliente === id);
+      return db.readTenant<Progreso>("progreso").filter((p) => p.id_cliente === id);
     },
-    async create(data: Omit<Progreso, "id_progreso">): Promise<ApiResp<Progreso>> {
+    async create(data: ProgresoNuevo): Promise<ApiResp<Progreso>> {
       await api._delay();
-      const arr = db.read<Progreso>("progreso");
-      const nuevoId = arr.reduce((max, p) => Math.max(max, p.id_progreso), 0) + 1;
-      const nuevo: Progreso = { id_progreso: nuevoId, ...data };
+      const arr = db.readTenant<Progreso>("progreso");
+      // El id sale de la tabla completa, no de readTenant: es global como un
+      // SERIAL en la tabla compartida, asi dos gimnasios nunca repiten id.
+      const nuevoId = db.read<Progreso>("progreso").reduce((max, p) => Math.max(max, p.id_progreso), 0) + 1;
+      const nuevo: Progreso = { gimnasio_id: gimnasioParaEscribir(), id_progreso: nuevoId, ...data };
       arr.push(nuevo);
-      db.write("progreso", arr);
+      db.writeTenant("progreso", arr);
       return { ok: true, mensaje: "Medición registrada", data: nuevo };
     },
   },
@@ -1538,37 +1545,39 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
   citas: {
     async list(): Promise<Cita[]> {
       await api._delay();
-      return db.read<Cita>("citas");
+      return db.readTenant<Cita>("citas");
     },
     async byCliente(id: string): Promise<Cita[]> {
       await api._delay();
-      return db.read<Cita>("citas").filter((c) => c.id_cliente === id);
+      return db.readTenant<Cita>("citas").filter((c) => c.id_cliente === id);
     },
     async create(data: CitaNueva): Promise<ApiResp<Cita>> {
       await api._delay();
-      const arr = db.read<Cita>("citas");
-      const nuevoId = arr.reduce((max, c) => Math.max(max, c.id_cita), 0) + 1;
-      const nueva: Cita = { id_cita: nuevoId, estado: "PENDIENTE", ...data };
+      const arr = db.readTenant<Cita>("citas");
+      // El id sale de la tabla completa, no de readTenant: es global como un
+      // SERIAL en la tabla compartida, asi dos gimnasios nunca repiten id.
+      const nuevoId = db.read<Cita>("citas").reduce((max, c) => Math.max(max, c.id_cita), 0) + 1;
+      const nueva: Cita = { gimnasio_id: gimnasioParaEscribir(), id_cita: nuevoId, estado: "PENDIENTE", ...data };
       arr.push(nueva);
-      db.write("citas", arr);
+      db.writeTenant("citas", arr);
       return { ok: true, mensaje: "Cita registrada", data: nueva };
     },
-    async update(id: number, data: Partial<Omit<Cita, "id_cita">>): Promise<ApiResp<Cita>> {
+    async update(id: number, data: Partial<CitaNueva>): Promise<ApiResp<Cita>> {
       await api._delay();
-      const arr = db.read<Cita>("citas");
+      const arr = db.readTenant<Cita>("citas");
       const cita = arr.find((c) => c.id_cita === id);
       if (!cita) return { ok: false, mensaje: "Cita no encontrada" };
       Object.assign(cita, data, { id_cita: id });
-      db.write("citas", arr);
+      db.writeTenant("citas", arr);
       return { ok: true, mensaje: "Cita actualizada", data: cita };
     },
     async setEstado(id: number, estado: Cita["estado"]): Promise<ApiResp<Cita>> {
       await api._delay();
-      const arr = db.read<Cita>("citas");
+      const arr = db.readTenant<Cita>("citas");
       const cita = arr.find((c) => c.id_cita === id);
       if (!cita) return { ok: false, mensaje: "Cita no encontrada" };
       cita.estado = estado;
-      db.write("citas", arr);
+      db.writeTenant("citas", arr);
       return { ok: true, mensaje: "Estado actualizado", data: cita };
     },
   },

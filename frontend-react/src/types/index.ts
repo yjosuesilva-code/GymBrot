@@ -116,6 +116,7 @@ export interface Ejercicio {
 }
 
 export interface Progreso {
+  gimnasio_id: Gimnasio['gimnasio_id'];
   id_progreso: number;
   id_cliente: string;
   fecha: string;      // 'YYYY-MM-DD'
@@ -123,6 +124,9 @@ export interface Progreso {
   altura: number;     // metros
   notas: string;
 }
+
+// Lo que se envía al crear: gimnasio_id e id_progreso los pone api.progreso.create
+export type ProgresoNuevo = Omit<Progreso, 'gimnasio_id' | 'id_progreso'>;
 
 export interface ApiResp<T = unknown> {
   ok: boolean;
@@ -226,6 +230,7 @@ export type RutinaNueva = Omit<Rutina, 'id_rutina' | 'fecha_creacion'>;
 
 // ===== [P2] Citas =====
 export interface Cita {
+  gimnasio_id: Gimnasio['gimnasio_id'];
   id_cita: number;
   id_cliente: string;
   id_instructor: string;
@@ -234,6 +239,6 @@ export interface Cita {
   estado: 'PENDIENTE' | 'CONFIRMADA' | 'CANCELADA';
   notas: string;
 }
-// Lo que se envía al crear: el id y el estado los pone api.citas.create
-export type CitaNueva = Omit<Cita, 'id_cita' | 'estado'>;
+// Lo que se envía al crear: gimnasio_id, el id y el estado los pone api.citas.create
+export type CitaNueva = Omit<Cita, 'gimnasio_id' | 'id_cita' | 'estado'>;
 // ===== [/P2] Citas =====

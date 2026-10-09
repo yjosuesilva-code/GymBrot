@@ -1,4 +1,43 @@
+/* PLANES_SOFTWARE: lo que la plataforma le vende a cada gimnasio. Es un
+   catalogo global, distinto de PlanMembresia, que es lo que cada gimnasio le
+   vende a sus socios. */
+export interface PlanSoftware {
+  id_plan_software: 'BASICO' | 'PRO' | 'PREMIUM';
+  nombre: string;
+  precio_mensual: number;
+  max_clientes: number | null;   // null = ilimitados
+  incluye: string[];
+  destacado: boolean;            // la tarjeta "mas elegido" de la pagina de planes
+}
+
+/* GIMNASIOS: el tenant. Cada fila de las tablas por gimnasio lleva su
+   gimnasio_id (DECISIONES.md, D1). Hoy el filtro se simula en api.ts; en
+   produccion lo hace cumplir RLS en la base. */
+export interface Gimnasio {
+  gimnasio_id: string;
+  nombre: string;
+  ciudad: string;
+  telefono: string;
+  estado: 'ACTIVO' | 'INACTIVO';
+  plan_software: PlanSoftware['id_plan_software'];
+  fecha_registro: string;        // 'YYYY-MM-DD'
+  vence_suscripcion: string;     // 'YYYY-MM-DD', pagada hasta este dia
+}
+
+/* Pago de la suscripcion de un gimnasio a la plataforma. Simulado: no hay
+   pasarela, y por eso no guarda ningun dato de tarjeta. */
+export interface PagoSoftware {
+  id_pago_software: number;
+  gimnasio_id: Gimnasio['gimnasio_id'];
+  id_plan_software: PlanSoftware['id_plan_software'];
+  valor: number;
+  metodo_pago: 'TARJETA' | 'PSE' | 'NEQUI';
+  fecha_pago: string;
+  referencia: string;
+}
+
 export interface Cliente {
+  gimnasio_id: Gimnasio['gimnasio_id'];
   numero_identificacion: string;
   tipo_identificacion: 'CC' | 'TI' | 'CE' | 'PP';
   nombre: string;
@@ -7,22 +46,66 @@ export interface Cliente {
   correo: string;
   direccion: string;
   fecha_nacimiento: string;   // 'YYYY-MM-DD'
-  estado: 'ACTIVO' | 'INACTIVO' | 'SUSPENDIDO';
+  estado: 'ACTIVO' | 'INACTIVO' | 'SUSPENDIDO' | 'BLOQUEADO';
   fecha_registro: string;
 }
 
+/* Lo que manda la vista al crear. gimnasio_id lo inyecta api.ts desde la
+   sesion (las vistas no lo conocen); estado y fecha_registro los pone
+   api.clientes.create. */
+export type ClienteNuevo = Omit<Cliente, 'gimnasio_id' | 'estado' | 'fecha_registro'>;
+
+/* USUARIOS del legacy (GYMBROT_COMPLETO.sql). El campo contrasena guarda la
+   clave en texto plano solo porque hoy no hay backend que la hashee; en la
+   columna real se llama contrasena_hash y va con BCrypt (AuthService.java:29).
+   Los socios tambien son usuarios: su contrasena es la que valida el acceso
+   con metodo CONTRASENA. Cada usuario pertenece a un solo gimnasio
+   (D3: la cedula es unica dentro de cada gimnasio). */
+export interface Usuario {
+  gimnasio_id: Gimnasio['gimnasio_id'];
+  numero_identificacion: string;
+  nombre: string;
+  apellidos: string;
+  correo: string;
+  contrasena: string;
+  estado: 'ACTIVO' | 'INACTIVO' | 'SUSPENDIDO' | 'BLOQUEADO';
+  tipo_usuario: 'ADMINISTRADOR' | 'INSTRUCTOR' | 'CLIENTE';
+  rol: string;
+}
+
+/* PLANES_MEMBRESIAS. id_plan es la clave que el legacy separa del nombre:
+   PagoMembresiaController.java:207 guarda el id en la membresia y el nombre
+   aparte, asi que renombrar un plan no reescribe el historial. */
+export interface PlanMembresia {
+    id_plan: number;
+    nombre: string;
+    descripcion: string;
+    precio_mensual: number;
+    precio_semestral: number;
+    precio_anual: number;
+    estado: 'ACTIVO' | 'INACTIVO';
+}
+
 export interface Membresia {
+    gimnasio_id: Gimnasio['gimnasio_id'];
     id_membresia: number;
     id_cliente: string;
+    id_plan: number | null;   // null en las sembradas a mano, que no tienen plan
     tipo_membresia: string;
-    modalidad_pago: 'MENSUAL' | 'ANUAL';
+    modalidad_pago: 'MENSUAL' | 'SEMESTRAL' | 'ANUAL';
     valor: number;
     fecha_inicio: string;
     fecha_vencimiento: string;
-    estado: 'ACTIVA' | 'VENCIDA';
+    // CANCELADA la agrega el flujo de pago, que es el unico que puede
+    // desactivar una membresia vigente al renewarla.
+    estado: 'ACTIVA' | 'VENCIDA' | 'CANCELADA';
 }
 
+// Lo que se envía al crear: gimnasio_id e id_membresia los pone api.membresias.create
+export type MembresiaNueva = Omit<Membresia, 'gimnasio_id' | 'id_membresia'>;
+
 export interface Pago {
+    gimnasio_id: Gimnasio['gimnasio_id'];
     id_pago: number;
     id_cliente: string;
     id_membresia: number;
@@ -30,15 +113,31 @@ export interface Pago {
     valor: number;
     metodo_pago: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA' | 'NEQUI';
     estado_pago: string;
+    referencia_transaccion: string;
+    observaciones: string;
+}
+
+/* HISTORIAL_MEMBRESIAS. Marca que membresia esta vigente ahora; es lo que
+   consulta el control de acceso (RegistroEntradaController.java:319) y la
+   consulta de pagos vencidos. */
+export interface HistorialMembresia {
+    gimnasio_id: Gimnasio['gimnasio_id'];
+    id_historial: number;
+    id_cliente: string;
+    id_membresia: number;
+    fecha_asignacion: string;
+    activa: boolean;
 }
 
 export interface Ingreso {
+    gimnasio_id: Gimnasio['gimnasio_id'];
     id_ingreso: number;
     id_cliente: string;
     fecha: string;
     hora_entrada: string;
     hora_salida: string | null;
-    metodo_verificacion: 'QR'| 'MANUAL';
+    metodo_verificacion: 'HUELLA' | 'CONTRASENA';
+    estado_verificacion: 'APROBADO' | 'RECHAZADO';
 }
 
 export interface Ejercicio {
@@ -53,6 +152,7 @@ export interface Ejercicio {
 }
 
 export interface Progreso {
+  gimnasio_id: Gimnasio['gimnasio_id'];
   id_progreso: number;
   id_cliente: string;
   fecha: string;      // 'YYYY-MM-DD'
@@ -61,18 +161,31 @@ export interface Progreso {
   notas: string;
 }
 
+// Lo que se envía al crear: gimnasio_id e id_progreso los pone api.progreso.create
+export type ProgresoNuevo = Omit<Progreso, 'gimnasio_id' | 'id_progreso'>;
+
 export interface ApiResp<T = unknown> {
   ok: boolean;
   mensaje: string;
   data?: T;
 }
 
-/* Sesion del mock en localStorage. Sin tenantId: el vanilla lo llevaba,
-   pero el modelo de React es de un solo gimnasio. */
+/* Sesion del mock en localStorage. Lleva el gimnasio_id que el login copia
+   del Usuario: es el gimnasio activo, y la capa db lo lee para filtrar cada
+   lectura. Las vistas no lo usan.
+
+   Guarda tipo_usuario desde ya porque el login solo admite ADMINISTRADOR
+   (loginController.java:156), pero viene preparado para que cada rol entre
+   a su propio dashboard. */
 export interface Sesion {
+  gimnasio_id: Gimnasio['gimnasio_id'];
+  numero_identificacion: string;
   usuario: string;
   nombre: string;
+  apellidos: string;
+  correo: string;
   rol: string;
+  tipo_usuario: Usuario['tipo_usuario'];
 }
 
 // ===== [P3] Instructores =====
@@ -153,6 +266,7 @@ export type RutinaNueva = Omit<Rutina, 'id_rutina' | 'fecha_creacion'>;
 
 // ===== [P2] Citas =====
 export interface Cita {
+  gimnasio_id: Gimnasio['gimnasio_id'];
   id_cita: number;
   id_cliente: string;
   id_instructor: string;
@@ -161,6 +275,6 @@ export interface Cita {
   estado: 'PENDIENTE' | 'CONFIRMADA' | 'CANCELADA';
   notas: string;
 }
-// Lo que se envía al crear: el id y el estado los pone api.citas.create
-export type CitaNueva = Omit<Cita, 'id_cita' | 'estado'>;
+// Lo que se envía al crear: gimnasio_id, el id y el estado los pone api.citas.create
+export type CitaNueva = Omit<Cita, 'gimnasio_id' | 'id_cita' | 'estado'>;
 // ===== [/P2] Citas =====

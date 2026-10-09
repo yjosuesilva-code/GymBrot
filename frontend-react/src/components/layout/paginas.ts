@@ -13,4 +13,5 @@ export const paginas = [
   { to: "/progreso", label: "Progreso", icon: "bi-activity" },
   { to: "/notificaciones", label: "Notificaciones", icon: "bi-bell" },
   { to: "/finanzas", label: "Finanzas", icon: "bi-graph-up-arrow" },
+  { to: "/gymbrot-ai", label: "Gymbrot AI", icon: "bi-stars" },
 ];

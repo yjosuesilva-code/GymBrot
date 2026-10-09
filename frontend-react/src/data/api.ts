@@ -750,6 +750,7 @@ export const api = {
       if (!c) return { ok: false, mensaje: "Cliente no encontrado" };
       c.estado = estado;
       db.write("clientes", arr);
+      await api.usuarios.setEstado(id, estado); // ← espejo: el estado del usuario sigue al del cliente
       return { ok: true, mensaje: "Estado actualizado", data: c };
     },
   },

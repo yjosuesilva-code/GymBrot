@@ -2,7 +2,9 @@ import { utils } from "../lib/utils";
 import { membresiaVigente } from "../lib/membresias";
 import { notificarCambioDeDatos } from "../lib/datos";
 import type {
+  Gimnasio, // [multitenant]
   Cliente,
+  ClienteNuevo, // [multitenant]
   Membresia,
   Pago,
   Ingreso,
@@ -24,6 +26,7 @@ import type {
 } from "../types";
 
 interface Seed {
+  gimnasios: Gimnasio[];
   usuarios: Usuario[];
   clientes: Cliente[];
   planes: PlanMembresia[];
@@ -292,6 +295,14 @@ function finDe(serie: Pago[], diasExtra: number): string {
 }
 
 const SEED: Seed = {
+  // Tenants de la plataforma. gym-titan se solapa a proposito con gym-centro
+  // (misma cedula, datos distintos): si alguna pantalla deja pasar filas del
+  // otro gimnasio, se nota al instante (DECISIONES.md, convenciones).
+  gimnasios: [
+    { gimnasio_id:'gym-centro', nombre:'GymBrot Centro', estado:'ACTIVO' },
+    { gimnasio_id:'gym-titan',  nombre:'Titan Fitness',  estado:'ACTIVO' },
+  ],
+
   // Personal con acceso al panel. El legacy exige tipo_usuario
   // 'ADMINISTRADOR' para iniciar sesion (loginController.java:156), asi que
   // instructor y cliente quedan sembrados para probar ese rechazo, no para
@@ -303,25 +314,33 @@ const SEED: Seed = {
   // podria entrar por huella. El estado espeja el del cliente, asi que
   // suspenderlo en Clientes lo suspende aqui tambien.
   usuarios: [
-    { numero_identificacion:'1001000001', nombre:'admin', apellidos:'Administrador', correo:'admin@gymbrot.com', contrasena:'admin',      estado:'ACTIVO',     tipo_usuario:'ADMINISTRADOR', rol:'SUPERADMIN' },
-    { numero_identificacion:'2001000001', nombre:'Diego', apellidos:'Morales',       correo:'diego.morales@gymbrot.com', contrasena:'instructor', estado:'ACTIVO',     tipo_usuario:'INSTRUCTOR',   rol:'INSTRUCTOR' },
-    { numero_identificacion:'1000000001', nombre:'Ana María',    apellidos:'Ruiz',     correo:'ana.ruiz@mail.com',   contrasena:'ana123',    estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
-    { numero_identificacion:'1000000002', nombre:'Carlos Andrés', apellidos:'Pérez',    correo:'carlos.perez@mail.com', contrasena:'carlos123', estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
-    { numero_identificacion:'1000000003', nombre:'Juan David',    apellidos:'Gómez',    correo:'juan.gomez@mail.com',  contrasena:'juan123',   estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
-    { numero_identificacion:'1000000004', nombre:'Laura Sofía',   apellidos:'Martínez', correo:'laura.m@mail.com',     contrasena:'laura123',  estado:'SUSPENDIDO', tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
-    { numero_identificacion:'1000000005', nombre:'Diego Fernando',apellidos:'Ríos',     correo:'diego.rios@mail.com',  contrasena:'diego123',  estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
-    { numero_identificacion:'1000000006', nombre:'Valentina',     apellidos:'Torres',   correo:'valen.torres@mail.com',contrasena:'valen123',  estado:'INACTIVO',   tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
-    { numero_identificacion:'1000000007', nombre:'Andrés Felipe', apellidos:'Navarro',  correo:'andres.nav@mail.com',  contrasena:'andres123', estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1001000001', nombre:'admin', apellidos:'Administrador', correo:'admin@gymbrot.com', contrasena:'admin',      estado:'ACTIVO',     tipo_usuario:'ADMINISTRADOR', rol:'SUPERADMIN' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'2001000001', nombre:'Diego', apellidos:'Morales',       correo:'diego.morales@gymbrot.com', contrasena:'instructor', estado:'ACTIVO',     tipo_usuario:'INSTRUCTOR',   rol:'INSTRUCTOR' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000001', nombre:'Ana María',    apellidos:'Ruiz',     correo:'ana.ruiz@mail.com',   contrasena:'ana123',    estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000002', nombre:'Carlos Andrés', apellidos:'Pérez',    correo:'carlos.perez@mail.com', contrasena:'carlos123', estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000003', nombre:'Juan David',    apellidos:'Gómez',    correo:'juan.gomez@mail.com',  contrasena:'juan123',   estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000004', nombre:'Laura Sofía',   apellidos:'Martínez', correo:'laura.m@mail.com',     contrasena:'laura123',  estado:'SUSPENDIDO', tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000005', nombre:'Diego Fernando',apellidos:'Ríos',     correo:'diego.rios@mail.com',  contrasena:'diego123',  estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000006', nombre:'Valentina',     apellidos:'Torres',   correo:'valen.torres@mail.com',contrasena:'valen123',  estado:'INACTIVO',   tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000007', nombre:'Andrés Felipe', apellidos:'Navarro',  correo:'andres.nav@mail.com',  contrasena:'andres123', estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    // --- gym-titan ---
+    { gimnasio_id:'gym-titan', numero_identificacion:'1001000002', nombre:'titan', apellidos:'Administrador', correo:'admin@titanfitness.com', contrasena:'titan', estado:'ACTIVO', tipo_usuario:'ADMINISTRADOR', rol:'ADMINISTRADOR' },
+    { gimnasio_id:'gym-titan', numero_identificacion:'1000000001', nombre:'Ana María', apellidos:'Ruiz', correo:'ana.ruiz@mail.com', contrasena:'anatitan', estado:'ACTIVO', tipo_usuario:'CLIENTE', rol:'CLIENTE' },
+    { gimnasio_id:'gym-titan', numero_identificacion:'1000000101', nombre:'Sebastián', apellidos:'Castro', correo:'sebas.castro@mail.com', contrasena:'sebas123', estado:'ACTIVO', tipo_usuario:'CLIENTE', rol:'CLIENTE' },
   ],
 
   clientes: [ 
-    { numero_identificacion:'1000000001', tipo_identificacion:'CC', nombre:'Ana María',    apellidos:'Ruiz',     telefono:'3001112233', correo:'ana.ruiz@mail.com',   direccion:'Cra 15 #23-40', fecha_nacimiento:'1995-03-12', estado:'ACTIVO',     fecha_registro:inicioDe(serieAna) },
-    { numero_identificacion:'1000000002', tipo_identificacion:'CC', nombre:'Carlos Andrés', apellidos:'Pérez',    telefono:'3012223344', correo:'carlos.perez@mail.com',direccion:'Cl 20 #5-16',   fecha_nacimiento:'1988-11-02', estado:'ACTIVO',     fecha_registro:inicioDe(serieCarlos) },
-    { numero_identificacion:'1000000003', tipo_identificacion:'TI', nombre:'Juan David',    apellidos:'Gómez',    telefono:'3023334455', correo:'juan.gomez@mail.com',  direccion:'Cra 9 #10-11',  fecha_nacimiento:'2009-06-25', estado:'ACTIVO',     fecha_registro:inicioDe(serieJuan) },
-    { numero_identificacion:'1000000004', tipo_identificacion:'CC', nombre:'Laura Sofía',   apellidos:'Martínez', telefono:'3034445566', correo:'laura.m@mail.com',     direccion:'Cl 8 #1-90',    fecha_nacimiento:'1999-09-14', estado:'SUSPENDIDO', fecha_registro:dia(180) },
-    { numero_identificacion:'1000000005', tipo_identificacion:'CE', nombre:'Diego Fernando',apellidos:'Ríos',     telefono:'3045556677', correo:'diego.rios@mail.com',  direccion:'Av 4 #12-30',   fecha_nacimiento:'1965-02-20', estado:'ACTIVO',     fecha_registro:pagoAnualDiego.fecha_pago },
-    { numero_identificacion:'1000000006', tipo_identificacion:'CC', nombre:'Valentina',     apellidos:'Torres',   telefono:'3056667788', correo:'valen.torres@mail.com',direccion:'Cra 19 #4-5',   fecha_nacimiento:'2001-12-01', estado:'INACTIVO',   fecha_registro:dia(55) },
-    { numero_identificacion:'1000000007', tipo_identificacion:'CC', nombre:'Andrés Felipe', apellidos:'Navarro',  telefono:'3067778899', correo:'andres.nav@mail.com',  direccion:'Cl 44 #7-2',    fecha_nacimiento:'1992-07-19', estado:'ACTIVO',     fecha_registro:inicioDe(serieAndres) }
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000001', tipo_identificacion:'CC', nombre:'Ana María',    apellidos:'Ruiz',     telefono:'3001112233', correo:'ana.ruiz@mail.com',   direccion:'Cra 15 #23-40', fecha_nacimiento:'1995-03-12', estado:'ACTIVO',     fecha_registro:inicioDe(serieAna) },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000002', tipo_identificacion:'CC', nombre:'Carlos Andrés', apellidos:'Pérez',    telefono:'3012223344', correo:'carlos.perez@mail.com',direccion:'Cl 20 #5-16',   fecha_nacimiento:'1988-11-02', estado:'ACTIVO',     fecha_registro:inicioDe(serieCarlos) },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000003', tipo_identificacion:'TI', nombre:'Juan David',    apellidos:'Gómez',    telefono:'3023334455', correo:'juan.gomez@mail.com',  direccion:'Cra 9 #10-11',  fecha_nacimiento:'2009-06-25', estado:'ACTIVO',     fecha_registro:inicioDe(serieJuan) },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000004', tipo_identificacion:'CC', nombre:'Laura Sofía',   apellidos:'Martínez', telefono:'3034445566', correo:'laura.m@mail.com',     direccion:'Cl 8 #1-90',    fecha_nacimiento:'1999-09-14', estado:'SUSPENDIDO', fecha_registro:dia(180) },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000005', tipo_identificacion:'CE', nombre:'Diego Fernando',apellidos:'Ríos',     telefono:'3045556677', correo:'diego.rios@mail.com',  direccion:'Av 4 #12-30',   fecha_nacimiento:'1965-02-20', estado:'ACTIVO',     fecha_registro:pagoAnualDiego.fecha_pago },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000006', tipo_identificacion:'CC', nombre:'Valentina',     apellidos:'Torres',   telefono:'3056667788', correo:'valen.torres@mail.com',direccion:'Cra 19 #4-5',   fecha_nacimiento:'2001-12-01', estado:'INACTIVO',   fecha_registro:dia(55) },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000007', tipo_identificacion:'CC', nombre:'Andrés Felipe', apellidos:'Navarro',  telefono:'3067778899', correo:'andres.nav@mail.com',  direccion:'Cl 44 #7-2',    fecha_nacimiento:'1992-07-19', estado:'ACTIVO',     fecha_registro:inicioDe(serieAndres) },
+    // --- gym-titan: Ana (1000000001) repite cedula con gym-centro, con otro telefono y direccion ---
+    { gimnasio_id:'gym-titan', numero_identificacion:'1000000001', tipo_identificacion:'CC', nombre:'Ana María', apellidos:'Ruiz', telefono:'3009998877', correo:'ana.ruiz@mail.com', direccion:'Cl 50 #30-12', fecha_nacimiento:'1995-03-12', estado:'ACTIVO', fecha_registro:dia(20) },
+    { gimnasio_id:'gym-titan', numero_identificacion:'1000000101', tipo_identificacion:'CC', nombre:'Sebastián', apellidos:'Castro', telefono:'3151112233', correo:'sebas.castro@mail.com', direccion:'Cra 7 #18-40', fecha_nacimiento:'1997-05-08', estado:'ACTIVO', fecha_registro:dia(40) },
+    { gimnasio_id:'gym-titan', numero_identificacion:'1000000102', tipo_identificacion:'CC', nombre:'Mariana', apellidos:'López', telefono:'3162223344', correo:'mariana.lopez@mail.com', direccion:'Cl 12 #3-25', fecha_nacimiento:'2000-10-30', estado:'ACTIVO', fecha_registro:dia(10) },
    ],
 
   // Catalogo de planes. Los tres precios por modalidad son los que lee
@@ -430,7 +449,9 @@ const SEED: Seed = {
 // v7 es la union con P3/P4: instruye el seed de instructores, rutinas,
 // progreso y citas a quien venga con el v4 de esas ramas, porque sin el bump
 // las colecciones nuevas quedarian vacias en localStorage.
-const SEED_VERSION = "7";
+// v8 agrega gimnasios y gimnasio_id en usuarios/clientes (multitenant), con un
+// segundo gimnasio que solapa datos para que una fuga de aislamiento se note.
+const SEED_VERSION = "8";
 const CLAVE_VERSION = "gymbrot_seed_version";
 const CLAVE_LECTOR = "gymbrot_lector_conectado";
 
@@ -445,6 +466,33 @@ function sembrarSiHaceFalta(): void {
 }
 
 sembrarSiHaceFalta();
+
+// --- Multitenant ---------------------------------------------------------
+// Misma clave que CLAVE en lib/auth.ts. Se lee directo de localStorage y no
+// con auth.current() porque auth.ts importa api: importarlo aqui armaria un
+// ciclo db <-> auth.
+const CLAVE_SESION = "gymbrot_session";
+
+/* Gimnasio de la sesion abierta, o null si no hay sesion valida. */
+function gimnasioActivo(): string | null {
+  const raw = localStorage.getItem(CLAVE_SESION);
+  if (!raw) return null;
+  try {
+    const sesion = JSON.parse(raw) as { gimnasio_id?: unknown };
+    return typeof sesion.gimnasio_id === "string" ? sesion.gimnasio_id : null;
+  } catch {
+    return null;
+  }
+}
+
+/* Para escribir. Las vistas estan detras del login (Layout.tsx), asi que
+   escribir datos de un gimnasio sin sesion es un error de programacion:
+   falla fuerte en vez de guardar una fila huerfana. */
+function gimnasioParaEscribir(): string {
+  const gym = gimnasioActivo();
+  if (!gym) throw new Error("No hay gimnasio activo: inicia sesion de nuevo.");
+  return gym;
+}
 
 const db = {
   _key(col: string) {
@@ -463,6 +511,27 @@ const db = {
     // db.write es el unico punto de escritura del mock: avisar aqui hace que
     // cualquier vista suscrita se refresque sin que tenga que recordarlo.
     notificarCambioDeDatos();
+  },
+
+  /* Solo las filas del gimnasio activo. Es el unico punto de filtro del
+     multitenant (DECISIONES.md): las colecciones por gimnasio se leen siempre
+     por aqui, y cualquier .find() por cedula va DESPUES de este filtro (D3).
+     Sin sesion devuelve vacio: mejor una pantalla sin datos que una con los
+     de todos los gimnasios. */
+  readTenant<T extends { gimnasio_id: string }>(col: string): T[] {
+    const gym = gimnasioActivo();
+    if (!gym) return [];
+    return this.read<T>(col).filter((r) => r.gimnasio_id === gym);
+  },
+
+  /* Pareja obligatoria de readTenant: guarda las filas del gimnasio activo
+     sin tocar las de los demas. Usar db.write() con un arreglo que salio de
+     readTenant borraria a los otros gimnasios. Ademas sella gimnasio_id en
+     cada fila, asi un update no puede mover un registro a otro gimnasio. */
+  writeTenant<T extends { gimnasio_id: string }>(col: string, filas: T[]): void {
+    const gym = gimnasioParaEscribir();
+    const otros = this.read<T>(col).filter((r) => r.gimnasio_id !== gym);
+    this.write(col, otros.concat(filas.map((r) => ({ ...r, gimnasio_id: gym }))));
   },
 };
 
@@ -509,7 +578,7 @@ export interface IntentoAcceso {
 function claveRechazada(id: string, contrasena: string | undefined): string | null {
   const clave = (contrasena ?? "").trim();
   if (!clave) return "Ingresa la contraseña del cliente.";
-  const usuario = db.read<Usuario>("usuarios").find((u) => u.numero_identificacion === id);
+  const usuario = db.readTenant<Usuario>("usuarios").find((u) => u.numero_identificacion === id);
   // Sin fila no hay con que comparar: reportarlo como clave mala dejaria al
   // operador reintentando algo que nunca va a funcionar.
   if (!usuario) return "Este cliente no tiene código de acceso. Asignale uno para usar el modo manual.";
@@ -524,7 +593,7 @@ function clienteAceptado(
   intento: IntentoAcceso,
 ): { error: string } | { cliente: Cliente } {
   const id = intento.id_cliente.trim();
-  const cliente = db.read<Cliente>("clientes").find((c) => c.numero_identificacion === id);
+  const cliente = db.readTenant<Cliente>("clientes").find((c) => c.numero_identificacion === id);
   if (!cliente) return { error: "No se encontró un cliente con ese número de identificación" };
 
   // El estado va antes que la clave: no tiene sentido pedirle la contraseña a
@@ -576,7 +645,7 @@ const DIAS: DiaSemana[] = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", 
 function validarReferencias(idInstructor: string, idCliente: string): string | null {
   if (!db.read<Instructor>("instructores").some((i) => i.numero_identificacion === idInstructor))
     return "El instructor no existe";
-  if (!db.read<Cliente>("clientes").some((c) => c.numero_identificacion === idCliente))
+  if (!db.readTenant<Cliente>("clientes").some((c) => c.numero_identificacion === idCliente))
     return "El cliente no existe";
   return null;
 }
@@ -605,19 +674,40 @@ export const api = {
     return new Promise<void>((res) => setTimeout(res, ms));
   },
 
+  // [multitenant] Catalogo de la plataforma: no pasa por readTenant porque
+  // es la tabla que define a los tenants.
+  gimnasios: {
+    async list(): Promise<Gimnasio[]> {
+      await api._delay();
+      return db.read<Gimnasio>("gimnasios");
+    },
+
+    // El de la sesion abierta, para mostrar su nombre (ej. en el Topbar).
+    async activo(): Promise<Gimnasio | null> {
+      await api._delay();
+      const gym = gimnasioActivo();
+      return db.read<Gimnasio>("gimnasios").find((g) => g.gimnasio_id === gym) ?? null;
+    },
+  },
+
   usuarios: {
-    /* Todas las filas, para que Clientes sepa de un vistazo quien tiene ya
-       codigo de acceso. byIdentificacion resuelve un solo cliente y cuesta un
-       delay por fila: en una tabla de siete socios serian siete idas y vueltas
-       para lo que es un conjunto de identificaciones. */
+    /* Todas las filas del gimnasio, para que Clientes sepa de un vistazo quien
+       tiene ya codigo de acceso. byIdentificacion resuelve un solo cliente y
+       cuesta un delay por fila: en una tabla de siete socios serian siete
+       idas y vueltas para lo que es un conjunto de identificaciones. */
     async list(): Promise<Usuario[]> {
       await api._delay();
-      return db.read<Usuario>("usuarios");
+      return db.readTenant<Usuario>("usuarios");
     },
 
     // El legacy busca por nombre o correo en el mismo campo
     // (UsuarioDAO.buscarPorNombreOCorreo, loginController.java:153), asi que
     // 'admin' y 'admin@gymbrot.com' resuelven al mismo usuario.
+    //
+    // Global a proposito, la unica lectura de usuarios sin readTenant: al
+    // iniciar sesion todavia no hay gimnasio activo, y es el usuario que se
+    // encuentra aqui el que decide a cual se entra. Por eso el nombre y el
+    // correo de quien inicia sesion deben ser unicos en toda la plataforma.
     async buscarPorNombreOCorreo(texto: string): Promise<Usuario | null> {
       await api._delay();
       const clave = texto.trim().toLowerCase();
@@ -636,7 +726,7 @@ export const api = {
       await api._delay();
       const clave = id.trim();
       if (!clave) return null;
-      return db.read<Usuario>("usuarios").find((u) => u.numero_identificacion === clave) ?? null;
+      return db.readTenant<Usuario>("usuarios").find((u) => u.numero_identificacion === clave) ?? null;
     },
 
     /* Crea o actualiza la clave de un cliente. Va por `usuarios`, no por
@@ -649,16 +739,17 @@ export const api = {
       const limpia = contrasena.trim();
       if (!limpia) return { ok: false, mensaje: "La contraseña no puede quedar vacía" };
 
-      const cliente = db.read<Cliente>("clientes").find((c) => c.numero_identificacion === id);
+      const cliente = db.readTenant<Cliente>("clientes").find((c) => c.numero_identificacion === id);
       if (!cliente) return { ok: false, mensaje: "El cliente no existe" };
 
-      const usuarios = db.read<Usuario>("usuarios");
+      const usuarios = db.readTenant<Usuario>("usuarios");
       let usuario = usuarios.find((u) => u.numero_identificacion === id);
 
       if (usuario) {
         usuario.contrasena = limpia;
       } else {
         usuario = {
+          gimnasio_id: cliente.gimnasio_id,
           numero_identificacion: id,
           nombre: cliente.nombre,
           apellidos: cliente.apellidos,
@@ -671,7 +762,7 @@ export const api = {
         usuarios.push(usuario);
       }
 
-      db.write("usuarios", usuarios);
+      db.writeTenant("usuarios", usuarios);
       return { ok: true, mensaje: "Contraseña guardada", data: usuario };
     },
 
@@ -681,7 +772,7 @@ export const api = {
        volarian a contar reglas distintas. */
     async setEstado(id: string, estado: Usuario["estado"]): Promise<ApiResp<Usuario>> {
       await api._delay();
-      const usuarios = db.read<Usuario>("usuarios");
+      const usuarios = db.readTenant<Usuario>("usuarios");
       const u = usuarios.find((x) => x.numero_identificacion === id);
       // Un cliente todavia sin fila en `usuarios` no tiene nada que espejar:
       // devolver error dejaria el alta como fallida por un dato cosmético. Y
@@ -689,7 +780,7 @@ export const api = {
       // "contraseña incorrecta" en vez de "no tiene código de acceso".
       if (!u) return { ok: true, mensaje: "Cliente sin usuario: nada que sincronizar" };
       u.estado = estado;
-      db.write("usuarios", usuarios);
+      db.writeTenant("usuarios", usuarios);
       return { ok: true, mensaje: "Estado actualizado", data: u };
     },
   },
@@ -711,45 +802,55 @@ export const api = {
     },
   },
 
+  /* [multitenant] Implementacion de referencia: toda lectura va por
+     db.readTenant y toda escritura por db.writeTenant. Las demas entidades
+     por gimnasio copian este patron. */
   clientes: {
     async list(): Promise<Cliente[]> {
       await api._delay();
-      return db.read<Cliente>("clientes");
+      return db.readTenant<Cliente>("clientes");
     },
 
     async get(id: string): Promise<Cliente | null> {
       await api._delay();
-      return db.read<Cliente>("clientes").find((c) => c.numero_identificacion === id) ?? null;
+      return db.readTenant<Cliente>("clientes").find((c) => c.numero_identificacion === id) ?? null;
     },
 
-    async create(data: Omit<Cliente, "estado" | "fecha_registro">): Promise<ApiResp<Cliente>> {
+    // La cedula es unica dentro de cada gimnasio (D3): la misma persona puede
+    // estar registrada en otro gimnasio sin que eso cuente como duplicado.
+    async create(data: ClienteNuevo): Promise<ApiResp<Cliente>> {
       await api._delay();
-      const arr = db.read<Cliente>("clientes");
+      const arr = db.readTenant<Cliente>("clientes");
       if (arr.some((c) => c.numero_identificacion === data.numero_identificacion))
-        return { ok: false, mensaje: "Ya existe un cliente con esa identificación" };
-      const nuevo: Cliente = { ...data, estado: "ACTIVO", fecha_registro: utils.isoDate() };
+        return { ok: false, mensaje: "Ya existe un cliente con esa identificación en este gimnasio" };
+      const nuevo: Cliente = {
+        ...data,
+        gimnasio_id: gimnasioParaEscribir(),
+        estado: "ACTIVO",
+        fecha_registro: utils.isoDate(),
+      };
       arr.push(nuevo);
-      db.write("clientes", arr);
+      db.writeTenant("clientes", arr);
       return { ok: true, mensaje: "Cliente registrado", data: nuevo };
     },
 
-    async update(id: string, data: Partial<Cliente>): Promise<ApiResp<Cliente>> {
+    async update(id: string, data: Partial<ClienteNuevo>): Promise<ApiResp<Cliente>> {
       await api._delay();
-      const arr = db.read<Cliente>("clientes");
+      const arr = db.readTenant<Cliente>("clientes");
       const c = arr.find((x) => x.numero_identificacion === id);
       if (!c) return { ok: false, mensaje: "Cliente no encontrado" };
       Object.assign(c, data);
-      db.write("clientes", arr);
+      db.writeTenant("clientes", arr);
       return { ok: true, mensaje: "Cliente actualizado", data: c };
     },
 
     async setEstado(id: string, estado: Cliente["estado"]): Promise<ApiResp<Cliente>> {
       await api._delay();
-      const arr = db.read<Cliente>("clientes");
+      const arr = db.readTenant<Cliente>("clientes");
       const c = arr.find((x) => x.numero_identificacion === id);
       if (!c) return { ok: false, mensaje: "Cliente no encontrado" };
       c.estado = estado;
-      db.write("clientes", arr);
+      db.writeTenant("clientes", arr);
       await api.usuarios.setEstado(id, estado); // ← espejo: el estado del usuario sigue al del cliente
       return { ok: true, mensaje: "Estado actualizado", data: c };
     },
@@ -837,7 +938,7 @@ export const api = {
         return { ok: false, mensaje: "El monto debe ser mayor que cero" };
       if (!input.metodo_pago) return { ok: false, mensaje: "Selecciona un metodo de pago" };
 
-      const clientes = db.read<Cliente>("clientes");
+      const clientes = db.readTenant<Cliente>("clientes");
       const cliente = clientes.find((c) => c.numero_identificacion === idCliente);
       if (!cliente) return { ok: false, mensaje: "El cliente no existe" };
       if (cliente.estado !== "ACTIVO")
@@ -998,7 +1099,7 @@ export const api = {
     async nuevosClientes(cantidadMeses = 12): Promise<{ mes: string; cantidad: number }[]> {
       await api._delay();
       const porMes = agruparPorMes(
-        db.read<Cliente>("clientes"),
+        db.readTenant<Cliente>("clientes"),
         (c) => c.fecha_registro,
         () => 1,
         cantidadMeses,
@@ -1014,7 +1115,7 @@ export const api = {
       await api._delay();
       const membresias = db.read<Membresia>("membresias");
       const porId = new Map(membresias.map((m) => [m.id_membresia, m]));
-      const clientes = new Map(db.read<Cliente>("clientes").map((c) => [c.numero_identificacion, c]));
+      const clientes = new Map(db.readTenant<Cliente>("clientes").map((c) => [c.numero_identificacion, c]));
       const hoy = utils.isoDate();
 
       return db
@@ -1115,7 +1216,7 @@ export const api = {
       await api._delay();
 
       const id = datos.id_cliente.trim();
-      const cliente = db.read<Cliente>("clientes").find((c) => c.numero_identificacion === id);
+      const cliente = db.readTenant<Cliente>("clientes").find((c) => c.numero_identificacion === id);
       if (!cliente) return { ok: false, mensaje: "No se encontró un cliente con ese número de identificación" };
 
       if (datos.metodo === "CONTRASENA") {

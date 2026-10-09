@@ -1,4 +1,14 @@
+/* GIMNASIOS: el tenant. Cada fila de las tablas por gimnasio lleva su
+   gimnasio_id (DECISIONES.md, D1). Hoy el filtro se simula en api.ts; en
+   produccion lo hace cumplir RLS en la base. */
+export interface Gimnasio {
+  gimnasio_id: string;
+  nombre: string;
+  estado: 'ACTIVO' | 'INACTIVO';
+}
+
 export interface Cliente {
+  gimnasio_id: Gimnasio['gimnasio_id'];
   numero_identificacion: string;
   tipo_identificacion: 'CC' | 'TI' | 'CE' | 'PP';
   nombre: string;
@@ -11,12 +21,19 @@ export interface Cliente {
   fecha_registro: string;
 }
 
+/* Lo que manda la vista al crear. gimnasio_id lo inyecta api.ts desde la
+   sesion (las vistas no lo conocen); estado y fecha_registro los pone
+   api.clientes.create. */
+export type ClienteNuevo = Omit<Cliente, 'gimnasio_id' | 'estado' | 'fecha_registro'>;
+
 /* USUARIOS del legacy (GYMBROT_COMPLETO.sql). El campo contrasena guarda la
    clave en texto plano solo porque hoy no hay backend que la hashee; en la
    columna real se llama contrasena_hash y va con BCrypt (AuthService.java:29).
    Los socios tambien son usuarios: su contrasena es la que valida el acceso
-   con metodo CONTRASENA. */
+   con metodo CONTRASENA. Cada usuario pertenece a un solo gimnasio
+   (D3: la cedula es unica dentro de cada gimnasio). */
 export interface Usuario {
+  gimnasio_id: Gimnasio['gimnasio_id'];
   numero_identificacion: string;
   nombre: string;
   apellidos: string;
@@ -113,13 +130,15 @@ export interface ApiResp<T = unknown> {
   data?: T;
 }
 
-/* Sesion del mock en localStorage. Sin tenantId: el vanilla lo llevaba,
-   pero el modelo de React es de un solo gimnasio.
+/* Sesion del mock en localStorage. Lleva el gimnasio_id que el login copia
+   del Usuario: es el gimnasio activo, y la capa db lo lee para filtrar cada
+   lectura. Las vistas no lo usan.
 
    Guarda tipo_usuario desde ya porque el login solo admite ADMINISTRADOR
    (loginController.java:156), pero viene preparado para que cada rol entre
    a su propio dashboard. */
 export interface Sesion {
+  gimnasio_id: Gimnasio['gimnasio_id'];
   numero_identificacion: string;
   usuario: string;
   nombre: string;

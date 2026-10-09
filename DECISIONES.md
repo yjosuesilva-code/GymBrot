@@ -57,13 +57,18 @@ Si en el futuro se necesita identidad compartida entre gimnasios, se reabre aqu�
 
 - [ ] Cómo identifica el login a qué gimnasio pertenece alguien: por usuario /
       por código de gimnasio / por subdominio. *(Recomendado: por usuario.)*
+      **Implementado por usuario de forma provisional** (`b347270`): el login
+      busca al usuario en toda la plataforma y la sesión hereda su
+      `gimnasio_id`. Consecuencia: el nombre y el correo de quien inicia sesión
+      deben ser **únicos en toda la plataforma**. Falta confirmarlo en equipo.
 - [ ] Qué catálogos son globales (compartidos) y cuáles por gimnasio:
       especialidades, ejercicios base.
 - [ ] Roles definitivos (superadmin, administrador, instructor, cliente) —
       validar contra las historias de usuario.
 - [ ] Si el superadmin de plataforma entra en esta entrega o después.
 - [ ] Unicidad por gimnasio: revisar cada validación de duplicados en `api.ts`
-      (hoy son globales; deben ser por gimnasio).
+      (hoy son globales; deben ser por gimnasio). *Hecho en `api.clientes`;
+      falta en el resto de entidades.*
 
 ---
 
@@ -72,8 +77,18 @@ Si en el futuro se necesita identidad compartida entre gimnasios, se reabre aqu�
 - **Un solo punto de filtro:** la inyección de `gimnasio_id` vive en la capa
   `db`/`api.ts`, nunca en las vistas.
 - Las vistas **no conocen** `gimnasio_id`.
+- **Patrón en `api.ts`:** leer con `db.readTenant<T>(col)` y escribir con
+  `db.writeTenant(col, filas)`. Nunca pasar a `db.write()` un arreglo que salió
+  de `readTenant`: borraría las filas de los otros gimnasios. Referencia:
+  `api.clientes`.
+- Los ids numéricos (`id_cita`, `id_pago`...) se calculan con `db.read`
+  (tabla completa), no con `readTenant`: son globales como un `SERIAL`, así
+  dos gimnasios nunca repiten id.
+- Los tipos "Nuevo" de cada entidad omiten `gimnasio_id` (ej. `ClienteNuevo`):
+  lo pone `api.ts`, no la vista.
 - El seed debe tener **al menos 2 gimnasios** (con datos que se solapen: misma
   cédula, mismo nombre de plan) para que una fuga de aislamiento se vea al instante.
+  *(Hecho: `gym-centro` y `gym-titan`; se entra con `admin` o `titan`.)*
 - **Pendiente de acordar:** un `.prettierrc` único en el repo antes de arrancar el
   refactor, para evitar que el format-on-save de cada quien genere diffs enormes en
   archivos compartidos (`api.ts`, `types/index.ts`).

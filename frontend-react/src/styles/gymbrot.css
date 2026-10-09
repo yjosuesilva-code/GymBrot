@@ -475,7 +475,123 @@ body {
 
 
 /* ===== [P2] Estilos propios · clientes, cliente-detalle, progreso, citas ===== */
-/* (por ahora vacia: se reutilizaron los componentes de la base — asi debe ser) */
+/* Las paginas de clientes reutilizan los componentes de la base. Lo de abajo
+   es de la plataforma (pagina del software y registro de gimnasios), que no
+   tiene sidebar ni topbar y por eso necesita su propio esqueleto. */
+
+/* ---- Plataforma: pagina del software (Landing.tsx) ---- */
+.land { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+.land a.btn-neon, .land a.btn-dark, .reg-card .btn-neon, .reg-card .btn-dark {
+  display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
+}
+.land-btn-lg { padding: 12px 22px; font-size: 14px; }
+.land-link { color: var(--neon); text-decoration: none; }
+.land-link:hover { text-decoration: underline; color: var(--neon); }
+
+.land-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; }
+.land-logo { width: 120px; height: auto; }
+.land-nav { display: flex; align-items: center; gap: 20px; }
+.land-nav > a:not(.btn-neon):not(.btn-dark) { color: var(--nav-text); text-decoration: none; font-family: var(--f-title); font-size: 14px; }
+.land-nav > a:not(.btn-neon):not(.btn-dark):hover { color: #fff; }
+
+.land-hero { text-align: center; padding: 72px 0 56px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.land-hero h1 { font-family: var(--f-title); font-weight: 800; font-size: 48px; line-height: 1.1; max-width: 760px; margin: 0; }
+.land-hero p { color: var(--nav-text); font-size: 17px; max-width: 620px; margin: 0; }
+.land-cta { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+
+.land-section { padding: 48px 0; scroll-margin-top: 16px; }
+.land-h2 { font-family: var(--f-title); font-weight: 700; font-size: 30px; text-align: center; margin: 0 0 8px; }
+.land-sub { color: var(--muted); text-align: center; margin: 0 0 28px; }
+.land-section > .land-h2 + .land-grid, .land-section > .land-h2 + .land-pasos { margin-top: 28px; }
+
+.land-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.land-feature i { font-size: 26px; color: var(--neon); }
+.land-feature h3 { font-family: var(--f-title); font-size: 17px; font-weight: 600; margin: 12px 0 6px; }
+.land-feature p { color: var(--nav-text); font-size: 14px; margin: 0; }
+
+/* Planes y pasos van siempre en 3 columnas o en 1: con auto-fit quedaban 2+1
+   en tablet y la tercera tarjeta se veia descolgada. */
+.land-planes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: stretch; }
+.land-plan { position: relative; display: flex; flex-direction: column; gap: 10px; }
+.land-plan.destacado { border-color: var(--neon); box-shadow: 0 0 0 1px var(--neon); }
+.land-plan-tag { position: absolute; top: -12px; left: 24px; background: var(--neon); color: #000; font-family: var(--f-label); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; padding: 4px 10px; border-radius: 20px; }
+.land-plan h3 { font-family: var(--f-title); font-size: 20px; font-weight: 700; margin: 0; }
+.land-precio { font-family: var(--f-title); font-size: clamp(26px, 3vw, 34px); font-weight: 800; color: #fff; display: flex; flex-wrap: wrap; align-items: baseline; }
+.land-precio span { font-size: 14px; font-weight: 500; color: var(--muted); margin-left: 4px; }
+.land-limite { color: var(--accent); font-size: 13px; margin: 0; }
+.land-plan ul { list-style: none; padding: 0; margin: 4px 0 12px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.land-plan li { color: var(--text-table); font-size: 14px; display: flex; gap: 8px; }
+.land-plan li i { color: var(--neon); }
+
+.land-pasos { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.land-pasos li { display: flex; gap: 14px; align-items: flex-start; }
+.land-pasos h3 { font-family: var(--f-title); font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+.land-pasos p { color: var(--nav-text); font-size: 14px; margin: 0; }
+
+.land-footer { border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; text-align: center; padding: 24px 0 32px; margin-top: 24px; }
+
+/* ---- Plataforma: registro de un gimnasio (Registro.tsx) ---- */
+.reg-wrap { min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; }
+.reg-card { width: 100%; max-width: 640px; display: flex; flex-direction: column; gap: 16px; }
+.reg-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
+.reg-logo { width: 96px; height: auto; }
+
+.reg-pasos { list-style: none; padding: 0; margin: 0; display: flex; gap: 8px; }
+.reg-paso { flex: 1; display: flex; align-items: center; gap: 8px; color: var(--muted); font-family: var(--f-title); font-size: 13px; padding-bottom: 8px; border-bottom: 2px solid var(--border-btn); }
+.reg-paso > span { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--bg-input); color: var(--nav-text); font-size: 12px; font-weight: 700; }
+.reg-paso.activo { color: #fff; border-color: var(--neon); }
+.reg-paso.activo > span { background: var(--neon); color: #000; }
+.reg-paso.hecho { color: var(--nav-text); border-color: rgba(212,255,0,.35); }
+.reg-paso.hecho > span { background: rgba(212,255,0,.15); color: var(--neon); }
+
+.reg-opciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.reg-opcion { background: var(--bg-input); border: 1px solid var(--border-btn); border-radius: var(--radius-sm); color: #fff; padding: 14px; text-align: left; display: flex; flex-direction: column; gap: 4px; cursor: pointer; font-family: var(--f-body); }
+.reg-opcion:hover { border-color: var(--nav-text); }
+.reg-opcion.sel { border-color: var(--neon); box-shadow: 0 0 0 1px var(--neon); }
+.reg-opcion:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.reg-opcion:disabled { opacity: .6; cursor: not-allowed; }
+.reg-opcion-nombre { font-family: var(--f-title); font-weight: 700; font-size: 16px; }
+.reg-opcion-precio { color: var(--neon); font-family: var(--f-title); font-weight: 600; }
+
+.reg-fieldset { border: 0; padding: 0; margin: 0 0 16px; }
+.reg-fieldset legend { font-family: var(--f-title); font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 12px; }
+.reg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.reg-col-2 { grid-column: 1 / -1; }
+
+.reg-resumen { margin: 0; display: grid; gap: 8px; background: var(--bg-input); border-radius: var(--radius-sm); padding: 14px 16px; }
+.reg-resumen > div { display: flex; justify-content: space-between; gap: 12px; }
+.reg-resumen dt { color: var(--muted); font-weight: 400; font-size: 13px; }
+.reg-resumen dd { margin: 0; color: #fff; font-size: 14px; text-align: right; overflow-wrap: anywhere; }
+.reg-total { font-family: var(--f-title); font-weight: 800; color: var(--neon) !important; font-size: 18px !important; }
+.reg-metodos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: -10px; }
+.reg-metodo { flex-direction: row; align-items: center; justify-content: center; gap: 8px; font-family: var(--f-title); font-weight: 600; }
+.reg-aviso { color: var(--muted); font-size: 12px; margin: 0; }
+
+.reg-acciones { display: flex; justify-content: flex-end; gap: 12px; }
+.reg-acciones button:disabled { opacity: .6; cursor: not-allowed; }
+
+.reg-ok { align-items: center; text-align: center; margin-top: 10vh; }
+.reg-ok > i { font-size: 56px; color: var(--neon); }
+.reg-ok h2 { font-family: var(--f-title); font-size: 24px; font-weight: 700; margin: 0; }
+.reg-ok p { margin: 0; color: var(--nav-text); }
+
+@media (max-width: 720px) {
+  .land-planes, .land-pasos { grid-template-columns: 1fr; max-width: 440px; margin-left: auto; margin-right: auto; }
+}
+
+@media (max-width: 768px) {
+  .land { padding: 0 16px; }
+  .land-hero { padding: 40px 0 32px; }
+  .land-hero h1 { font-size: 32px; }
+  .land-hero p { font-size: 15px; }
+  .land-h2 { font-size: 24px; }
+  .land-section { padding: 32px 0; }
+  .land-nav { gap: 12px; }
+  .reg-grid { grid-template-columns: 1fr; }
+  .reg-metodos { grid-template-columns: 1fr; }
+  .reg-acciones { flex-direction: column-reverse; }
+  .reg-acciones button { width: 100%; }
+}
 
 
 /* ===== [P3] Estilos propios · instructores, instructor-detalle, rutinas ===== */

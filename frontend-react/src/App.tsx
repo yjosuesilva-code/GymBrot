@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import { Layout } from "./components/layout/Layout";
 import { Dashboard } from "./pages/Dashboard";
 import { Clientes } from "./pages/Clientes";
@@ -14,11 +14,15 @@ import { Ejercicios } from "./pages/Ejercicios";              // [P4]
 import { Membresias } from "./pages/Membresias";              // [P4]
 import { Progreso } from "./pages/Progreso";                  // [P2]
 import { Citas } from "./pages/Citas";                        // [P2]
+import { Landing } from "./pages/Landing";                    // [P2] plataforma
+import { Registro } from "./pages/Registro";                  // [P2] plataforma
 
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      {/* [P2] Plataforma: paginas publicas, sin sesion ni Layout */}
+      <Route path="/" element={<Landing />} />
+      <Route path="/registro" element={<Registro />} />
       <Route path="/login" element={<Login />} />
       <Route element={<Layout />}>
         <Route path="/dashboard" element={<Dashboard />} />

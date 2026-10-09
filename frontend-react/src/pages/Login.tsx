@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import * as auth from "../lib/auth";
 import { api } from "../data/api";
 
@@ -114,6 +114,11 @@ export function Login() {
         <button type="button" className="reader-toggle" onClick={alternarLector}>
           Simular lector {lectorConectado ? "desconectado" : "conectado"}
         </button>
+
+        {/* [P2] plataforma */}
+        <p className="login-hint">
+          <Link to="/" className="land-link">¿Tu gimnasio aún no usa GymBrot? Conoce los planes</Link>
+        </p>
       </form>
     </div>
   );

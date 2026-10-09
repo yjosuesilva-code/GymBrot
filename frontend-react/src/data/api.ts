@@ -3,6 +3,8 @@ import { membresiaVigente } from "../lib/membresias";
 import { notificarCambioDeDatos } from "../lib/datos";
 import type {
   Gimnasio, // [multitenant]
+  PlanSoftware, // [plataforma]
+  PagoSoftware, // [plataforma]
   Cliente,
   ClienteNuevo, // [multitenant]
   Membresia,
@@ -28,7 +30,9 @@ import type {
 } from "../types";
 
 interface Seed {
+  planesSoftware: PlanSoftware[];
   gimnasios: Gimnasio[];
+  pagosSoftware: PagoSoftware[];
   usuarios: Usuario[];
   clientes: Cliente[];
   planes: PlanMembresia[];
@@ -306,13 +310,27 @@ function finDe(serie: Pago[], diasExtra: number): string {
 }
 
 const SEED: Seed = {
+  // Lo que la plataforma vende a los gimnasios (pagina de planes y registro).
+  // max_clientes todavia no se hace cumplir: solo se muestra.
+  planesSoftware: [
+    { id_plan_software:'BASICO',  nombre:'Básico',  precio_mensual:99000,  max_clientes:100,  destacado:false,
+      incluye:['Clientes y membresías', 'Control de acceso con huella', 'Registro de pagos'] },
+    { id_plan_software:'PRO',     nombre:'Pro',     precio_mensual:189000, max_clientes:500,  destacado:true,
+      incluye:['Todo lo del plan Básico', 'Instructores, rutinas y citas', 'Progreso de los socios', 'Finanzas y reportes'] },
+    { id_plan_software:'PREMIUM', nombre:'Premium', precio_mensual:299000, max_clientes:null, destacado:false,
+      incluye:['Todo lo del plan Pro', 'Gymbrot AI', 'Soporte prioritario'] },
+  ],
+
   // Tenants de la plataforma. gym-titan se solapa a proposito con gym-centro
   // (misma cedula, datos distintos): si alguna pantalla deja pasar filas del
   // otro gimnasio, se nota al instante (DECISIONES.md, convenciones).
   gimnasios: [
-    { gimnasio_id:'gym-centro', nombre:'GymBrot Centro', estado:'ACTIVO' },
-    { gimnasio_id:'gym-titan',  nombre:'Titan Fitness',  estado:'ACTIVO' },
+    { gimnasio_id:'gym-centro', nombre:'GymBrot Centro', ciudad:'Valledupar', telefono:'6055700000', estado:'ACTIVO', plan_software:'PREMIUM', fecha_registro:dia(400), vence_suscripcion:dia(-20) },
+    { gimnasio_id:'gym-titan',  nombre:'Titan Fitness',  ciudad:'Valledupar', telefono:'6055711111', estado:'ACTIVO', plan_software:'BASICO',  fecha_registro:dia(25),  vence_suscripcion:dia(-5) },
   ],
+
+  // Pagos de suscripcion que hacen los gimnasios nuevos desde /registro.
+  pagosSoftware: [],
 
   // Personal con acceso al panel. El legacy exige tipo_usuario
   // 'ADMINISTRADOR' para iniciar sesion (loginController.java:156), asi que
@@ -472,7 +490,9 @@ const SEED: Seed = {
 // v9 lleva gimnasio_id a progreso y citas, con una medicion de la Ana de Titan.
 // v10 lo lleva a membresias, historial, pagos e ingresos, con una membresia y
 // un pago propios de la Ana de Titan.
-const SEED_VERSION = "10";
+// v11 agrega planesSoftware y pagosSoftware (pagina de planes y registro de
+// gimnasios) y los datos de suscripcion de cada gimnasio.
+const SEED_VERSION = "11";
 const CLAVE_VERSION = "gymbrot_seed_version";
 const CLAVE_LECTOR = "gymbrot_lector_conectado";
 
@@ -562,6 +582,38 @@ const db = {
     return this.read<T>(col).reduce((max, f) => Math.max(max, idDe(f)), 0) + 1;
   },
 };
+
+/* [plataforma] Lo que manda /registro al comprar el software. El
+   administrador entra con su correo: por nombre seria ambiguo, porque dos
+   personas pueden llamarse igual. */
+export interface RegistroGimnasio {
+  plan: PlanSoftware["id_plan_software"];
+  gimnasio: { nombre: string; ciudad: string; telefono: string };
+  admin: {
+    numero_identificacion: string;
+    nombre: string;
+    apellidos: string;
+    correo: string;
+    contrasena: string;
+  };
+  metodo_pago: PagoSoftware["metodo_pago"];
+}
+
+/* 'Iron Fit' -> 'gym-iron-fit'. Quita tildes y simbolos para que el id se
+   lea bien en localStorage; si ya existe, le suma -2, -3... */
+function idDeGimnasio(nombre: string, existentes: Gimnasio[]): string {
+  const slug = nombre
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const base = "gym-" + (slug || "nuevo");
+  const usados = new Set(existentes.map((g) => g.gimnasio_id));
+  let id = base;
+  for (let n = 2; usados.has(id); n++) id = base + "-" + n;
+  return id;
+}
 
 /* Datos que pide el modal de cobro. El monto va aparte del precio del plan a
    proposito: el legacy lo deja editable (PagoMembresiaController.java:185) y
@@ -715,6 +767,94 @@ export const api = {
       await api._delay();
       const gym = gimnasioActivo();
       return db.read<Gimnasio>("gimnasios").find((g) => g.gimnasio_id === gym) ?? null;
+    },
+
+    // [plataforma] Lo que muestra la pagina de planes.
+    async planesSoftware(): Promise<PlanSoftware[]> {
+      await api._delay();
+      return db.read<PlanSoftware>("planesSoftware");
+    },
+
+    /* [plataforma] Alta de un gimnasio desde /registro: crea el gimnasio, su
+       administrador y el pago de la suscripcion. Es una operacion de
+       plataforma: todavia no hay sesion, asi que lee y escribe las tablas
+       completas con db.read/db.write y no con readTenant, como lo haria el
+       superadmin. El pago es simulado: siempre se aprueba. */
+    async registrar(
+      datos: RegistroGimnasio,
+    ): Promise<ApiResp<{ gimnasio: Gimnasio; pago: PagoSoftware }>> {
+      await api._delay(1200); // el "Procesando pago..." de la pasarela simulada
+
+      const g = {
+        nombre: datos.gimnasio.nombre.trim(),
+        ciudad: datos.gimnasio.ciudad.trim(),
+        telefono: datos.gimnasio.telefono.trim(),
+      };
+      const a = {
+        numero_identificacion: datos.admin.numero_identificacion.trim(),
+        nombre: datos.admin.nombre.trim(),
+        apellidos: datos.admin.apellidos.trim(),
+        correo: datos.admin.correo.trim().toLowerCase(),
+        // auth.login compara la clave ya recortada, asi que se guarda igual.
+        contrasena: datos.admin.contrasena.trim(),
+      };
+
+      if (!g.nombre || !g.ciudad || !g.telefono)
+        return { ok: false, mensaje: "Completa los datos del gimnasio." };
+      if (!a.numero_identificacion || !a.nombre || !a.apellidos || !a.correo)
+        return { ok: false, mensaje: "Completa los datos del administrador." };
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.correo))
+        return { ok: false, mensaje: "El correo no es válido." };
+      if (a.contrasena.length < 6)
+        return { ok: false, mensaje: "La contraseña debe tener al menos 6 caracteres." };
+
+      const plan = db.read<PlanSoftware>("planesSoftware").find((p) => p.id_plan_software === datos.plan);
+      if (!plan) return { ok: false, mensaje: "El plan no existe." };
+
+      // El login busca en toda la plataforma (usuarios.buscarPorNombreOCorreo),
+      // asi que el correo del administrador debe ser unico en todos los
+      // gimnasios, no solo en el suyo (DECISIONES.md, login por usuario).
+      const usuarios = db.read<Usuario>("usuarios");
+      if (usuarios.some((u) => u.correo.toLowerCase() === a.correo))
+        return { ok: false, mensaje: "Ya hay una cuenta con ese correo. Inicia sesión o usa otro." };
+
+      const gimnasios = db.read<Gimnasio>("gimnasios");
+      const hoy = utils.isoDate();
+
+      const gimnasio: Gimnasio = {
+        gimnasio_id: idDeGimnasio(g.nombre, gimnasios),
+        nombre: g.nombre,
+        ciudad: g.ciudad,
+        telefono: g.telefono,
+        estado: "ACTIVO",
+        plan_software: plan.id_plan_software,
+        fecha_registro: hoy,
+        vence_suscripcion: sumarDias(hoy, 30),
+      };
+
+      const admin: Usuario = {
+        gimnasio_id: gimnasio.gimnasio_id,
+        ...a,
+        estado: "ACTIVO",
+        tipo_usuario: "ADMINISTRADOR",
+        rol: "ADMINISTRADOR",
+      };
+
+      const pago: PagoSoftware = {
+        id_pago_software: db.siguienteId<PagoSoftware>("pagosSoftware", (p) => p.id_pago_software),
+        gimnasio_id: gimnasio.gimnasio_id,
+        id_plan_software: plan.id_plan_software,
+        valor: plan.precio_mensual,
+        metodo_pago: datos.metodo_pago,
+        fecha_pago: hoy,
+        referencia: "GB-" + Date.now().toString(36).toUpperCase(),
+      };
+
+      db.write("gimnasios", gimnasios.concat(gimnasio));
+      db.write("usuarios", usuarios.concat(admin));
+      db.write("pagosSoftware", db.read<PagoSoftware>("pagosSoftware").concat(pago));
+
+      return { ok: true, mensaje: "Pago aprobado y gimnasio registrado", data: { gimnasio, pago } };
     },
   },
 

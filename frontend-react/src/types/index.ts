@@ -1,10 +1,39 @@
+/* PLANES_SOFTWARE: lo que la plataforma le vende a cada gimnasio. Es un
+   catalogo global, distinto de PlanMembresia, que es lo que cada gimnasio le
+   vende a sus socios. */
+export interface PlanSoftware {
+  id_plan_software: 'BASICO' | 'PRO' | 'PREMIUM';
+  nombre: string;
+  precio_mensual: number;
+  max_clientes: number | null;   // null = ilimitados
+  incluye: string[];
+  destacado: boolean;            // la tarjeta "mas elegido" de la pagina de planes
+}
+
 /* GIMNASIOS: el tenant. Cada fila de las tablas por gimnasio lleva su
    gimnasio_id (DECISIONES.md, D1). Hoy el filtro se simula en api.ts; en
    produccion lo hace cumplir RLS en la base. */
 export interface Gimnasio {
   gimnasio_id: string;
   nombre: string;
+  ciudad: string;
+  telefono: string;
   estado: 'ACTIVO' | 'INACTIVO';
+  plan_software: PlanSoftware['id_plan_software'];
+  fecha_registro: string;        // 'YYYY-MM-DD'
+  vence_suscripcion: string;     // 'YYYY-MM-DD', pagada hasta este dia
+}
+
+/* Pago de la suscripcion de un gimnasio a la plataforma. Simulado: no hay
+   pasarela, y por eso no guarda ningun dato de tarjeta. */
+export interface PagoSoftware {
+  id_pago_software: number;
+  gimnasio_id: Gimnasio['gimnasio_id'];
+  id_plan_software: PlanSoftware['id_plan_software'];
+  valor: number;
+  metodo_pago: 'TARJETA' | 'PSE' | 'NEQUI';
+  fecha_pago: string;
+  referencia: string;
 }
 
 export interface Cliente {

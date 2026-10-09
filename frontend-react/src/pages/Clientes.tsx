@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
+import { Paginador } from "../components/Paginador";
 import type { Cliente, ClienteNuevo, Usuario } from "../types";
 
 type FormCliente = {
@@ -32,6 +33,10 @@ export function Clientes() {
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState("");
 
+  // Paginación: 10 por página (100 socios en el seed); al buscar se vuelve a la 1
+  const POR_PAGINA = 10;
+  const [pagina, setPagina] = useState(1);
+
   const [show, setShow] = useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [form, setForm] = useState<FormCliente>(VACIO);
@@ -55,6 +60,11 @@ export function Clientes() {
     const texto = (c.nombre + " " + c.apellidos + " " + c.numero_identificacion + " " + c.correo).toLowerCase();
     return texto.includes(filtro.toLowerCase());
   });
+  // La página se recorta a un rango válido ("paginaSegura") cuando la lista
+  // filtrada es más corta; así al buscar se vuelve solo al rango disponible.
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const paginaSegura = Math.min(pagina, totalPaginas);
+  const paginados = filtrados.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA);
   const conCodigo = new Set(
     usuarios.filter((u) => u.contrasena).map((u) => u.numero_identificacion)
   );
@@ -194,7 +204,7 @@ export function Clientes() {
                 </td>
               </tr>
             ) : (
-              filtrados.map((c) => {
+              paginados.map((c) => {
                 const edad = utils.edad(c.fecha_nacimiento);
                 return (
                   <tr key={c.numero_identificacion}>
@@ -265,6 +275,12 @@ export function Clientes() {
             )}
           </tbody>
         </table>
+        <Paginador
+          pagina={paginaSegura}
+          total={filtrados.length}
+          porPagina={POR_PAGINA}
+          onCambiar={setPagina}
+        />
       </div>
 
       <Modal show={show} onHide={() => setShow(false)} centered size="lg">

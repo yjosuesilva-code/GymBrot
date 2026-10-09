@@ -301,6 +301,34 @@ body {
 
 /* ===== [P1] Estilos propios · dashboard, acceso, finanzas ===== */
 
+/* ---- Scrollbars ----
+   Con el seed masivo (v12) las listas y tablas crecen (100 socios, 40
+   rutinas, 80 membresias) y el realce del overflow deja de ser un detalle.
+   Se viste el scrollbar nativo para que no rompa el lenguaje neon del resto:
+   track mas oscuro que el fondo y thumb del borde suave. Los prefijos de
+   Firefox se aplican igual a los paneles que el navegador auto-esrolle.
+   Se deja visible el scrollbar en .table-wrap y en los paneles internos en
+   vez de ocultarlo: ocultar finge que todo cabe y ahora hay mucho contenido. */
+* { scrollbar-width: thin; scrollbar-color: var(--border-btn) var(--bg-input); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg-input); }
+::-webkit-scrollbar-thumb { background: var(--border-btn); border-radius: 6px; border: 2px solid var(--bg-input); }
+::-webkit-scrollbar-thumb:hover { background: #697072; }
+::-webkit-scrollbar-corner { background: var(--bg-input); }
+
+/* ---- Paginador ----
+   Con las listas largas del seed v12 se recorta a 10 filas por pagina y esta
+   barra va debajo de la tabla. Colapsa con "…" cuando hay muchas paginas y en
+   movil solo deja la info + flechas, para no ocupar dos renglones. */
+.paginador { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 4px 0; }
+.paginador-info { font-family: var(--f-label); font-size: 11px; color: var(--muted); }
+.paginador-pages { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.paginador-btn { min-width: 30px; height: 30px; padding: 0 8px; background: var(--bg-input); color: var(--nav-text); border: 1px solid var(--border-btn); border-radius: var(--radius-sm); font-family: var(--f-label); font-size: 12px; font-weight: 600; cursor: pointer; }
+.paginador-btn:hover:not(:disabled) { border-color: var(--neon); color: var(--neon); }
+.paginador-btn.activo { background: var(--neon); color: #000; border-color: var(--neon); }
+.paginador-btn:disabled { opacity: .4; cursor: default; }
+.paginador-elipsis { padding: 0 4px; color: var(--muted); font-size: 12px; }
+
 /* ---- Lector de huella en el login ----
    Colores y textos copiados del legacy (loginController.java:73-83): verde
    #72e06a conectado, rojo #ff6b6b desconectado. El pulso es el mismo que ya
@@ -663,4 +691,20 @@ body[data-modulo="ejercicios"] button:disabled { opacity: .6; cursor: wait; }
   body[data-modulo="ejercicios"] .topbar-user { display: none; }
   body[data-modulo="ejercicios"] .card-g { padding: 16px; }
   body[data-modulo="ejercicios"] #btnNuevoEjercicio { width: 100%; }
+}
+
+/* En pantallas angostas las tablas de Instructores y Membresías se apilan como
+   tarjetas: se oculta el <thead> y cada <td> pasa a renglón propio, con la
+   etiqueta original como tema (via el atributo data-label puesto en la página).
+   Así el estado y la modalidad se leen de arriba a abajo en vez de escapar por
+   el scroll horizontal. */
+@media (max-width: 640px) {
+  .tabla-stack thead { display: none; }
+  .tabla-stack, .tabla-stack tbody, .tabla-stack tr, .tabla-stack td { display: block; width: 100%; }
+  .tabla-stack tr { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; padding: 4px 12px; }
+  .tabla-stack td { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 8px 0; border: none; border-bottom: 1px solid var(--border); text-align: right; }
+  .tabla-stack td:last-child { border-bottom: none; }
+  .tabla-stack td::before { content: attr(data-label); flex: 0 0 auto; text-align: left; font-family: var(--f-label); font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; padding-right: 8px; }
+  .tabla-stack td:last-child::before { content: ""; display: none; }
+  .tabla-stack .cell-actions { justify-content: flex-end; }
 }

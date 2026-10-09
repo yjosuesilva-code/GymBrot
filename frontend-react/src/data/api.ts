@@ -23,10 +23,12 @@ import type {
   Instructor, // [P3]
   InstructorNuevo, // [P3]
   EstadoInstructor, // [P3]
+  Especialidad, // [P3]
   Rutina, // [P3]
   RutinaNueva, // [P3]
   RutinaEjercicio, // [P3]
   DiaSemana, // [P3]
+  ObjetivoRutina, // [P3]
 } from "../types";
 
 interface Seed {
@@ -277,28 +279,31 @@ function pagosMensuales(
 // Los dos ultimos argumentos son los meses hacia atras que se cubren (11) y si
 // la renovacion mas reciente cae hoy. Carlos y Juan renuevan hoy, que es lo que
 // alimenta "Recaudado hoy".
-const serieAna    = pagosMensuales('1000000001', 1, 280000, ['TARJETA', 'NEQUI'],    20, 11);
-const serieCarlos = pagosMensuales('1000000002', 2, 120000, ['EFECTIVO', 'NEQUI'],    8, 11, true);
-const serieJuan   = pagosMensuales('1000000003', 3, 180000, ['TARJETA', 'EFECTIVO'], 12, 11, true);
-const serieAndres = pagosMensuales('1000000007', 5, 180000, ['NEQUI', 'TARJETA'],    18, 11);
+// Los valores de la serie siguen a los planes del catalogo (v12): Premium,
+// Estándar y Básico cuestan 110000, 80000 y 50000 al mes. Si cambian los
+// planes, esta serie deja de ser coherente con el modal de cobro.
+const serieAna    = pagosMensuales('1000000001', 1, 110000, ['TARJETA', 'NEQUI'],    20, 11);
+const serieCarlos = pagosMensuales('1000000002', 2, 50000,  ['EFECTIVO', 'NEQUI'],    8, 11, true);
+const serieJuan   = pagosMensuales('1000000003', 3, 80000,  ['TARJETA', 'EFECTIVO'], 12, 11, true);
+const serieAndres = pagosMensuales('1000000007', 5, 80000,  ['NEQUI', 'TARJETA'],    18, 11);
 
 // El pago anual de Diego cierra la serie de ingresos del mes 11.
 const pagoAnualDiego = pago(
-  '1000000005', 4, 0, 2800000, 'TRANSFERENCIA', 'EXITOSO', 'TR-2290',
+  '1000000005', 4, 0, 1100000, 'TRANSFERENCIA', 'EXITOSO', 'TR-2290',
   'Pago anual anticipado', diaDeMes(11, 6),
 );
 
 // Pagos sin aplicar: son los unicos estados distintos de EXITOSO, y son la
 // razon de que la tabla "Pagos por aplicar" no salga vacia.
 const pagosSinAplicar = [
-  pago('1000000004', 6, 40, 180000, 'TRANSFERENCIA', 'PENDIENTE', 'TR-2299', 'Transferencia sin aplicar'),
-  pago('1000000006', 7, 25, 120000, 'EFECTIVO',      'PENDIENTE', '',          'Cobro en efectivo sin membresia activa'),
+  pago('1000000004', 6, 40, 80000, 'TRANSFERENCIA', 'PENDIENTE', 'TR-2299', 'Transferencia sin aplicar'),
+  pago('1000000006', 7, 25, 50000, 'EFECTIVO',      'PENDIENTE', '',          'Cobro en efectivo sin membresia activa'),
 ];
 
 // gym-titan: el unico pago de la Ana de Titan (membresia 8). Misma cedula que
 // la Ana de Centro, que tiene 12 pagos: si su detalle muestra mas de uno, el
 // filtro por gimnasio fallo.
-const pagoTitanAna: Pago = { ...pago('1000000001', 8, 20, 120000, 'NEQUI'), gimnasio_id: 'gym-titan' };
+const pagoTitanAna: Pago = { ...pago('1000000001', 8, 20, 50000, 'NEQUI'), gimnasio_id: 'gym-titan' };
 
 function inicioDe(serie: Pago[]): string {
   return serie.reduce((menor, p) => (p.fecha_pago < menor ? p.fecha_pago : menor), serie[0].fecha_pago);
@@ -307,6 +312,279 @@ function inicioDe(serie: Pago[]): string {
 function finDe(serie: Pago[], diasExtra: number): string {
   const ultimo = serie.reduce((mayor, p) => (p.fecha_pago > mayor ? p.fecha_pago : mayor), serie[0].fecha_pago);
   return sumarDias(ultimo, diasExtra);
+}
+
+/* ---------------------------------------------------------------------------
+   Seed masivo (v12). Generadores deterministicos: el seed no usa
+   Math.random, asi que dos cargas producen exactamente los mismos ids y
+   fechas y la UI nunca ve datos que cambian solos. Los numeros inventados
+   solo alteran nombres, telefonos y anos de nacimiento; las claves y los
+   valores financieros siguen reglas fijas.
+   --------------------------------------------------------------------------- */
+
+let semillaGen = 19700101;
+// Devuelve un valor en [base, base+mod-1] (inclusivo). El rango base..base+mod
+// se elige llamando con azar(1, n) para ids 1..n y con azar(0, n) para 0..n-1;
+// el operador % sobre `base+semilla` daria 0 con algunos seeds, y un id 0 de
+// ejercicio no existe.
+function azar(base: number, mod: number): number {
+  semillaGen = (semillaGen * 1103515245 + 12345) & 0x7fffffff;
+  return base + (semillaGen % mod);
+}
+
+// Primeros meses (fsano) y ultimos nombres para compor socios e instructores.
+const NOMBRES_SOCIO = [
+  "Santiago", "Valentina", "Mariana", "Sebastián", "Laura", "Andrés", "Camila", "Daniel",
+  "Isabella", "Felipe", "Nicole", "Julián", "Sara", "Mateo", "Salomé", "Juan Pablo",
+  "María José", "Pedro", "Luisa", "David", "Fernanda", "Gabriel", "Valeria", "Simón",
+];
+const APELLIDOS_SOCIO = [
+  "García", "Rodríguez", "Martínez", "López", "Hernández", "González", "Pérez", "Sánchez",
+  "Ramírez", "Torres", "Flores", "Rivera", "Gómez", "Díaz", "Reyes", "Morales", "Castro",
+  "Ortiz", "Silva", "Vargas",
+];
+
+/* Los tres tipos de plan de v12: Básico 50.000, Estándar 80.000 y Premium
+   110.000 al mes. Semestral y anual se calculan con descuento del 5% y 10%
+   sobre la mensualidad por 6 y 12 meses, para que el numero "menos por el
+   paquete" se entienda solo en el detalle. */
+const PLANES_V12: PlanMembresia[] = [
+  { id_plan:1, nombre:'Básico',   descripcion:'Acceso a sala de maquinas y area cardio',  precio_mensual:50000,  precio_semestral:285000,  precio_anual:540000,   estado:'ACTIVO' },
+  { id_plan:2, nombre:'Estándar', descripcion:'Básico mas clases grupales',               precio_mensual:80000,  precio_semestral:456000,  precio_anual:864000,   estado:'ACTIVO' },
+  { id_plan:3, nombre:'Premium',  descripcion:'Todo lo anterior mas sauna y entrenador',  precio_mensual:110000, precio_semestral:627000, precio_anual:1188000, estado:'ACTIVO' },
+];
+
+const CLIENTES_EXTRA: Cliente[] = [];
+const USUARIOS_CLIENTES: Usuario[] = [];
+const MEMBRESIAS_EXTRA: Membresia[] = [];
+const HISTORIAL_EXTRA: HistorialMembresia[] = [];
+const PAGOS_EXTRA: Pago[] = [];
+
+// Una membresia por cada socio nuevo que tenga una: 72 de los 93 socios
+// generados, con su serie de pagos y su historial coherentes (la misma
+// disciplina con la que se escriben las 5 membresias a mano de arriba).
+for (let i = 0; i < 72; i++) {
+  const idMembresia = 9 + i;
+  const idCliente = String(1000000008 + i);
+  const plan = PLANES_V12[i % 3];
+
+  // Vencidas de vez en cuando, para que existan casos de cobro pendiente y
+  // socios que deben renovar. El resto quedan activas con vencimiento futuro.
+  const vencida = i % 11 === 0;
+  const modalidad = i % 10 === 7 ? 'SEMESTRAL' : i % 10 === 9 ? 'ANUAL' : 'MENSUAL';
+  const metodo: Pago['metodo_pago'] = (['EFECTIVO', 'NEQUI', 'TARJETA', 'TRANSFERENCIA'] as const)[i % 4];
+
+  let serie: Pago[];
+  let valor: number;
+  let diasVigencia: number;
+
+  switch (modalidad) {
+    case 'SEMESTRAL':
+      valor = plan.precio_semestral;
+      diasVigencia = 180;
+      serie = vencida
+        ? [pago(idCliente, idMembresia, 200, valor, metodo), pago(idCliente, idMembresia, 150, valor, metodo)]
+        : [pago(idCliente, idMembresia, 190, valor, metodo), pago(idCliente, idMembresia, 10, valor, metodo)];
+      break;
+    case 'ANUAL':
+      valor = plan.precio_anual;
+      diasVigencia = 365;
+      serie = [pago(idCliente, idMembresia, vencida ? 200 : 20, valor, metodo)];
+      break;
+    default:
+      valor = plan.precio_mensual;
+      diasVigencia = 30;
+      serie = vencida
+        ? Array.from({ length: 2 + (i % 3) }, (_, k) => pago(idCliente, idMembresia, 45 + k * 30, valor, metodo))
+        : pagosMensuales(idCliente, idMembresia, valor, ['EFECTIVO', 'NEQUI', 'TARJETA'], 2 + (i * 5) % 26, 1 + (i % 8), i % 4 === 0);
+      break;
+  }
+
+  MEMBRESIAS_EXTRA.push({
+    gimnasio_id: 'gym-centro',
+    id_membresia: idMembresia,
+    id_cliente: idCliente,
+    id_plan: plan.id_plan,
+    tipo_membresia: plan.nombre,
+    modalidad_pago: modalidad,
+    valor,
+    fecha_inicio: inicioDe(serie),
+    // Vencida: el ultimo pago y los dias de vigencia caen en el pasado.
+    fecha_vencimiento: vencida ? finDe(serie, 5) : finDe(serie, diasVigencia),
+    estado: vencida ? 'VENCIDA' : 'ACTIVA',
+  });
+  HISTORIAL_EXTRA.push({
+    gimnasio_id: 'gym-centro',
+    id_historial: 9 + i,
+    id_cliente: idCliente,
+    id_membresia: idMembresia,
+    fecha_asignacion: inicioDe(serie),
+    activa: !vencida,
+  });
+  PAGOS_EXTRA.push(...serie);
+}
+
+// Los 93 socios nuevos de gym-centro. Los que tienen membresia heredan su
+// fecha_registro del primer pago (una membresia no puede empezar antes de que
+// el cliente exista); los que estan sin plan se registran hace unos meses.
+// 1 de cada 6 queda sin fila en `usuarios` a proposito, para que el badge
+// "Sin codigo" de Clientes siga teniendo quien lo muestre.
+for (let i = 0; i < 93; i++) {
+  const id = String(1000000008 + i);
+  const nombre = NOMBRES_SOCIO[i % NOMBRES_SOCIO.length];
+  const apellidos = APELLIDOS_SOCIO[i % APELLIDOS_SOCIO.length] + " " + APELLIDOS_SOCIO[(i * 7) % APELLIDOS_SOCIO.length];
+  const anioNac = azar(1945, 68);          // 1945..2012: niños, adultos y senior
+  const diaNac = azar(1, 28);
+  const mesNac = azar(1, 12);
+  const nacimiento = anioNac + "-" + String(mesNac).padStart(2, "0") + "-" + String(diaNac).padStart(2, "0");
+  const membresia = MEMBRESIAS_EXTRA.find((m) => m.id_cliente === id);
+  // Sin membresia el socio no puede estar ACTIVO: no tiene plan por el cual
+  // entrar. Ya vencida (de antes) se mantiene el matiz; los que nunca tuvieron
+  // plan quedan INACTIVO. Los otros estados se reparten para que la lista no
+  // sea monótona.
+  const estado: Cliente['estado'] = !membresia
+    ? 'INACTIVO'
+    : i % 17 === 0 ? 'SUSPENDIDO' : i % 13 === 0 ? 'INACTIVO' : i % 19 === 0 ? 'BLOQUEADO' : 'ACTIVO';
+
+  CLIENTES_EXTRA.push({
+    gimnasio_id: 'gym-centro',
+    numero_identificacion: id,
+    tipo_identificacion: 'CC',
+    nombre,
+    apellidos,
+    telefono: "30" + String(10000000 + azar(0, 99999999)).padStart(8, "0"),
+    correo: "socio" + id + "@mail.com",
+    direccion: "Cl " + azar(1, 90) + " #" + azar(1, 40) + "-" + azar(1, 60),
+    fecha_nacimiento: nacimiento,
+    estado,
+    // fecha_inicio ya es el primer pago de la serie: menos trabajo que volver
+    // a filtrar PAGOS_EXTRA y sin riesgo de calcular un array vacio.
+    fecha_registro: membresia ? membresia.fecha_inicio : dia(30 + azar(0, 200)),
+  });
+
+  // 1 de cada 6 sin codigo de acceso: sin fila en `usuarios` el modo manual
+  // de control de acceso responde "no tiene codigo", que es justo el caso que
+  // se quiere ver en la lista.
+  if (i % 6 !== 0) {
+    USUARIOS_CLIENTES.push({
+      gimnasio_id: 'gym-centro',
+      numero_identificacion: id,
+      nombre,
+      apellidos,
+      correo: "socio" + id + "@mail.com",
+      contrasena: "socio" + id.slice(-6),
+      estado,
+      tipo_usuario: 'CLIENTE',
+      rol: 'CLIENTE',
+    });
+  }
+}
+
+// Instructores 2000000004..2000000020 (se suman a los tres que ya habia).
+const INSTRUCTORES_EXTRA: Instructor[] = [];
+const ESPECIALIDADES: Especialidad[] = [
+  'Entrenador personal', 'Nutrición', 'Fisioterapia', 'Yoga/Pilates', 'Cardio', 'Musculación', 'Funcional',
+];
+const DISPONIBILIDADES = [
+  'Lun-Vie 6:00-14:00', 'Lun-Mié-Vie 16:00-21:00', 'Mar-Jue 8:00-12:00', 'Lun-Jue 14:00-20:00', 'Sab 8:00-13:00',
+];
+for (let i = 0; i < 17; i++) {
+  const id = "20000000" + String(4 + i).padStart(2, "0");
+  const nombre = NOMBRES_SOCIO[(i * 5) % NOMBRES_SOCIO.length];
+  const apellidos = APELLIDOS_SOCIO[(i * 3) % APELLIDOS_SOCIO.length] + " " + APELLIDOS_SOCIO[(i * 9) % APELLIDOS_SOCIO.length];
+  INSTRUCTORES_EXTRA.push({
+    numero_identificacion: id,
+    tipo_identificacion: 'CC',
+    nombre,
+    apellidos,
+    telefono: "31" + String(20000000 + azar(0, 99999999)).padStart(8, "0"),
+    correo: "instructor" + id + "@gymbrot.com",
+    especialidad: ESPECIALIDADES[i % ESPECIALIDADES.length],
+    disponibilidad: DISPONIBILIDADES[i % DISPONIBILIDADES.length],
+    fecha_contratacion: "20" + (20 + (i % 6)) + "-" + String(1 + (i % 12)).padStart(2, "0") + "-" + String(1 + (i % 26)).padStart(2, "0"),
+    estado: i % 7 === 0 ? 'INACTIVO' : 'ACTIVO',
+  });
+}
+
+// 100 ejercicios: nombres compuestos de musculo + movimiento para que la
+// busqueda por grupo muscular tenga de donde agarrar.
+const EJERCICIOS: Ejercicio[] = [];
+const GRUPOS_EJERCICIO = [
+  'Pecho', 'Espalda', 'Piernas', 'Hombros', 'Brazos', 'Core', 'Glúteos', 'Cardio', 'Funcional',
+];
+const MOVIMIENTOS: Record<string, string[]> = {
+  'Pecho': ['Press banca', 'Aperturas', 'Fondos', 'Press inclinado', 'Cruces'],
+  'Espalda': ['Dominadas', 'Remo', 'Jalón', 'Peso muerto', 'Pull-over'],
+  'Piernas': ['Sentadilla', 'Prensa', 'Zancadas', 'Curl femoral', 'Extensión cuádriceps'],
+  'Hombros': ['Press militar', 'Elevaciones laterales', 'Vuelos frontales', 'Pájaros', 'Press Arnold'],
+  'Brazos': ['Curl bíceps', 'Curl martillo', 'Extensión tríceps', 'Fondos banco', 'Curl concentrado'],
+  'Core': ['Plancha', 'Crunch', 'Elevación piernas', 'Russian twist', 'Abdominal bicicleta'],
+  'Glúteos': ['Hip thrust', 'Patada glúteo', 'Puente', 'Abducción máquina', 'Sentadilla sumo'],
+  'Cardio': ['Cinta correr', 'Bicicleta', 'Elíptica', 'Cuerda', 'Burpees'],
+  'Funcional': ['Kettlebell swing', 'Clean', 'Thruster', 'Sled push', 'Battle ropes'],
+};
+const NIVEL_EJERCICIO = ['Principiante', 'Intermedio', 'Avanzado'];
+{
+  let id = 0;
+  // 8 grupos con 12 ejercicios (96) y el ultimo con 4 = 100 en total, que es
+  // el volumen de v12; la criba por grupo muscular no deja ninguno vacio.
+  for (const [grupoIdx, grupo] of GRUPOS_EJERCICIO.entries()) {
+    const nombres = MOVIMIENTOS[grupo];
+    const cuantos = grupoIdx === GRUPOS_EJERCICIO.length - 1 ? 4 : 12;
+    for (let k = 0; k < cuantos; k++) {
+      EJERCICIOS.push({
+        idEjercicio: ++id,
+        nombre: nombres[k % nombres.length] + (k >= nombres.length ? " " + (k - nombres.length + 2) : ""),
+        descripcion: "Trabaja " + grupo.toLowerCase() + " con enfoque en fuerza y control.",
+        grupoMuscular: grupo,
+        nivel: NIVEL_EJERCICIO[(id + k) % 3],
+        series: 3 + (id % 3),
+        repeticiones: 8 + (id % 8),
+        recursoUrl: "",
+      });
+    }
+  }
+}
+
+// 36 rutinas mas (total 40) repartidas entre los 20 instructores y los socios
+// nuevos, para que la criba por vigencia y por objetivo tenga volumen.
+const RUTINAS_EXTRA: Rutina[] = [];
+const RUTINA_EJERCICIOS_EXTRA: RutinaEjercicio[] = [];
+const DIAS_SEMANA: DiaSemana[] = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'DOMINGO'];
+const OBJETIVOS: ObjetivoRutina[] = [
+  'Pérdida de peso', 'Ganancia muscular', 'Resistencia', 'Tonificación', 'Rehabilitación',
+];
+{
+  let idRutina = 5;
+  for (let i = 0; i < 36; i++) {
+    const idCliente = String(1000000008 + i);
+    const idInstructor = "20000000" + String(1 + (i % 20)).padStart(2, "0");
+    const objetivo = OBJETIVOS[i % OBJETIVOS.length];
+    const vencida = i % 3 === 0;
+    const dias = [DIAS_SEMANA[i % 7], DIAS_SEMANA[(i + 2) % 7], DIAS_SEMANA[(i + 4) % 7]];
+    const ruta: Rutina = {
+      id_rutina: idRutina,
+      id_instructor: idInstructor,
+      id_cliente: idCliente,
+      nombre: objetivo + " - ciclo " + (i + 1),
+      descripcion: "Plan " + objetivo.toLowerCase() + " diseñado para " + NOMBRES_SOCIO[i % NOMBRES_SOCIO.length] + ".",
+      fecha_creacion: dia(15 + (i * 2) % 90),
+      fecha_fin: vencida ? dia(5 + (i % 30)) : i % 3 === 1 ? null : dia(-(5 + (i % 35))),
+      dias_semana: dias,
+      objetivo,
+    };
+    RUTINAS_EXTRA.push(ruta);
+    for (let e = 0; e < 4; e++) {
+      RUTINA_EJERCICIOS_EXTRA.push({
+        id_rutina: idRutina,
+        id_ejercicio: azar(1, EJERCICIOS.length),
+        orden: e + 1,
+        dia_semana: dias[e % dias.length],
+        notas_instructor: "Serie " + (e + 1) + ": mantener postura y respirar.",
+      });
+    }
+    idRutina++;
+  }
 }
 
 const SEED: Seed = {
@@ -356,6 +634,9 @@ const SEED: Seed = {
     { gimnasio_id:'gym-titan', numero_identificacion:'1001000002', nombre:'titan', apellidos:'Administrador', correo:'admin@titanfitness.com', contrasena:'titan', estado:'ACTIVO', tipo_usuario:'ADMINISTRADOR', rol:'ADMINISTRADOR' },
     { gimnasio_id:'gym-titan', numero_identificacion:'1000000001', nombre:'Ana María', apellidos:'Ruiz', correo:'ana.ruiz@mail.com', contrasena:'anatitan', estado:'ACTIVO', tipo_usuario:'CLIENTE', rol:'CLIENTE' },
     { gimnasio_id:'gym-titan', numero_identificacion:'1000000101', nombre:'Sebastián', apellidos:'Castro', correo:'sebas.castro@mail.com', contrasena:'sebas123', estado:'ACTIVO', tipo_usuario:'CLIENTE', rol:'CLIENTE' },
+    // --- socios masivos de gym-centro (v12). 1 de cada 6 no tiene fila === no
+    // tiene codigo de acceso, y el modo manual lo reporta como "sin codigo". ---
+    ...USUARIOS_CLIENTES,
   ],
 
   clientes: [ 
@@ -370,15 +651,13 @@ const SEED: Seed = {
     { gimnasio_id:'gym-titan', numero_identificacion:'1000000001', tipo_identificacion:'CC', nombre:'Ana María', apellidos:'Ruiz', telefono:'3009998877', correo:'ana.ruiz@mail.com', direccion:'Cl 50 #30-12', fecha_nacimiento:'1995-03-12', estado:'ACTIVO', fecha_registro:dia(20) },
     { gimnasio_id:'gym-titan', numero_identificacion:'1000000101', tipo_identificacion:'CC', nombre:'Sebastián', apellidos:'Castro', telefono:'3151112233', correo:'sebas.castro@mail.com', direccion:'Cra 7 #18-40', fecha_nacimiento:'1997-05-08', estado:'ACTIVO', fecha_registro:dia(40) },
     { gimnasio_id:'gym-titan', numero_identificacion:'1000000102', tipo_identificacion:'CC', nombre:'Mariana', apellidos:'López', telefono:'3162223344', correo:'mariana.lopez@mail.com', direccion:'Cl 12 #3-25', fecha_nacimiento:'2000-10-30', estado:'ACTIVO', fecha_registro:dia(10) },
+    // --- 93 socios masivos de gym-centro (v12), con y sin plan ---
+    ...CLIENTES_EXTRA,
    ],
 
   // Catalogo de planes. Los tres precios por modalidad son los que lee
   // PagoMembresiaController.java:148 al abrir el cobro.
-  planes: [
-    { id_plan:1, nombre:'Básico',   descripcion:'Acceso a sala de maquinas y area cardio',   precio_mensual:120000, precio_semestral:650000,  precio_anual:1200000, estado:'ACTIVO' },
-    { id_plan:2, nombre:'Estándar', descripcion:'Básico mas clases grupales',                precio_mensual:180000, precio_semestral:980000,  precio_anual:1900000, estado:'ACTIVO' },
-    { id_plan:3, nombre:'Premium',  descripcion:'Todo lo anterior mas sauna y entrenador',  precio_mensual:280000, precio_semestral:1520000, precio_anual:2800000, estado:'ACTIVO' },
-  ],
+  planes: PLANES_V12,
 
   // Una membresia vigente por cada cliente ACTIVO (5 en total), mas dos
   // vencidas para que existan los casos de cobro pendiente.
@@ -389,17 +668,18 @@ const SEED: Seed = {
   // (30 / 365 dias) a partir del ultimo pago, para que el dato nunca contradiga
   // al reloj.
   membresias: [
-    { gimnasio_id:'gym-centro', id_membresia:1, id_cliente:'1000000001', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'MENSUAL', valor:280000,  fecha_inicio:inicioDe(serieAna),    fecha_vencimiento:finDe(serieAna, 30),    estado:'ACTIVA' },
-    { gimnasio_id:'gym-centro', id_membresia:2, id_cliente:'1000000002', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:inicioDe(serieCarlos), fecha_vencimiento:finDe(serieCarlos, 30), estado:'ACTIVA' },
-    { gimnasio_id:'gym-centro', id_membresia:3, id_cliente:'1000000003', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:inicioDe(serieJuan),   fecha_vencimiento:finDe(serieJuan, 30),   estado:'ACTIVA' },
-    { gimnasio_id:'gym-centro', id_membresia:4, id_cliente:'1000000005', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'ANUAL',   valor:2800000, fecha_inicio:pagoAnualDiego.fecha_pago, fecha_vencimiento:sumarDias(pagoAnualDiego.fecha_pago, 365), estado:'ACTIVA' },
-    { gimnasio_id:'gym-centro', id_membresia:5, id_cliente:'1000000007', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:inicioDe(serieAndres), fecha_vencimiento:finDe(serieAndres, 30), estado:'ACTIVA' },
+    { gimnasio_id:'gym-centro', id_membresia:1, id_cliente:'1000000001', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'MENSUAL', valor:110000,  fecha_inicio:inicioDe(serieAna),    fecha_vencimiento:finDe(serieAna, 30),    estado:'ACTIVA' },
+    { gimnasio_id:'gym-centro', id_membresia:2, id_cliente:'1000000002', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:50000,   fecha_inicio:inicioDe(serieCarlos), fecha_vencimiento:finDe(serieCarlos, 30), estado:'ACTIVA' },
+    { gimnasio_id:'gym-centro', id_membresia:3, id_cliente:'1000000003', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:80000,   fecha_inicio:inicioDe(serieJuan),   fecha_vencimiento:finDe(serieJuan, 30),   estado:'ACTIVA' },
+    { gimnasio_id:'gym-centro', id_membresia:4, id_cliente:'1000000005', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'ANUAL',   valor:1100000, fecha_inicio:pagoAnualDiego.fecha_pago, fecha_vencimiento:sumarDias(pagoAnualDiego.fecha_pago, 365), estado:'ACTIVA' },
+    { gimnasio_id:'gym-centro', id_membresia:5, id_cliente:'1000000007', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:80000,   fecha_inicio:inicioDe(serieAndres), fecha_vencimiento:finDe(serieAndres, 30), estado:'ACTIVA' },
     // Membresias ya vencidas: son las que dejan pagos sin aplicar y las que
     // el control de acceso debe rechazar.
-    { gimnasio_id:'gym-centro', id_membresia:6, id_cliente:'1000000004', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:dia(70),  fecha_vencimiento:dia(40),  estado:'VENCIDA' },
-    { gimnasio_id:'gym-centro', id_membresia:7, id_cliente:'1000000006', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:dia(55),  fecha_vencimiento:dia(25),  estado:'VENCIDA' },
+    { gimnasio_id:'gym-centro', id_membresia:6, id_cliente:'1000000004', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:80000,   fecha_inicio:dia(70),  fecha_vencimiento:dia(40),  estado:'VENCIDA' },
+    { gimnasio_id:'gym-centro', id_membresia:7, id_cliente:'1000000006', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:50000,   fecha_inicio:dia(55),  fecha_vencimiento:dia(25),  estado:'VENCIDA' },
     // gym-titan: la Ana de Titan tiene su propia membresia, distinta de la Premium de Centro.
-    { gimnasio_id:'gym-titan',  id_membresia:8, id_cliente:'1000000001', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:pagoTitanAna.fecha_pago, fecha_vencimiento:sumarDias(pagoTitanAna.fecha_pago, 30), estado:'ACTIVA' },
+    { gimnasio_id:'gym-titan',  id_membresia:8, id_cliente:'1000000001', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:50000,   fecha_inicio:pagoTitanAna.fecha_pago, fecha_vencimiento:sumarDias(pagoTitanAna.fecha_pago, 30), estado:'ACTIVA' },
+    ...MEMBRESIAS_EXTRA,
   ],
 
   // Marca que membresia esta vigente. El control de acceso consulta esta tabla
@@ -415,6 +695,8 @@ const SEED: Seed = {
     { gimnasio_id:'gym-centro', id_historial:6, id_cliente:'1000000004', id_membresia:6, fecha_asignacion:dia(70),  activa:false },
     { gimnasio_id:'gym-centro', id_historial:7, id_cliente:'1000000006', id_membresia:7, fecha_asignacion:dia(55),  activa:false },
     { gimnasio_id:'gym-titan',  id_historial:8, id_cliente:'1000000001', id_membresia:8, fecha_asignacion:pagoTitanAna.fecha_pago, activa:true },
+    // --- v12: una fila por cada membresia generada ---
+    ...HISTORIAL_EXTRA,
   ],
   
   pagos: serieAna
@@ -423,16 +705,19 @@ const SEED: Seed = {
     .concat(serieAndres)
     .concat([pagoAnualDiego])
     .concat(pagosSinAplicar)
-    .concat([pagoTitanAna]),
+    .concat([pagoTitanAna])
+    .concat(PAGOS_EXTRA),
 
   ingresos: ingresosPasados().concat(ingresosDeHoy()),
-  ejercicios: [],   // la colección de P4 arranca vacía
+  ejercicios: EJERCICIOS,   // v12: los 100 del catalogo de P4
 
   // ===== [P3] Instructores =====
   instructores: [
     { numero_identificacion:'2000000001', tipo_identificacion:'CC', nombre:'Camilo',  apellidos:'Herrera Díaz', telefono:'3101234567', correo:'camilo.herrera@gymbrot.com', especialidad:'Entrenador personal', disponibilidad:'Lun-Vie 6:00-14:00',  fecha_contratacion:'2025-02-03', estado:'ACTIVO' },
     { numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Natalia', apellidos:'Vargas Rojas', telefono:'3112345678', correo:'natalia.vargas@gymbrot.com', especialidad:'Yoga/Pilates',        disponibilidad:'Lun-Mié-Vie 16:00-21:00', fecha_contratacion:'2025-08-18', estado:'ACTIVO' },
     { numero_identificacion:'2000000003', tipo_identificacion:'CE', nombre:'Mateo',   apellidos:'Silva Castro', telefono:'3123456789', correo:'mateo.silva@gymbrot.com',    especialidad:'Nutrición',           disponibilidad:'Mar-Jue 8:00-12:00',  fecha_contratacion:'2026-01-12', estado:'INACTIVO' },
+    // --- v12: 17 instructores mas (total 20) ---
+    ...INSTRUCTORES_EXTRA,
   ],
   // ===== [/P3] Instructores =====
 
@@ -446,8 +731,10 @@ const SEED: Seed = {
     { id_rutina:2, id_instructor:'2000000001', id_cliente:'1000000002', nombre:'Quema de grasa',       descripcion:'Circuitos de cardio y funcional.',         fecha_creacion:dia(50), fecha_fin:dia(-10), dias_semana:['MARTES','JUEVES','SABADO'],    objetivo:'Pérdida de peso' },
     { id_rutina:3, id_instructor:'2000000002', id_cliente:'1000000005', nombre:'Movilidad y espalda',  descripcion:'Estiramientos y fortalecimiento de core.', fecha_creacion:dia(15), fecha_fin:null,     dias_semana:['LUNES','JUEVES'],              objetivo:'Rehabilitación' },
     { id_rutina:4, id_instructor:'2000000002', id_cliente:'1000000007', nombre:'Resistencia básica',   descripcion:'Base aeróbica para principiantes.',        fecha_creacion:dia(90), fecha_fin:dia(5),  dias_semana:['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES'], objetivo:'Resistencia' },
+    // --- v12: 36 rutinas mas (total 40) sobre los 20 instructores ---
+    ...RUTINAS_EXTRA,
   ],
-  rutina_ejercicios: [],
+  rutina_ejercicios: RUTINA_EJERCICIOS_EXTRA,
   // ===== [/P3] Rutinas =====
 
   // ===== [P2] Progreso =====
@@ -492,7 +779,14 @@ const SEED: Seed = {
 // un pago propios de la Ana de Titan.
 // v11 agrega planesSoftware y pagosSoftware (pagina de planes y registro de
 // gimnasios) y los datos de suscripcion de cada gimnasio.
-const SEED_VERSION = "11";
+// v12 baja los 3 planes a 50.000/80.000/110.000 mensuales (semestral y anual
+// con 5% y 10% de descuento), alinea las series financieras a esos precios y
+// siembra el seed masivo en gym-centro: 93 socios nuevos (100 en total), 17
+// instructores mas (20), 100 ejercicios, 36 rutinas mas (40) con sus
+// ejercicios, y 72 membresias mas (80) coherentes con sus pagos e historial.
+// v13 corrige un matiz de estado: los socios nuevos sin membresia no pueden
+// estar ACTIVO (no tienen plan por el cual entrar), asi que quedan INACTIVO.
+const SEED_VERSION = "13";
 const CLAVE_VERSION = "gymbrot_seed_version";
 const CLAVE_LECTOR = "gymbrot_lector_conectado";
 

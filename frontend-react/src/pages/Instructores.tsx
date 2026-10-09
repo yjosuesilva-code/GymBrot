@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
+import { Paginador } from "../components/Paginador";
 import type { Instructor, Especialidad, EstadoInstructor, TipoIdentificacion } from "../types";
 
 // El formulario tiene todos los campos del instructor menos el estado (ese se cambia con activar/desactivar)
@@ -68,6 +69,10 @@ export function Instructores() {
   const [filtroEspecialidad, setFiltroEspecialidad] = useState<Especialidad | "">("");
   const [filtroEstado, setFiltroEstado] = useState<EstadoInstructor | "">("");
 
+  // Paginación: 10 por página; al cambiar la búsqueda o un filtro se vuelve a la 1
+  const POR_PAGINA = 10;
+  const [pagina, setPagina] = useState(1);
+
   const [alerta, setAlerta] = useState<Alerta | null>(null);
 
   // Estado del modal: show lo abre/cierra; editandoId es null al crear y la cédula al editar
@@ -110,6 +115,12 @@ export function Instructores() {
     );
   });
   const hayFiltros = texto !== "" || filtroEspecialidad !== "" || filtroEstado !== "";
+
+  // La página se recorta a un rango válido ("paginaSegura") cuando la lista
+  // filtrada es más corta; así al buscar se vuelve solo al rango disponible.
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const paginaSegura = Math.min(pagina, totalPaginas);
+  const paginada = filtrados.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA);
 
   function limpiarFiltros() {
     setBusqueda("");
@@ -266,7 +277,7 @@ export function Instructores() {
       </div>
 
       <div className="table-wrap">
-        <table className="table-g">
+        <table className="table-g tabla-stack">
           <thead>
             <tr>
               <th>Instructor</th><th>Identificación</th><th>Teléfono</th><th>Especialidad</th><th>Disponibilidad</th><th>Contratación</th><th>Estado</th><th>Acciones</th>
@@ -284,9 +295,9 @@ export function Instructores() {
                 </td>
               </tr>
             ) : (
-              filtrados.map((i) => (
+              paginada.map((i) => (
                 <tr key={i.numero_identificacion}>
-                  <td>
+                  <td data-label="Instructor">
                     <div className="person">
                       <div className="person-avatar">{utils.iniciales(i.nombre, i.apellidos)}</div>
                       <div>
@@ -295,13 +306,13 @@ export function Instructores() {
                       </div>
                     </div>
                   </td>
-                  <td>{i.tipo_identificacion} {i.numero_identificacion}</td>
-                  <td>{i.telefono}</td>
-                  <td>{i.especialidad}</td>
-                  <td>{i.disponibilidad}</td>
-                  <td>{utils.fecha(i.fecha_contratacion)}</td>
-                  <td><span className={"badge-g " + utils.badgeClass(i.estado)}>{i.estado}</span></td>
-                  <td>
+                  <td data-label="Identificación">{i.tipo_identificacion} {i.numero_identificacion}</td>
+                  <td data-label="Teléfono">{i.telefono}</td>
+                  <td data-label="Especialidad">{i.especialidad}</td>
+                  <td data-label="Disponibilidad">{i.disponibilidad}</td>
+                  <td data-label="Contratación">{utils.fecha(i.fecha_contratacion)}</td>
+                  <td data-label="Estado"><span className={"badge-g " + utils.badgeClass(i.estado)}>{i.estado}</span></td>
+                  <td data-label="Acciones">
                     <div className="cell-actions">
                       <button className="btn-icon" title="Ver perfil" onClick={() => navigate("/instructores/" + i.numero_identificacion)}>👁</button>
                       <button className="btn-icon" title="Editar" onClick={() => abrirEdicion(i)}>✏️</button>
@@ -316,6 +327,7 @@ export function Instructores() {
             )}
           </tbody>
         </table>
+        <Paginador pagina={pagina} total={filtrados.length} porPagina={POR_PAGINA} onCambiar={setPagina} />
       </div>
 
       <Modal show={show} onHide={() => setShow(false)} centered size="lg">

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
+import { Paginador } from "../components/Paginador";
 import type { Rutina, RutinaNueva, Instructor, Cliente, ObjetivoRutina, DiaSemana } from "../types";
 
 const OBJETIVOS: ObjetivoRutina[] = [
@@ -100,6 +101,10 @@ export function Rutinas() {
   const [filtroObjetivo, setFiltroObjetivo] = useState<ObjetivoRutina | "">("");
   const [agrupar, setAgrupar] = useState(false);
 
+  // Paginación: 10 por página; al buscar o filtrar se vuelve a la 1
+  const POR_PAGINA = 10;
+  const [pagina, setPagina] = useState(1);
+
   const [alerta, setAlerta] = useState<Alerta | null>(null);
 
   // Modal crear/editar: editandoId es null al crear y el id de la rutina al editar
@@ -160,6 +165,11 @@ export function Rutinas() {
     return datos.includes(texto) && (filtroObjetivo === "" || r.objetivo === filtroObjetivo);
   });
   const hayFiltros = texto !== "" || filtroObjetivo !== "";
+  // La página se recorta a un rango válido ("paginaSegura") cuando la lista
+  // filtrada es más corta; así al buscar se vuelve solo al rango disponible.
+  const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
+  const paginaSegura = Math.min(pagina, totalPaginas);
+  const paginadas = filtradas.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA);
 
   // Agrupa por instructor: { "2000000001": [rutina, rutina], "2000000002": [rutina] }
   const grupos = filtradas.reduce<Record<string, Rutina[]>>((acc, r) => {
@@ -421,7 +431,19 @@ export function Rutinas() {
       );
     });
   } else {
-    contenido = <div className="rutinas-grid">{filtradas.map(tarjeta)}</div>;
+    contenido = (
+      <>
+        <div className="rutinas-grid">{paginadas.map(tarjeta)}</div>
+        <div className="card-g">
+          <Paginador
+            pagina={paginaSegura}
+            total={filtradas.length}
+            porPagina={POR_PAGINA}
+            onCambiar={setPagina}
+          />
+        </div>
+      </>
+    );
   }
 
   return (

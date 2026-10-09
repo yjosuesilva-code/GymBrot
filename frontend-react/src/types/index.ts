@@ -58,6 +58,7 @@ export interface PlanMembresia {
 }
 
 export interface Membresia {
+    gimnasio_id: Gimnasio['gimnasio_id'];
     id_membresia: number;
     id_cliente: string;
     id_plan: number | null;   // null en las sembradas a mano, que no tienen plan
@@ -71,7 +72,11 @@ export interface Membresia {
     estado: 'ACTIVA' | 'VENCIDA' | 'CANCELADA';
 }
 
+// Lo que se envía al crear: gimnasio_id e id_membresia los pone api.membresias.create
+export type MembresiaNueva = Omit<Membresia, 'gimnasio_id' | 'id_membresia'>;
+
 export interface Pago {
+    gimnasio_id: Gimnasio['gimnasio_id'];
     id_pago: number;
     id_cliente: string;
     id_membresia: number;
@@ -87,6 +92,7 @@ export interface Pago {
    consulta el control de acceso (RegistroEntradaController.java:319) y la
    consulta de pagos vencidos. */
 export interface HistorialMembresia {
+    gimnasio_id: Gimnasio['gimnasio_id'];
     id_historial: number;
     id_cliente: string;
     id_membresia: number;
@@ -95,6 +101,7 @@ export interface HistorialMembresia {
 }
 
 export interface Ingreso {
+    gimnasio_id: Gimnasio['gimnasio_id'];
     id_ingreso: number;
     id_cliente: string;
     fecha: string;

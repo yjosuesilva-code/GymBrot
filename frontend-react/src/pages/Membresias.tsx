@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
-import type { Cliente, Membresia } from "../types";
+import type { Cliente, Membresia, MembresiaNueva } from "../types";
 
-type FormMembresia = Omit<Membresia, "id_membresia" | "valor" | "estado" | "id_plan"> & { valor: string; id_plan: number | null };
+type FormMembresia = Omit<MembresiaNueva, "valor" | "estado" | "id_plan"> & { valor: string; id_plan: number | null };
 
 const VACIO: FormMembresia = {
   id_cliente: "",

@@ -6,6 +6,7 @@ import type {
   Cliente,
   ClienteNuevo, // [multitenant]
   Membresia,
+  MembresiaNueva, // [multitenant]
   Pago,
   Ingreso,
   Ejercicio,
@@ -119,6 +120,7 @@ function ingresosPasados(): Ingreso[] {
       const entrada =
         fecha + "T" + String(hora).padStart(2, "0") + ":" + String(minuto).padStart(2, "0") + ":00";
       lista.push({
+        gimnasio_id: "gym-centro",
         id_ingreso: ++id,
         id_cliente: RUTINA[(i + d) % RUTINA.length],
         fecha,
@@ -157,6 +159,7 @@ function ingresosDeHoy(): Ingreso[] {
   return filas.map(([hora, cliente, dentro], i) => {
     const entrada = fecha + "T" + hora + ":00";
     return {
+      gimnasio_id: "gym-centro",
       id_ingreso: base + i + 1,
       id_cliente: cliente,
       fecha,
@@ -190,6 +193,8 @@ function pago(
   fechaExacta?: string,
 ): Pago {
   return {
+    // Todo el historial sembrado es de gym-centro; el pago de Titan lo pisa.
+    gimnasio_id: "gym-centro",
     id_pago: ++secuenciaPago,
     id_cliente: idCliente,
     id_membresia: idMembresia,
@@ -286,6 +291,11 @@ const pagosSinAplicar = [
   pago('1000000006', 7, 25, 120000, 'EFECTIVO',      'PENDIENTE', '',          'Cobro en efectivo sin membresia activa'),
 ];
 
+// gym-titan: el unico pago de la Ana de Titan (membresia 8). Misma cedula que
+// la Ana de Centro, que tiene 12 pagos: si su detalle muestra mas de uno, el
+// filtro por gimnasio fallo.
+const pagoTitanAna: Pago = { ...pago('1000000001', 8, 20, 120000, 'NEQUI'), gimnasio_id: 'gym-titan' };
+
 function inicioDe(serie: Pago[]): string {
   return serie.reduce((menor, p) => (p.fecha_pago < menor ? p.fecha_pago : menor), serie[0].fecha_pago);
 }
@@ -361,15 +371,17 @@ const SEED: Seed = {
   // (30 / 365 dias) a partir del ultimo pago, para que el dato nunca contradiga
   // al reloj.
   membresias: [
-    { id_membresia:1, id_cliente:'1000000001', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'MENSUAL', valor:280000,  fecha_inicio:inicioDe(serieAna),    fecha_vencimiento:finDe(serieAna, 30),    estado:'ACTIVA' },
-    { id_membresia:2, id_cliente:'1000000002', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:inicioDe(serieCarlos), fecha_vencimiento:finDe(serieCarlos, 30), estado:'ACTIVA' },
-    { id_membresia:3, id_cliente:'1000000003', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:inicioDe(serieJuan),   fecha_vencimiento:finDe(serieJuan, 30),   estado:'ACTIVA' },
-    { id_membresia:4, id_cliente:'1000000005', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'ANUAL',   valor:2800000, fecha_inicio:pagoAnualDiego.fecha_pago, fecha_vencimiento:sumarDias(pagoAnualDiego.fecha_pago, 365), estado:'ACTIVA' },
-    { id_membresia:5, id_cliente:'1000000007', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:inicioDe(serieAndres), fecha_vencimiento:finDe(serieAndres, 30), estado:'ACTIVA' },
+    { gimnasio_id:'gym-centro', id_membresia:1, id_cliente:'1000000001', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'MENSUAL', valor:280000,  fecha_inicio:inicioDe(serieAna),    fecha_vencimiento:finDe(serieAna, 30),    estado:'ACTIVA' },
+    { gimnasio_id:'gym-centro', id_membresia:2, id_cliente:'1000000002', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:inicioDe(serieCarlos), fecha_vencimiento:finDe(serieCarlos, 30), estado:'ACTIVA' },
+    { gimnasio_id:'gym-centro', id_membresia:3, id_cliente:'1000000003', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:inicioDe(serieJuan),   fecha_vencimiento:finDe(serieJuan, 30),   estado:'ACTIVA' },
+    { gimnasio_id:'gym-centro', id_membresia:4, id_cliente:'1000000005', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'ANUAL',   valor:2800000, fecha_inicio:pagoAnualDiego.fecha_pago, fecha_vencimiento:sumarDias(pagoAnualDiego.fecha_pago, 365), estado:'ACTIVA' },
+    { gimnasio_id:'gym-centro', id_membresia:5, id_cliente:'1000000007', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:inicioDe(serieAndres), fecha_vencimiento:finDe(serieAndres, 30), estado:'ACTIVA' },
     // Membresias ya vencidas: son las que dejan pagos sin aplicar y las que
     // el control de acceso debe rechazar.
-    { id_membresia:6, id_cliente:'1000000004', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:dia(70),  fecha_vencimiento:dia(40),  estado:'VENCIDA' },
-    { id_membresia:7, id_cliente:'1000000006', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:dia(55),  fecha_vencimiento:dia(25),  estado:'VENCIDA' },
+    { gimnasio_id:'gym-centro', id_membresia:6, id_cliente:'1000000004', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:dia(70),  fecha_vencimiento:dia(40),  estado:'VENCIDA' },
+    { gimnasio_id:'gym-centro', id_membresia:7, id_cliente:'1000000006', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:dia(55),  fecha_vencimiento:dia(25),  estado:'VENCIDA' },
+    // gym-titan: la Ana de Titan tiene su propia membresia, distinta de la Premium de Centro.
+    { gimnasio_id:'gym-titan',  id_membresia:8, id_cliente:'1000000001', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:pagoTitanAna.fecha_pago, fecha_vencimiento:sumarDias(pagoTitanAna.fecha_pago, 30), estado:'ACTIVA' },
   ],
 
   // Marca que membresia esta vigente. El control de acceso consulta esta tabla
@@ -377,13 +389,14 @@ const SEED: Seed = {
   // siempre con una membresia ACTIVA y no vencida: antes tres filas marcaban
   // activa=true sobre membresias vencidas y el acceso las dejaba pasar.
   historialMembresias: [
-    { id_historial:1, id_cliente:'1000000001', id_membresia:1, fecha_asignacion:inicioDe(serieAna),    activa:true  },
-    { id_historial:2, id_cliente:'1000000002', id_membresia:2, fecha_asignacion:inicioDe(serieCarlos), activa:true  },
-    { id_historial:3, id_cliente:'1000000003', id_membresia:3, fecha_asignacion:inicioDe(serieJuan),   activa:true  },
-    { id_historial:4, id_cliente:'1000000005', id_membresia:4, fecha_asignacion:pagoAnualDiego.fecha_pago, activa:true },
-    { id_historial:5, id_cliente:'1000000007', id_membresia:5, fecha_asignacion:inicioDe(serieAndres), activa:true  },
-    { id_historial:6, id_cliente:'1000000004', id_membresia:6, fecha_asignacion:dia(70),  activa:false },
-    { id_historial:7, id_cliente:'1000000006', id_membresia:7, fecha_asignacion:dia(55),  activa:false },
+    { gimnasio_id:'gym-centro', id_historial:1, id_cliente:'1000000001', id_membresia:1, fecha_asignacion:inicioDe(serieAna),    activa:true  },
+    { gimnasio_id:'gym-centro', id_historial:2, id_cliente:'1000000002', id_membresia:2, fecha_asignacion:inicioDe(serieCarlos), activa:true  },
+    { gimnasio_id:'gym-centro', id_historial:3, id_cliente:'1000000003', id_membresia:3, fecha_asignacion:inicioDe(serieJuan),   activa:true  },
+    { gimnasio_id:'gym-centro', id_historial:4, id_cliente:'1000000005', id_membresia:4, fecha_asignacion:pagoAnualDiego.fecha_pago, activa:true },
+    { gimnasio_id:'gym-centro', id_historial:5, id_cliente:'1000000007', id_membresia:5, fecha_asignacion:inicioDe(serieAndres), activa:true  },
+    { gimnasio_id:'gym-centro', id_historial:6, id_cliente:'1000000004', id_membresia:6, fecha_asignacion:dia(70),  activa:false },
+    { gimnasio_id:'gym-centro', id_historial:7, id_cliente:'1000000006', id_membresia:7, fecha_asignacion:dia(55),  activa:false },
+    { gimnasio_id:'gym-titan',  id_historial:8, id_cliente:'1000000001', id_membresia:8, fecha_asignacion:pagoTitanAna.fecha_pago, activa:true },
   ],
   
   pagos: serieAna
@@ -391,7 +404,8 @@ const SEED: Seed = {
     .concat(serieJuan)
     .concat(serieAndres)
     .concat([pagoAnualDiego])
-    .concat(pagosSinAplicar),
+    .concat(pagosSinAplicar)
+    .concat([pagoTitanAna]),
 
   ingresos: ingresosPasados().concat(ingresosDeHoy()),
   ejercicios: [],   // la colección de P4 arranca vacía
@@ -456,7 +470,9 @@ const SEED: Seed = {
 // v8 agrega gimnasios y gimnasio_id en usuarios/clientes (multitenant), con un
 // segundo gimnasio que solapa datos para que una fuga de aislamiento se note.
 // v9 lleva gimnasio_id a progreso y citas, con una medicion de la Ana de Titan.
-const SEED_VERSION = "9";
+// v10 lo lleva a membresias, historial, pagos e ingresos, con una membresia y
+// un pago propios de la Ana de Titan.
+const SEED_VERSION = "10";
 const CLAVE_VERSION = "gymbrot_seed_version";
 const CLAVE_LECTOR = "gymbrot_lector_conectado";
 
@@ -537,6 +553,13 @@ const db = {
     const gym = gimnasioParaEscribir();
     const otros = this.read<T>(col).filter((r) => r.gimnasio_id !== gym);
     this.write(col, otros.concat(filas.map((r) => ({ ...r, gimnasio_id: gym }))));
+  },
+
+  /* Siguiente id numerico de una coleccion. Lee la tabla completa y no
+     readTenant: el id es global como un SERIAL en la tabla compartida, asi
+     dos gimnasios nunca repiten id. */
+  siguienteId<T>(col: string, idDe: (fila: T) => number): number {
+    return this.read<T>(col).reduce((max, f) => Math.max(max, idDe(f)), 0) + 1;
   },
 };
 
@@ -861,6 +884,8 @@ export const api = {
     },
   },
 
+  // Catalogo global por ahora: si los planes son de cada gimnasio sigue
+  // pendiente en DECISIONES.md (catalogos globales vs por gimnasio).
   planes: {
     async list(): Promise<PlanMembresia[]> {
       await api._delay();
@@ -871,45 +896,46 @@ export const api = {
   membresias: {
     async list(): Promise<Membresia[]> {
       await api._delay();
-      return db.read<Membresia>("membresias");
+      return db.readTenant<Membresia>("membresias");
     },
     async byCliente(id: string): Promise<Membresia[]> {
       await api._delay();
-      return db.read<Membresia>("membresias").filter((m) => m.id_cliente === id);
+      return db.readTenant<Membresia>("membresias").filter((m) => m.id_cliente === id);
     },
 
-    async create(data: Omit<Membresia, "id_membresia">): Promise<ApiResp<Membresia>> {
+    async create(data: MembresiaNueva): Promise<ApiResp<Membresia>> {
       await api._delay();
-      const arr = db.read<Membresia>("membresias");
-      const nuevoId = arr.length > 0
-        ? Math.max(...arr.map((m) => m.id_membresia)) + 1
-        : 1;
-      const nueva: Membresia = { ...data, id_membresia: nuevoId };
+      const arr = db.readTenant<Membresia>("membresias");
+      const nueva: Membresia = {
+        ...data,
+        gimnasio_id: gimnasioParaEscribir(),
+        id_membresia: db.siguienteId<Membresia>("membresias", (m) => m.id_membresia),
+      };
       arr.push(nueva);
-      db.write("membresias", arr);
+      db.writeTenant("membresias", arr);
       return { ok: true, mensaje: "Membresía registrada", data: nueva };
     },
 
     async update(
       id: number,
-      data: Partial<Omit<Membresia, "id_membresia">>
+      data: Partial<MembresiaNueva>
     ): Promise<ApiResp<Membresia>> {
       await api._delay();
-      const arr = db.read<Membresia>("membresias");
+      const arr = db.readTenant<Membresia>("membresias");
       const membresia = arr.find((m) => m.id_membresia === id);
       if (!membresia) return { ok: false, mensaje: "Membresía no encontrada" };
       Object.assign(membresia, data, { id_membresia: id });
-      db.write("membresias", arr);
+      db.writeTenant("membresias", arr);
       return { ok: true, mensaje: "Membresía actualizada", data: membresia };
     },
 
     async setEstado(id: number, estado: Membresia["estado"]): Promise<ApiResp<Membresia>> {
       await api._delay();
-      const arr = db.read<Membresia>("membresias");
+      const arr = db.readTenant<Membresia>("membresias");
       const membresia = arr.find((m) => m.id_membresia === id);
       if (!membresia) return { ok: false, mensaje: "Membresía no encontrada" };
       membresia.estado = estado;
-      db.write("membresias", arr);
+      db.writeTenant("membresias", arr);
       return { ok: true, mensaje: "Estado de membresía actualizado", data: membresia };
     },
   },
@@ -917,11 +943,11 @@ export const api = {
   pagos: {
     async  list(): Promise<Pago[]> {
       await api._delay();
-      return db.read<Pago>("pagos");
+      return db.readTenant<Pago>("pagos");
     },
     async byCliente(id: string): Promise<Pago[]> {
       await api._delay();
-      return db.read<Pago>("pagos").filter((p) => p.id_cliente === id);
+      return db.readTenant<Pago>("pagos").filter((p) => p.id_cliente === id);
     },
 
     /* Registra un cobro y activa la membresia. El orden importa y es el que
@@ -956,15 +982,18 @@ export const api = {
       // Idempotencia por referencia: la misma transaccion no se cobra dos
       // veces. El legacy no lo hace, asi que un doble clic en Procesar cobra
       // dos veces y crea dos membresias (PagoMembresiaController.java:215).
+      // La referencia se busca dentro del gimnasio: la numeracion de recibos
+      // es de cada uno, y un gimnasio no debe enterarse de las del otro.
       const referencia = input.referencia_transaccion.trim().toUpperCase();
-      const pagos = db.read<Pago>("pagos");
+      const pagos = db.readTenant<Pago>("pagos");
 
       if (referencia && pagos.some((p) => p.referencia_transaccion.toUpperCase() === referencia))
         return { ok: false, mensaje: "Esa referencia ya tiene un pago registrado" };
 
       const hoy = utils.isoDate();
-      const membresias = db.read<Membresia>("membresias");
-      const historial = db.read<HistorialMembresia>("historialMembresias");
+      const gym = gimnasioParaEscribir();
+      const membresias = db.readTenant<Membresia>("membresias");
+      const historial = db.readTenant<HistorialMembresia>("historialMembresias");
 
       // El cobro solo renueva la membresia vigente: si el cliente ya tiene una,
       // el plan y la modalidad van dados y cambiar alguno exige cancelar antes
@@ -994,7 +1023,8 @@ export const api = {
         const dias = input.modalidad_pago === "SEMESTRAL" ? 180 : input.modalidad_pago === "ANUAL" ? 365 : 30;
 
         const membresia: Membresia = {
-          id_membresia: membresias.reduce((max, m) => Math.max(max, m.id_membresia), 0) + 1,
+          gimnasio_id: gym,
+          id_membresia: db.siguienteId<Membresia>("membresias", (m) => m.id_membresia),
           id_cliente: idCliente,
           id_plan: plan.id_plan,
           tipo_membresia: plan.nombre,
@@ -1015,7 +1045,8 @@ export const api = {
         });
 
         historial.push({
-          id_historial: historial.reduce((max, h) => Math.max(max, h.id_historial), 0) + 1,
+          gimnasio_id: gym,
+          id_historial: db.siguienteId<HistorialMembresia>("historialMembresias", (h) => h.id_historial),
           id_cliente: idCliente,
           id_membresia: membresia.id_membresia,
           fecha_asignacion: hoy,
@@ -1023,7 +1054,8 @@ export const api = {
         });
 
         const pago: Pago = {
-          id_pago: pagos.reduce((max, p) => Math.max(max, p.id_pago), 0) + 1,
+          gimnasio_id: gym,
+          id_pago: db.siguienteId<Pago>("pagos", (p) => p.id_pago),
           id_cliente: idCliente,
           id_membresia: membresia.id_membresia,
           fecha_pago: input.fecha_pago || hoy,
@@ -1037,16 +1069,18 @@ export const api = {
         pagos.push(pago);
         membresias.push(membresia);
 
-        db.write("membresias", membresias);
-        db.write("historialMembresias", historial);
-        db.write("pagos", pagos);
+        db.writeTenant("membresias", membresias);
+        db.writeTenant("historialMembresias", historial);
+        db.writeTenant("pagos", pagos);
 
         return { ok: true, mensaje: "Pago registrado y membresia activada", data: pago };
       } catch (e) {
         // Atraso de las tres escrituras: sin esto, un fallo a medias deja
-        // una membresia activa sin pago registrado.
-        db.write("membresias", membresiasPrevias);
-        db.write("historialMembresias", historialPrevio);
+        // una membresia activa sin pago registrado. Va por writeTenant: las
+        // copias salieron de readTenant y db.write borraria a los otros
+        // gimnasios.
+        db.writeTenant("membresias", membresiasPrevias);
+        db.writeTenant("historialMembresias", historialPrevio);
         return {
           ok: false,
           mensaje: "No se pudo registrar el pago. Revisa el historial. (" + (e instanceof Error ? e.message : "error") + ")",
@@ -1063,17 +1097,17 @@ export const api = {
   finanzas: {
     async ingresosPorMes(cantidadMeses = 12): Promise<{ mes: string; total: number }[]> {
       await api._delay();
-      const pagos = db.read<Pago>("pagos").filter((p) => p.estado_pago === "EXITOSO");
+      const pagos = db.readTenant<Pago>("pagos").filter((p) => p.estado_pago === "EXITOSO");
       return agruparPorMes(pagos, (p) => p.fecha_pago, (p) => p.valor, cantidadMeses);
     },
 
     async ingresosPorPlan(): Promise<{ plan: string; total: number }[]> {
       await api._delay();
-      const membresias = db.read<Membresia>("membresias");
+      const membresias = db.readTenant<Membresia>("membresias");
       const porId = new Map(membresias.map((m) => [m.id_membresia, m.tipo_membresia]));
       const totales = new Map<string, number>();
 
-      for (const p of db.read<Pago>("pagos")) {
+      for (const p of db.readTenant<Pago>("pagos")) {
         if (p.estado_pago !== "EXITOSO") continue;
         const plan = porId.get(p.id_membresia);
         if (!plan) continue;   // pago sin membresia asociada: no se puede atribuir
@@ -1087,7 +1121,7 @@ export const api = {
       await api._delay();
       const totales = new Map<string, { total: number; cantidad: number }>();
 
-      for (const p of db.read<Pago>("pagos")) {
+      for (const p of db.readTenant<Pago>("pagos")) {
         if (p.estado_pago !== "EXITOSO") continue;
         const previo = totales.get(p.metodo_pago) ?? { total: 0, cantidad: 0 };
         totales.set(p.metodo_pago, {
@@ -1118,13 +1152,13 @@ export const api = {
        PENDIENTE aunque la membresia este bien. */
     async pagosVencidos(): Promise<PagoVencido[]> {
       await api._delay();
-      const membresias = db.read<Membresia>("membresias");
+      const membresias = db.readTenant<Membresia>("membresias");
       const porId = new Map(membresias.map((m) => [m.id_membresia, m]));
       const clientes = new Map(db.readTenant<Cliente>("clientes").map((c) => [c.numero_identificacion, c]));
       const hoy = utils.isoDate();
 
       return db
-        .read<Pago>("pagos")
+        .readTenant<Pago>("pagos")
         .filter((p) => p.estado_pago !== "EXITOSO")
         .map((p): PagoVencido | null => {
           const m = porId.get(p.id_membresia);
@@ -1163,7 +1197,7 @@ export const api = {
       // si esa tarjeta no lo cuenta, la puerta no lo deja pasar.
       const hoy = utils.isoDate();
       const id = cliente.numero_identificacion;
-      const vigente = db.read<Membresia>("membresias").some(
+      const vigente = db.readTenant<Membresia>("membresias").some(
         (m) => m.id_cliente === id && membresiaVigente(m, hoy, cliente),
       );
       if (!vigente) {
@@ -1173,7 +1207,9 @@ export const api = {
         };
       }
 
-      const ingresos = db.read<Ingreso>("ingresos");
+      // Solo cuenta una entrada abierta en este gimnasio: estar dentro de otro
+      // con la misma cedula no impide entrar aqui.
+      const ingresos = db.readTenant<Ingreso>("ingresos");
       const abierto = ingresos.find(
         (i) => i.id_cliente === id && i.fecha === hoy && i.hora_salida === null,
       );
@@ -1185,7 +1221,8 @@ export const api = {
       }
 
       const registro: Ingreso = {
-        id_ingreso: ingresos.reduce((max, i) => Math.max(max, i.id_ingreso), 0) + 1,
+        gimnasio_id: gimnasioParaEscribir(),
+        id_ingreso: db.siguienteId<Ingreso>("ingresos", (i) => i.id_ingreso),
         id_cliente: id,
         fecha: hoy,
         hora_entrada: hoy + "T" + relojLocal(),
@@ -1194,7 +1231,7 @@ export const api = {
         estado_verificacion: "APROBADO",
       };
       ingresos.push(registro);
-      db.write("ingresos", ingresos);
+      db.writeTenant("ingresos", ingresos);
 
       return {
         ok: true,
@@ -1230,7 +1267,7 @@ export const api = {
       }
 
       const hoy = utils.isoDate();
-      const ingresos = db.read<Ingreso>("ingresos");
+      const ingresos = db.readTenant<Ingreso>("ingresos");
       const abierto = ingresos.find(
         (i) => i.id_cliente === id && i.fecha === hoy && i.hora_salida === null,
       );
@@ -1243,7 +1280,7 @@ export const api = {
       // reloj, así que a primera hora puede haber una entrada "futura". Sin
       // este tope saldria un registro con la salida antes que la entrada.
       abierto.hora_salida = ahora < abierto.hora_entrada ? abierto.hora_entrada : ahora;
-      db.write("ingresos", ingresos);
+      db.writeTenant("ingresos", ingresos);
 
       return {
         ok: true,
@@ -1256,18 +1293,18 @@ export const api = {
   ingresos: {
     async list(): Promise<Ingreso[]> {
       await api._delay();
-      return db.read<Ingreso>("ingresos");
+      return db.readTenant<Ingreso>("ingresos");
     },
     async byCliente(id: string): Promise<Ingreso[]> {
       await api._delay();
-      return db.read<Ingreso>("ingresos").filter((i) => i.id_cliente === id);
+      return db.readTenant<Ingreso>("ingresos").filter((i) => i.id_cliente === id);
     },
     /* Lo que muestra el listado de control de acceso: un solo dia. Dashboard y
        Finanzas usan list() con el historial completo; aqui leer los seis dias
        anteriores solo serviria para filtrarlos en el componente. */
     async delDia(fecha: string): Promise<Ingreso[]> {
       await api._delay();
-      return db.read<Ingreso>("ingresos").filter((i) => i.fecha === fecha);
+      return db.readTenant<Ingreso>("ingresos").filter((i) => i.fecha === fecha);
     },
   },
 
@@ -1530,9 +1567,7 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
     async create(data: ProgresoNuevo): Promise<ApiResp<Progreso>> {
       await api._delay();
       const arr = db.readTenant<Progreso>("progreso");
-      // El id sale de la tabla completa, no de readTenant: es global como un
-      // SERIAL en la tabla compartida, asi dos gimnasios nunca repiten id.
-      const nuevoId = db.read<Progreso>("progreso").reduce((max, p) => Math.max(max, p.id_progreso), 0) + 1;
+      const nuevoId = db.siguienteId<Progreso>("progreso", (p) => p.id_progreso);
       const nuevo: Progreso = { gimnasio_id: gimnasioParaEscribir(), id_progreso: nuevoId, ...data };
       arr.push(nuevo);
       db.writeTenant("progreso", arr);
@@ -1554,9 +1589,7 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
     async create(data: CitaNueva): Promise<ApiResp<Cita>> {
       await api._delay();
       const arr = db.readTenant<Cita>("citas");
-      // El id sale de la tabla completa, no de readTenant: es global como un
-      // SERIAL en la tabla compartida, asi dos gimnasios nunca repiten id.
-      const nuevoId = db.read<Cita>("citas").reduce((max, c) => Math.max(max, c.id_cita), 0) + 1;
+      const nuevoId = db.siguienteId<Cita>("citas", (c) => c.id_cita);
       const nueva: Cita = { gimnasio_id: gimnasioParaEscribir(), id_cita: nuevoId, estado: "PENDIENTE", ...data };
       arr.push(nueva);
       db.writeTenant("citas", arr);

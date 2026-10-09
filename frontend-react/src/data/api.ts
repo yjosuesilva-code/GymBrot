@@ -1,11 +1,43 @@
 import { utils } from "../lib/utils";
-import type { Cliente, Membresia, Pago, Ingreso, Ejercicio, Progreso, Cita, CitaNueva, ApiResp } from "../types";
-import type { Instructor, InstructorNuevo, EstadoInstructor } from "../types"; // [P3]
-import type { Rutina, RutinaNueva, RutinaEjercicio, DiaSemana } from "../types"; // [P3]
+import { membresiaVigente } from "../lib/membresias";
+import { notificarCambioDeDatos } from "../lib/datos";
+import type {
+  Gimnasio, // [multitenant]
+  PlanSoftware, // [plataforma]
+  PagoSoftware, // [plataforma]
+  Cliente,
+  ClienteNuevo, // [multitenant]
+  Membresia,
+  MembresiaNueva, // [multitenant]
+  Pago,
+  Ingreso,
+  Ejercicio,
+  Usuario,
+  ApiResp,
+  PlanMembresia,
+  HistorialMembresia,
+  Progreso, // [P2]
+  ProgresoNuevo, // [P2]
+  Cita, // [P2]
+  CitaNueva, // [P2]
+  Instructor, // [P3]
+  InstructorNuevo, // [P3]
+  EstadoInstructor, // [P3]
+  Rutina, // [P3]
+  RutinaNueva, // [P3]
+  RutinaEjercicio, // [P3]
+  DiaSemana, // [P3]
+} from "../types";
 
 interface Seed {
+  planesSoftware: PlanSoftware[];
+  gimnasios: Gimnasio[];
+  pagosSoftware: PagoSoftware[];
+  usuarios: Usuario[];
   clientes: Cliente[];
+  planes: PlanMembresia[];
   membresias: Membresia[];
+  historialMembresias: HistorialMembresia[];
   pagos: Pago[];
   ingresos: Ingreso[];
   ejercicios: Ejercicio[];
@@ -28,6 +60,14 @@ function dia(offset: number): string {
   return utils.isoDate(d);
 }
 
+// Suma dias a una fecha 'YYYY-MM-DD' sin pasar por UTC: usar toISOString()
+// correria la fecha un dia en zonas a poniente.
+function sumarDias(iso: string, dias: number): string {
+  const [anio, mes, diaNum] = iso.split("-").map(Number);
+  const d = new Date(anio, mes - 1, diaNum + dias);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
 // Suma minutos a un datetime 'YYYY-MM-DDTHH:MM:SS' usando aritmetica de
 // strings. No usar toISOString(): convierte a UTC y correria la hora local,
 // moviendo las entradas fuera de las franjas 06-21 de la grafica.
@@ -38,6 +78,17 @@ function sumarMinutos(iso: string, minutos: number): string {
   const hh = Math.floor(total / 60) % 24;
   const mm = total % 60;
   return fecha + "T" + String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0") + ":00";
+}
+
+// Reloj local en 'HH:MM:SS'. Se junta con dia(0) para escribir hora_entrada con
+// el mismo criterio que el seed: la fecha en el eje de utils.isoDate (que es el
+// que compara Dashboard) y la hora en local, que es la que reparte la grafica
+// de horas picos. Usar toISOString() pondria la hora UTC y correria cada
+// entrada una franja para atras.
+function relojLocal(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
 }
 
 // Horarios tipo de un gimnasio: picos temprano (6-8) y en la tarde (18-20).
@@ -73,12 +124,14 @@ function ingresosPasados(): Ingreso[] {
       const entrada =
         fecha + "T" + String(hora).padStart(2, "0") + ":" + String(minuto).padStart(2, "0") + ":00";
       lista.push({
+        gimnasio_id: "gym-centro",
         id_ingreso: ++id,
         id_cliente: RUTINA[(i + d) % RUTINA.length],
         fecha,
         hora_entrada: entrada,
         hora_salida: sumarMinutos(entrada, 60),
-        metodo_verificacion: i % 2 === 0 ? "QR" : "MANUAL",
+        metodo_verificacion: i % 2 === 0 ? "HUELLA" : "CONTRASENA",
+        estado_verificacion: "APROBADO",
       });
     });
   }
@@ -110,45 +163,267 @@ function ingresosDeHoy(): Ingreso[] {
   return filas.map(([hora, cliente, dentro], i) => {
     const entrada = fecha + "T" + hora + ":00";
     return {
+      gimnasio_id: "gym-centro",
       id_ingreso: base + i + 1,
       id_cliente: cliente,
       fecha,
       hora_entrada: entrada,
       hora_salida: dentro ? null : sumarMinutos(entrada, 60),
-      metodo_verificacion: i % 2 === 0 ? "QR" : "MANUAL",
+      metodo_verificacion: i % 2 === 0 ? "HUELLA" : "CONTRASENA",
+      estado_verificacion: "APROBADO",
     };
   });
 }
 
+// --- Seed de finanzas ------------------------------------------------------
+//
+// Todo el historial financiero usa fechas relativas a hoy. Escribirlas fijas
+// era un error: las membresias.tenian 2026-08-15 y 2026-09-15 hardcodeadas, y
+// en cuanto paso la fecha de vencimiento las cuatro quedaron vencidas, Finanzas
+// mostro 0 membresias vigentes y el control de acceso dejo entrar a todo el
+// mundo porque el historial seguia con activa=true.
+
+let secuenciaPago = 0;
+
+function pago(
+  idCliente: string,
+  idMembresia: number,
+  haceDias: number,
+  valor: number,
+  metodo: Pago["metodo_pago"],
+  estado: Pago["estado_pago"] = "EXITOSO",
+  referencia = "",
+  observaciones = "",
+  fechaExacta?: string,
+): Pago {
+  return {
+    // Todo el historial sembrado es de gym-centro; el pago de Titan lo pisa.
+    gimnasio_id: "gym-centro",
+    id_pago: ++secuenciaPago,
+    id_cliente: idCliente,
+    id_membresia: idMembresia,
+    fecha_pago: fechaExacta ?? dia(haceDias),
+    valor,
+    metodo_pago: metodo,
+    estado_pago: estado,
+    referencia_transaccion: referencia,
+    observaciones,
+  };
+}
+
+// Primer dia del mes 'mesesAtras' meses antes de hoy. Anclar por mes en vez de
+// por cantidad de dias es lo que mantiene estable la serie: con offsets fijos
+// de 30 dias la cantidad de meses con dato dependia del dia del mes en que se
+// corria el seed, y la grafica aparecia con 11 o 13 barras.
+function inicioDeMes(mesesAtras: number): string {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - mesesAtras);
+  return utils.isoDate(d);
+}
+
+// Un dia dentro del mes 'mesesAtras' atras, recortado al ultimo dia si el mes
+// es mas corto. Asi el dia de cobro de cada cliente (Ana el 20, Carlos el 8)
+// se mantiene parecido en todos los meses. Nunca devuelve una fecha futura:
+// si el dia de cobro todavia no llego en el mes corriente, se recorta a hoy.
+function diaDeMes(mesesAtras: number, diaDelMes: number): string {
+  const base = inicioDeMes(mesesAtras);
+  const [anio, mes] = base.split("-").map(Number);
+  const ultimoDelMes = new Date(anio, mes, 0).getDate();
+  const fecha = sumarDias(base, Math.min(diaDelMes, ultimoDelMes) - 1);
+  const hoy = dia(0);
+  return fecha > hoy ? hoy : fecha;
+}
+
+// Un pago por mes hacia atras, para que la grafica de ingresos tenga los 12
+// meses con dato en vez de solo el corriente.
+//
+// El pago del mes en curso usa diaDeMes(0, ...) en vez de un offset fijo de
+// dias: con offsets, "hace 16 dias" caia en el mes anterior cuando hoy era dia
+// 1 o 2, y el dia de cobro caia en el futuro cuando hoy era dia 1. Con anclaje
+// por mes la serie tiene siempre los mismos 12 meses, sea cual sea el dia.
+function pagosMensuales(
+  idCliente: string,
+  idMembresia: number,
+  valor: number,
+  metodos: Pago["metodo_pago"][],
+  diaDeCobro: number,
+  mesesAtras: number,
+  renewalHoy = false,
+): Pago[] {
+  const lista: Pago[] = [];
+  // La renovacion de hoy se ancla al dia actual para que "Recaudado hoy" tenga
+  // movimiento; las anteriores, al dia de cobro habitual del cliente.
+  const actual = renewalHoy ? dia(0) : diaDeMes(0, diaDeCobro);
+  lista.push(pago(idCliente, idMembresia, 0, valor, metodos[0], "EXITOSO", "", "", actual));
+
+  for (let mes = 1; mes <= mesesAtras; mes++) {
+    const fecha = diaDeMes(mes, diaDeCobro);
+    // Se descarta cualquier cuota que caiga en el mismo mes que la renovacion
+    // mas reciente, para no inventar dos cobros en un mismo mes.
+    if (fecha >= actual) continue;
+    lista.push(
+      pago(idCliente, idMembresia, 0, valor, metodos[mes % metodos.length], "EXITOSO", "", "", fecha),
+    );
+  }
+  return lista;
+}
+
+// Serie de cada cliente con membresia vigente. Se declaran antes que las
+// membresias porque de ellas se derivan fecha_inicio (primer pago) y
+// fecha_registro: una membresia no puede empezar antes de que el cliente
+// exista, ni antes del primer pago que la financia.
+//
+// Los dos ultimos argumentos son los meses hacia atras que se cubren (11) y si
+// la renovacion mas reciente cae hoy. Carlos y Juan renuevan hoy, que es lo que
+// alimenta "Recaudado hoy".
+const serieAna    = pagosMensuales('1000000001', 1, 280000, ['TARJETA', 'NEQUI'],    20, 11);
+const serieCarlos = pagosMensuales('1000000002', 2, 120000, ['EFECTIVO', 'NEQUI'],    8, 11, true);
+const serieJuan   = pagosMensuales('1000000003', 3, 180000, ['TARJETA', 'EFECTIVO'], 12, 11, true);
+const serieAndres = pagosMensuales('1000000007', 5, 180000, ['NEQUI', 'TARJETA'],    18, 11);
+
+// El pago anual de Diego cierra la serie de ingresos del mes 11.
+const pagoAnualDiego = pago(
+  '1000000005', 4, 0, 2800000, 'TRANSFERENCIA', 'EXITOSO', 'TR-2290',
+  'Pago anual anticipado', diaDeMes(11, 6),
+);
+
+// Pagos sin aplicar: son los unicos estados distintos de EXITOSO, y son la
+// razon de que la tabla "Pagos por aplicar" no salga vacia.
+const pagosSinAplicar = [
+  pago('1000000004', 6, 40, 180000, 'TRANSFERENCIA', 'PENDIENTE', 'TR-2299', 'Transferencia sin aplicar'),
+  pago('1000000006', 7, 25, 120000, 'EFECTIVO',      'PENDIENTE', '',          'Cobro en efectivo sin membresia activa'),
+];
+
+// gym-titan: el unico pago de la Ana de Titan (membresia 8). Misma cedula que
+// la Ana de Centro, que tiene 12 pagos: si su detalle muestra mas de uno, el
+// filtro por gimnasio fallo.
+const pagoTitanAna: Pago = { ...pago('1000000001', 8, 20, 120000, 'NEQUI'), gimnasio_id: 'gym-titan' };
+
+function inicioDe(serie: Pago[]): string {
+  return serie.reduce((menor, p) => (p.fecha_pago < menor ? p.fecha_pago : menor), serie[0].fecha_pago);
+}
+
+function finDe(serie: Pago[], diasExtra: number): string {
+  const ultimo = serie.reduce((mayor, p) => (p.fecha_pago > mayor ? p.fecha_pago : mayor), serie[0].fecha_pago);
+  return sumarDias(ultimo, diasExtra);
+}
+
 const SEED: Seed = {
+  // Lo que la plataforma vende a los gimnasios (pagina de planes y registro).
+  // max_clientes todavia no se hace cumplir: solo se muestra.
+  planesSoftware: [
+    { id_plan_software:'BASICO',  nombre:'Básico',  precio_mensual:99000,  max_clientes:100,  destacado:false,
+      incluye:['Clientes y membresías', 'Control de acceso con huella', 'Registro de pagos'] },
+    { id_plan_software:'PRO',     nombre:'Pro',     precio_mensual:189000, max_clientes:500,  destacado:true,
+      incluye:['Todo lo del plan Básico', 'Instructores, rutinas y citas', 'Progreso de los socios', 'Finanzas y reportes'] },
+    { id_plan_software:'PREMIUM', nombre:'Premium', precio_mensual:299000, max_clientes:null, destacado:false,
+      incluye:['Todo lo del plan Pro', 'Gymbrot AI', 'Soporte prioritario'] },
+  ],
+
+  // Tenants de la plataforma. gym-titan se solapa a proposito con gym-centro
+  // (misma cedula, datos distintos): si alguna pantalla deja pasar filas del
+  // otro gimnasio, se nota al instante (DECISIONES.md, convenciones).
+  gimnasios: [
+    { gimnasio_id:'gym-centro', nombre:'GymBrot Centro', ciudad:'Valledupar', telefono:'6055700000', estado:'ACTIVO', plan_software:'PREMIUM', fecha_registro:dia(400), vence_suscripcion:dia(-20) },
+    { gimnasio_id:'gym-titan',  nombre:'Titan Fitness',  ciudad:'Valledupar', telefono:'6055711111', estado:'ACTIVO', plan_software:'BASICO',  fecha_registro:dia(25),  vence_suscripcion:dia(-5) },
+  ],
+
+  // Pagos de suscripcion que hacen los gimnasios nuevos desde /registro.
+  pagosSoftware: [],
+
+  // Personal con acceso al panel. El legacy exige tipo_usuario
+  // 'ADMINISTRADOR' para iniciar sesion (loginController.java:156), asi que
+  // instructor y cliente quedan sembrados para probar ese rechazo, no para
+  // entrar. Cuando haya roles reales, estos 3 pasan a ser los perfiles.
+  //
+  // Los 7 clientes tienen fila propia con su clave: es la que compara el modo
+  // manual de control de acceso (RegistroEntradaController.handleValidarIngreso
+  // -> AuthService.validarContrasena). Sin fila no hay clave y ese socio solo
+  // podria entrar por huella. El estado espeja el del cliente, asi que
+  // suspenderlo en Clientes lo suspende aqui tambien.
+  usuarios: [
+    { gimnasio_id:'gym-centro', numero_identificacion:'1001000001', nombre:'admin', apellidos:'Administrador', correo:'admin@gymbrot.com', contrasena:'admin',      estado:'ACTIVO',     tipo_usuario:'ADMINISTRADOR', rol:'SUPERADMIN' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'2001000001', nombre:'Diego', apellidos:'Morales',       correo:'diego.morales@gymbrot.com', contrasena:'instructor', estado:'ACTIVO',     tipo_usuario:'INSTRUCTOR',   rol:'INSTRUCTOR' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000001', nombre:'Ana María',    apellidos:'Ruiz',     correo:'ana.ruiz@mail.com',   contrasena:'ana123',    estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000002', nombre:'Carlos Andrés', apellidos:'Pérez',    correo:'carlos.perez@mail.com', contrasena:'carlos123', estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000003', nombre:'Juan David',    apellidos:'Gómez',    correo:'juan.gomez@mail.com',  contrasena:'juan123',   estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000004', nombre:'Laura Sofía',   apellidos:'Martínez', correo:'laura.m@mail.com',     contrasena:'laura123',  estado:'SUSPENDIDO', tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000005', nombre:'Diego Fernando',apellidos:'Ríos',     correo:'diego.rios@mail.com',  contrasena:'diego123',  estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000006', nombre:'Valentina',     apellidos:'Torres',   correo:'valen.torres@mail.com',contrasena:'valen123',  estado:'INACTIVO',   tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000007', nombre:'Andrés Felipe', apellidos:'Navarro',  correo:'andres.nav@mail.com',  contrasena:'andres123', estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
+    // --- gym-titan ---
+    { gimnasio_id:'gym-titan', numero_identificacion:'1001000002', nombre:'titan', apellidos:'Administrador', correo:'admin@titanfitness.com', contrasena:'titan', estado:'ACTIVO', tipo_usuario:'ADMINISTRADOR', rol:'ADMINISTRADOR' },
+    { gimnasio_id:'gym-titan', numero_identificacion:'1000000001', nombre:'Ana María', apellidos:'Ruiz', correo:'ana.ruiz@mail.com', contrasena:'anatitan', estado:'ACTIVO', tipo_usuario:'CLIENTE', rol:'CLIENTE' },
+    { gimnasio_id:'gym-titan', numero_identificacion:'1000000101', nombre:'Sebastián', apellidos:'Castro', correo:'sebas.castro@mail.com', contrasena:'sebas123', estado:'ACTIVO', tipo_usuario:'CLIENTE', rol:'CLIENTE' },
+  ],
+
   clientes: [ 
-    { numero_identificacion:'1000000001', tipo_identificacion:'CC', nombre:'Ana María',    apellidos:'Ruiz',     telefono:'3001112233', correo:'ana.ruiz@mail.com',   direccion:'Cra 15 #23-40', fecha_nacimiento:'1995-03-12', estado:'ACTIVO',     fecha_registro:'2026-01-10' },
-    { numero_identificacion:'1000000002', tipo_identificacion:'CC', nombre:'Carlos Andrés', apellidos:'Pérez',    telefono:'3012223344', correo:'carlos.perez@mail.com',direccion:'Cl 20 #5-16',   fecha_nacimiento:'1988-11-02', estado:'ACTIVO',     fecha_registro:'2026-01-18' },
-    { numero_identificacion:'1000000003', tipo_identificacion:'TI', nombre:'Juan David',    apellidos:'Gómez',    telefono:'3023334455', correo:'juan.gomez@mail.com',  direccion:'Cra 9 #10-11',  fecha_nacimiento:'2009-06-25', estado:'ACTIVO',     fecha_registro:'2026-02-01' },
-    { numero_identificacion:'1000000004', tipo_identificacion:'CC', nombre:'Laura Sofía',   apellidos:'Martínez', telefono:'3034445566', correo:'laura.m@mail.com',     direccion:'Cl 8 #1-90',    fecha_nacimiento:'1999-09-14', estado:'SUSPENDIDO', fecha_registro:'2026-02-10' },
-    { numero_identificacion:'1000000005', tipo_identificacion:'CE', nombre:'Diego Fernando',apellidos:'Ríos',     telefono:'3045556677', correo:'diego.rios@mail.com',  direccion:'Av 4 #12-30',   fecha_nacimiento:'1965-02-20', estado:'ACTIVO',     fecha_registro:'2026-02-15' },
-    { numero_identificacion:'1000000006', tipo_identificacion:'CC', nombre:'Valentina',     apellidos:'Torres',   telefono:'3056667788', correo:'valen.torres@mail.com',direccion:'Cra 19 #4-5',   fecha_nacimiento:'2001-12-01', estado:'INACTIVO',   fecha_registro:'2026-03-01' },
-    { numero_identificacion:'1000000007', tipo_identificacion:'CC', nombre:'Andrés Felipe', apellidos:'Navarro',  telefono:'3067778899', correo:'andres.nav@mail.com',  direccion:'Cl 44 #7-2',    fecha_nacimiento:'1992-07-19', estado:'ACTIVO',     fecha_registro:'2026-03-05' }
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000001', tipo_identificacion:'CC', nombre:'Ana María',    apellidos:'Ruiz',     telefono:'3001112233', correo:'ana.ruiz@mail.com',   direccion:'Cra 15 #23-40', fecha_nacimiento:'1995-03-12', estado:'ACTIVO',     fecha_registro:inicioDe(serieAna) },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000002', tipo_identificacion:'CC', nombre:'Carlos Andrés', apellidos:'Pérez',    telefono:'3012223344', correo:'carlos.perez@mail.com',direccion:'Cl 20 #5-16',   fecha_nacimiento:'1988-11-02', estado:'ACTIVO',     fecha_registro:inicioDe(serieCarlos) },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000003', tipo_identificacion:'TI', nombre:'Juan David',    apellidos:'Gómez',    telefono:'3023334455', correo:'juan.gomez@mail.com',  direccion:'Cra 9 #10-11',  fecha_nacimiento:'2009-06-25', estado:'ACTIVO',     fecha_registro:inicioDe(serieJuan) },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000004', tipo_identificacion:'CC', nombre:'Laura Sofía',   apellidos:'Martínez', telefono:'3034445566', correo:'laura.m@mail.com',     direccion:'Cl 8 #1-90',    fecha_nacimiento:'1999-09-14', estado:'SUSPENDIDO', fecha_registro:dia(180) },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000005', tipo_identificacion:'CE', nombre:'Diego Fernando',apellidos:'Ríos',     telefono:'3045556677', correo:'diego.rios@mail.com',  direccion:'Av 4 #12-30',   fecha_nacimiento:'1965-02-20', estado:'ACTIVO',     fecha_registro:pagoAnualDiego.fecha_pago },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000006', tipo_identificacion:'CC', nombre:'Valentina',     apellidos:'Torres',   telefono:'3056667788', correo:'valen.torres@mail.com',direccion:'Cra 19 #4-5',   fecha_nacimiento:'2001-12-01', estado:'INACTIVO',   fecha_registro:dia(55) },
+    { gimnasio_id:'gym-centro', numero_identificacion:'1000000007', tipo_identificacion:'CC', nombre:'Andrés Felipe', apellidos:'Navarro',  telefono:'3067778899', correo:'andres.nav@mail.com',  direccion:'Cl 44 #7-2',    fecha_nacimiento:'1992-07-19', estado:'ACTIVO',     fecha_registro:inicioDe(serieAndres) },
+    // --- gym-titan: Ana (1000000001) repite cedula con gym-centro, con otro telefono y direccion ---
+    { gimnasio_id:'gym-titan', numero_identificacion:'1000000001', tipo_identificacion:'CC', nombre:'Ana María', apellidos:'Ruiz', telefono:'3009998877', correo:'ana.ruiz@mail.com', direccion:'Cl 50 #30-12', fecha_nacimiento:'1995-03-12', estado:'ACTIVO', fecha_registro:dia(20) },
+    { gimnasio_id:'gym-titan', numero_identificacion:'1000000101', tipo_identificacion:'CC', nombre:'Sebastián', apellidos:'Castro', telefono:'3151112233', correo:'sebas.castro@mail.com', direccion:'Cra 7 #18-40', fecha_nacimiento:'1997-05-08', estado:'ACTIVO', fecha_registro:dia(40) },
+    { gimnasio_id:'gym-titan', numero_identificacion:'1000000102', tipo_identificacion:'CC', nombre:'Mariana', apellidos:'López', telefono:'3162223344', correo:'mariana.lopez@mail.com', direccion:'Cl 12 #3-25', fecha_nacimiento:'2000-10-30', estado:'ACTIVO', fecha_registro:dia(10) },
    ],
 
-  membresias: [{ id_membresia:1, id_cliente:'1000000001', tipo_membresia:'Premium',  modalidad_pago:'MENSUAL', valor:280000,  fecha_inicio:'2026-08-15', fecha_vencimiento:'2026-09-15', estado:'ACTIVA' },
-    { id_membresia:2, id_cliente:'1000000001', tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:'2026-07-15', fecha_vencimiento:'2026-08-15', estado:'VENCIDA' },
-    { id_membresia:3, id_cliente:'1000000002', tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:'2026-09-01', fecha_vencimiento:'2026-10-01', estado:'ACTIVA' },
-    { id_membresia:4, id_cliente:'1000000005', tipo_membresia:'Premium',  modalidad_pago:'ANUAL',   valor:2800000, fecha_inicio:'2026-02-15', fecha_vencimiento:'2027-02-15', estado:'ACTIVA' }
+  // Catalogo de planes. Los tres precios por modalidad son los que lee
+  // PagoMembresiaController.java:148 al abrir el cobro.
+  planes: [
+    { id_plan:1, nombre:'Básico',   descripcion:'Acceso a sala de maquinas y area cardio',   precio_mensual:120000, precio_semestral:650000,  precio_anual:1200000, estado:'ACTIVO' },
+    { id_plan:2, nombre:'Estándar', descripcion:'Básico mas clases grupales',                precio_mensual:180000, precio_semestral:980000,  precio_anual:1900000, estado:'ACTIVO' },
+    { id_plan:3, nombre:'Premium',  descripcion:'Todo lo anterior mas sauna y entrenador',  precio_mensual:280000, precio_semestral:1520000, precio_anual:2800000, estado:'ACTIVO' },
+  ],
+
+  // Una membresia vigente por cada cliente ACTIVO (5 en total), mas dos
+  // vencidas para que existan los casos de cobro pendiente.
+  //
+  // fecha_inicio es el PRIMER pago de la serie, no el ultimo: una membresia
+  // mensual renovada no arranca de nuevo en cada renovacion. Y
+  // fecha_vencimiento se calcula con la duracion que aplica el cobro real
+  // (30 / 365 dias) a partir del ultimo pago, para que el dato nunca contradiga
+  // al reloj.
+  membresias: [
+    { gimnasio_id:'gym-centro', id_membresia:1, id_cliente:'1000000001', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'MENSUAL', valor:280000,  fecha_inicio:inicioDe(serieAna),    fecha_vencimiento:finDe(serieAna, 30),    estado:'ACTIVA' },
+    { gimnasio_id:'gym-centro', id_membresia:2, id_cliente:'1000000002', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:inicioDe(serieCarlos), fecha_vencimiento:finDe(serieCarlos, 30), estado:'ACTIVA' },
+    { gimnasio_id:'gym-centro', id_membresia:3, id_cliente:'1000000003', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:inicioDe(serieJuan),   fecha_vencimiento:finDe(serieJuan, 30),   estado:'ACTIVA' },
+    { gimnasio_id:'gym-centro', id_membresia:4, id_cliente:'1000000005', id_plan:3, tipo_membresia:'Premium',  modalidad_pago:'ANUAL',   valor:2800000, fecha_inicio:pagoAnualDiego.fecha_pago, fecha_vencimiento:sumarDias(pagoAnualDiego.fecha_pago, 365), estado:'ACTIVA' },
+    { gimnasio_id:'gym-centro', id_membresia:5, id_cliente:'1000000007', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:inicioDe(serieAndres), fecha_vencimiento:finDe(serieAndres, 30), estado:'ACTIVA' },
+    // Membresias ya vencidas: son las que dejan pagos sin aplicar y las que
+    // el control de acceso debe rechazar.
+    { gimnasio_id:'gym-centro', id_membresia:6, id_cliente:'1000000004', id_plan:2, tipo_membresia:'Estándar', modalidad_pago:'MENSUAL', valor:180000,  fecha_inicio:dia(70),  fecha_vencimiento:dia(40),  estado:'VENCIDA' },
+    { gimnasio_id:'gym-centro', id_membresia:7, id_cliente:'1000000006', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:dia(55),  fecha_vencimiento:dia(25),  estado:'VENCIDA' },
+    // gym-titan: la Ana de Titan tiene su propia membresia, distinta de la Premium de Centro.
+    { gimnasio_id:'gym-titan',  id_membresia:8, id_cliente:'1000000001', id_plan:1, tipo_membresia:'Básico',   modalidad_pago:'MENSUAL', valor:120000,  fecha_inicio:pagoTitanAna.fecha_pago, fecha_vencimiento:sumarDias(pagoTitanAna.fecha_pago, 30), estado:'ACTIVA' },
+  ],
+
+  // Marca que membresia esta vigente. El control de acceso consulta esta tabla
+  // (RegistroEntradaController.java:319), asi que activa=true debe coincidir
+  // siempre con una membresia ACTIVA y no vencida: antes tres filas marcaban
+  // activa=true sobre membresias vencidas y el acceso las dejaba pasar.
+  historialMembresias: [
+    { gimnasio_id:'gym-centro', id_historial:1, id_cliente:'1000000001', id_membresia:1, fecha_asignacion:inicioDe(serieAna),    activa:true  },
+    { gimnasio_id:'gym-centro', id_historial:2, id_cliente:'1000000002', id_membresia:2, fecha_asignacion:inicioDe(serieCarlos), activa:true  },
+    { gimnasio_id:'gym-centro', id_historial:3, id_cliente:'1000000003', id_membresia:3, fecha_asignacion:inicioDe(serieJuan),   activa:true  },
+    { gimnasio_id:'gym-centro', id_historial:4, id_cliente:'1000000005', id_membresia:4, fecha_asignacion:pagoAnualDiego.fecha_pago, activa:true },
+    { gimnasio_id:'gym-centro', id_historial:5, id_cliente:'1000000007', id_membresia:5, fecha_asignacion:inicioDe(serieAndres), activa:true  },
+    { gimnasio_id:'gym-centro', id_historial:6, id_cliente:'1000000004', id_membresia:6, fecha_asignacion:dia(70),  activa:false },
+    { gimnasio_id:'gym-centro', id_historial:7, id_cliente:'1000000006', id_membresia:7, fecha_asignacion:dia(55),  activa:false },
+    { gimnasio_id:'gym-titan',  id_historial:8, id_cliente:'1000000001', id_membresia:8, fecha_asignacion:pagoTitanAna.fecha_pago, activa:true },
   ],
   
-  pagos: [{ id_pago:1, id_cliente:'1000000001', id_membresia:1, fecha_pago:'2026-08-15', valor:280000,  metodo_pago:'TARJETA',       estado_pago:'EXITOSO' },
-    { id_pago:2, id_cliente:'1000000001', id_membresia:2, fecha_pago:'2026-07-15', valor:180000,  metodo_pago:'NEQUI',         estado_pago:'EXITOSO' },
-    { id_pago:3, id_cliente:'1000000002', id_membresia:3, fecha_pago:'2026-09-01', valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO' },
-    { id_pago:4, id_cliente:'1000000005', id_membresia:4, fecha_pago:'2026-02-15', valor:2800000, metodo_pago:'TRANSFERENCIA', estado_pago:'EXITOSO' },
-    { id_pago:5, id_cliente:'1000000007', id_membresia:3, fecha_pago:'2026-09-05', valor:180000,  metodo_pago:'NEQUI',         estado_pago:'EXITOSO' },
-    { id_pago:6, id_cliente:'1000000003', id_membresia:1, fecha_pago:'2026-09-12', valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO' },
-    // Pagos del mes en curso (fechas relativas) -> KPI "Ingresos este mes"
-    { id_pago:7,  id_cliente:'1000000001', id_membresia:1, fecha_pago:dia(0), valor:280000,  metodo_pago:'TARJETA',       estado_pago:'EXITOSO' },
-    { id_pago:8,  id_cliente:'1000000002', id_membresia:3, fecha_pago:dia(0), valor:120000,  metodo_pago:'EFECTIVO',      estado_pago:'EXITOSO' },
-    { id_pago:9,  id_cliente:'1000000007', id_membresia:3, fecha_pago:dia(1), valor:180000,  metodo_pago:'NEQUI',         estado_pago:'EXITOSO' },
-    { id_pago:10, id_cliente:'1000000004', id_membresia:3, fecha_pago:dia(1), valor:180000,  metodo_pago:'TRANSFERENCIA', estado_pago:'EXITOSO' },
-  ],
+  pagos: serieAna
+    .concat(serieCarlos)
+    .concat(serieJuan)
+    .concat(serieAndres)
+    .concat([pagoAnualDiego])
+    .concat(pagosSinAplicar)
+    .concat([pagoTitanAna]),
 
   ingresos: ingresosPasados().concat(ingresosDeHoy()),
   ejercicios: [],   // la colección de P4 arranca vacía
@@ -177,18 +452,21 @@ const SEED: Seed = {
 
   // ===== [P2] Progreso =====
   progreso: [
-    { id_progreso:1, id_cliente:'1000000001', fecha:'2026-07-10', peso:62,   altura:1.65, notas:'Medición inicial' },
-    { id_progreso:2, id_cliente:'1000000001', fecha:'2026-08-10', peso:60.5, altura:1.65, notas:'Bajó 1.5 kg' },
-    { id_progreso:3, id_cliente:'1000000002', fecha:'2026-08-01', peso:82,   altura:1.78, notas:'Control inicial' },
-    { id_progreso:4, id_cliente:'1000000005', fecha:'2026-09-01', peso:75,   altura:1.72, notas:'' }
+    { gimnasio_id:'gym-centro', id_progreso:1, id_cliente:'1000000001', fecha:'2026-07-10', peso:62,   altura:1.65, notas:'Medición inicial' },
+    { gimnasio_id:'gym-centro', id_progreso:2, id_cliente:'1000000001', fecha:'2026-08-10', peso:60.5, altura:1.65, notas:'Bajó 1.5 kg' },
+    { gimnasio_id:'gym-centro', id_progreso:3, id_cliente:'1000000002', fecha:'2026-08-01', peso:82,   altura:1.78, notas:'Control inicial' },
+    { gimnasio_id:'gym-centro', id_progreso:4, id_cliente:'1000000005', fecha:'2026-09-01', peso:75,   altura:1.72, notas:'' },
+    // gym-titan: misma cedula que la Ana de gym-centro. Si su medicion aparece
+    // en el progreso de la Ana de Centro, el filtro por gimnasio fallo.
+    { gimnasio_id:'gym-titan',  id_progreso:5, id_cliente:'1000000001', fecha:'2026-09-20', peso:63,   altura:1.65, notas:'Medición inicial en Titan' }
   ],
   // ===== [/P2] Progreso =====
 
   // ===== [P2] Citas =====
   citas: [
-    { id_cita:1, id_cliente:'1000000001', id_instructor:'2000000001', fecha:'2026-10-06', hora:'07:00', estado:'CONFIRMADA', notas:'Rutina de fuerza' },
-    { id_cita:2, id_cliente:'1000000002', id_instructor:'2000000002', fecha:'2026-10-07', hora:'17:00', estado:'PENDIENTE',  notas:'Primera clase de yoga' },
-    { id_cita:3, id_cliente:'1000000005', id_instructor:'2000000003', fecha:'2026-10-08', hora:'09:00', estado:'CANCELADA',  notas:'Reagendar' }
+    { gimnasio_id:'gym-centro', id_cita:1, id_cliente:'1000000001', id_instructor:'2000000001', fecha:'2026-10-06', hora:'07:00', estado:'CONFIRMADA', notas:'Rutina de fuerza' },
+    { gimnasio_id:'gym-centro', id_cita:2, id_cliente:'1000000002', id_instructor:'2000000002', fecha:'2026-10-07', hora:'17:00', estado:'PENDIENTE',  notas:'Primera clase de yoga' },
+    { gimnasio_id:'gym-centro', id_cita:3, id_cliente:'1000000005', id_instructor:'2000000003', fecha:'2026-10-08', hora:'09:00', estado:'CANCELADA',  notas:'Reagendar' }
   ],
   // ===== [/P2] Citas =====
 };
@@ -199,8 +477,24 @@ const SEED: Seed = {
 // tenga datos: read() solo siembra cuando la clave no existe, asi que un
 // seed nuevo convive con el viejo indefinidamente. Al cambiar este numero
 // la siguiente carga regenera todas las colecciones.
-const SEED_VERSION = "4";
+// v5 reescribio el seed financiero con fechas relativas, 5 membresias vigentes
+// coherentes con sus pagos, y pagos PENDIENTE para que la tabla de pendientes
+// no salga vacia. El bump descarta los datos v4 que quedaron inconsistentes.
+// v6 da fila en `usuarios` a los 7 clientes con clave propia: sin ella el
+// modo manual de control de acceso no tenia con que validar a nadie.
+// v7 es la union con P3/P4: instruye el seed de instructores, rutinas,
+// progreso y citas a quien venga con el v4 de esas ramas, porque sin el bump
+// las colecciones nuevas quedarian vacias en localStorage.
+// v8 agrega gimnasios y gimnasio_id en usuarios/clientes (multitenant), con un
+// segundo gimnasio que solapa datos para que una fuga de aislamiento se note.
+// v9 lleva gimnasio_id a progreso y citas, con una medicion de la Ana de Titan.
+// v10 lo lleva a membresias, historial, pagos e ingresos, con una membresia y
+// un pago propios de la Ana de Titan.
+// v11 agrega planesSoftware y pagosSoftware (pagina de planes y registro de
+// gimnasios) y los datos de suscripcion de cada gimnasio.
+const SEED_VERSION = "11";
 const CLAVE_VERSION = "gymbrot_seed_version";
+const CLAVE_LECTOR = "gymbrot_lector_conectado";
 
 function sembrarSiHaceFalta(): void {
   if (localStorage.getItem(CLAVE_VERSION) === SEED_VERSION) return;
@@ -213,6 +507,33 @@ function sembrarSiHaceFalta(): void {
 }
 
 sembrarSiHaceFalta();
+
+// --- Multitenant ---------------------------------------------------------
+// Misma clave que CLAVE en lib/auth.ts. Se lee directo de localStorage y no
+// con auth.current() porque auth.ts importa api: importarlo aqui armaria un
+// ciclo db <-> auth.
+const CLAVE_SESION = "gymbrot_session";
+
+/* Gimnasio de la sesion abierta, o null si no hay sesion valida. */
+function gimnasioActivo(): string | null {
+  const raw = localStorage.getItem(CLAVE_SESION);
+  if (!raw) return null;
+  try {
+    const sesion = JSON.parse(raw) as { gimnasio_id?: unknown };
+    return typeof sesion.gimnasio_id === "string" ? sesion.gimnasio_id : null;
+  } catch {
+    return null;
+  }
+}
+
+/* Para escribir. Las vistas estan detras del login (Layout.tsx), asi que
+   escribir datos de un gimnasio sin sesion es un error de programacion:
+   falla fuerte en vez de guardar una fila huerfana. */
+function gimnasioParaEscribir(): string {
+  const gym = gimnasioActivo();
+  if (!gym) throw new Error("No hay gimnasio activo: inicia sesion de nuevo.");
+  return gym;
+}
 
 const db = {
   _key(col: string) {
@@ -228,9 +549,175 @@ const db = {
 
   write<T>(col: string, arreglo: T[]) {
     localStorage.setItem(this._key(col), JSON.stringify(arreglo));
+    // db.write es el unico punto de escritura del mock: avisar aqui hace que
+    // cualquier vista suscrita se refresque sin que tenga que recordarlo.
+    notificarCambioDeDatos();
+  },
+
+  /* Solo las filas del gimnasio activo. Es el unico punto de filtro del
+     multitenant (DECISIONES.md): las colecciones por gimnasio se leen siempre
+     por aqui, y cualquier .find() por cedula va DESPUES de este filtro (D3).
+     Sin sesion devuelve vacio: mejor una pantalla sin datos que una con los
+     de todos los gimnasios. */
+  readTenant<T extends { gimnasio_id: string }>(col: string): T[] {
+    const gym = gimnasioActivo();
+    if (!gym) return [];
+    return this.read<T>(col).filter((r) => r.gimnasio_id === gym);
+  },
+
+  /* Pareja obligatoria de readTenant: guarda las filas del gimnasio activo
+     sin tocar las de los demas. Usar db.write() con un arreglo que salio de
+     readTenant borraria a los otros gimnasios. Ademas sella gimnasio_id en
+     cada fila, asi un update no puede mover un registro a otro gimnasio. */
+  writeTenant<T extends { gimnasio_id: string }>(col: string, filas: T[]): void {
+    const gym = gimnasioParaEscribir();
+    const otros = this.read<T>(col).filter((r) => r.gimnasio_id !== gym);
+    this.write(col, otros.concat(filas.map((r) => ({ ...r, gimnasio_id: gym }))));
+  },
+
+  /* Siguiente id numerico de una coleccion. Lee la tabla completa y no
+     readTenant: el id es global como un SERIAL en la tabla compartida, asi
+     dos gimnasios nunca repiten id. */
+  siguienteId<T>(col: string, idDe: (fila: T) => number): number {
+    return this.read<T>(col).reduce((max, f) => Math.max(max, idDe(f)), 0) + 1;
   },
 };
 
+/* [plataforma] Lo que manda /registro al comprar el software. El
+   administrador entra con su correo: por nombre seria ambiguo, porque dos
+   personas pueden llamarse igual. */
+export interface RegistroGimnasio {
+  plan: PlanSoftware["id_plan_software"];
+  gimnasio: { nombre: string; ciudad: string; telefono: string };
+  admin: {
+    numero_identificacion: string;
+    nombre: string;
+    apellidos: string;
+    correo: string;
+    contrasena: string;
+  };
+  metodo_pago: PagoSoftware["metodo_pago"];
+}
+
+/* 'Iron Fit' -> 'gym-iron-fit'. Quita tildes y simbolos para que el id se
+   lea bien en localStorage; si ya existe, le suma -2, -3... */
+function idDeGimnasio(nombre: string, existentes: Gimnasio[]): string {
+  const slug = nombre
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const base = "gym-" + (slug || "nuevo");
+  const usados = new Set(existentes.map((g) => g.gimnasio_id));
+  let id = base;
+  for (let n = 2; usados.has(id); n++) id = base + "-" + n;
+  return id;
+}
+
+/* Datos que pide el modal de cobro. El monto va aparte del precio del plan a
+   proposito: el legacy lo deja editable (PagoMembresiaController.java:185) y
+   asi se pueden aplicar descuentos o cobros parciales. */
+export interface NuevoPago {
+  id_cliente: string;
+  id_plan: number | null;
+  modalidad_pago: Membresia["modalidad_pago"];
+  valor: number;
+  metodo_pago: Pago["metodo_pago"] | "";
+  fecha_pago: string;
+  referencia_transaccion: string;
+  observaciones: string;
+}
+
+/* Fila de la tabla "Pagos pendientes" que arma FinanzasService.pagosVencidos
+   (FinanzasService.java:18). El nombre es el del legacy: son pagos que
+   quedaron sin aplicar, no necesariamente cuotas vencidas. */
+export interface PagoVencido {
+  id_pago: number;
+  cliente: string;
+  plan: string;
+  valor: number;
+  metodo: string;
+  fecha: string;
+  estado: string;
+}
+
+/* Lo que manda la vista de control de acceso al registrar algo. `metodo` es
+   el mismo campo que guarda el registro: HUELLA o CONTRASENA, los dos del
+   legacy. `contrasena` solo se usa cuando metodo es CONTRASENA. */
+export interface IntentoAcceso {
+  id_cliente: string;
+  metodo: Ingreso["metodo_verificacion"];
+  contrasena?: string;
+}
+
+/* Compara la clave que escribe el operador con la del usuario del cliente.
+   Devuelve el motivo del rechazo, o null si pasa. Va aparte de
+   clienteAceptado() porque la salida tambien la usa: cerrar la sesion de alguien
+   exige identificarlo, pero no volver a pasar las reglas de entrada. */
+function claveRechazada(id: string, contrasena: string | undefined): string | null {
+  const clave = (contrasena ?? "").trim();
+  if (!clave) return "Ingresa la contraseña del cliente.";
+  const usuario = db.readTenant<Usuario>("usuarios").find((u) => u.numero_identificacion === id);
+  // Sin fila no hay con que comparar: reportarlo como clave mala dejaria al
+  // operador reintentando algo que nunca va a funcionar.
+  if (!usuario) return "Este cliente no tiene código de acceso. Asignale uno para usar el modo manual.";
+  if (usuario.contrasena !== clave) return "Contraseña incorrecta.";
+  return null;
+}
+
+/* Validaciones de la puerta. Devuelve el motivo del rechazo, o el cliente si
+   pasa. Se resuelve aqui y no en el componente para que ninguna vista pueda
+   dejar entrar a alguien con la membresia vencida o el cliente suspendido. */
+function clienteAceptado(
+  intento: IntentoAcceso,
+): { error: string } | { cliente: Cliente } {
+  const id = intento.id_cliente.trim();
+  const cliente = db.readTenant<Cliente>("clientes").find((c) => c.numero_identificacion === id);
+  if (!cliente) return { error: "No se encontró un cliente con ese número de identificación" };
+
+  // El estado va antes que la clave: no tiene sentido pedirle la contraseña a
+  // alguien que ya sabemos que esta suspendido.
+  if (cliente.estado !== "ACTIVO") {
+    return { error: `El cliente está ${cliente.estado}. Actívalo en Clientes antes de registrar su acceso.` };
+  }
+
+  if (intento.metodo === "CONTRASENA") {
+    const rechazo = claveRechazada(id, intento.contrasena);
+    if (rechazo) return { error: rechazo };
+  }
+
+  return { cliente };
+}
+
+/* Devuelve los ultimos 'cantidadMeses' meses en orden, desde el mas viejo,
+   incluyendo los que no tienen datos con total 0. El legacy devuelve solo los
+   meses con filas (FinanzasService.java:23), y en una grafica eso deja huecos
+   que parecen Drops en vez de meses sin facturar. */
+function agruparPorMes<T>(
+  filas: T[],
+  fechaDe: (f: T) => string,
+  valorDe: (f: T) => number,
+  cantidadMeses: number,
+): { mes: string; total: number }[] {
+  const totales = new Map<string, number>();
+
+  for (const f of filas) {
+    const mes = fechaDe(f).slice(0, 7);
+    if (!mes) continue;
+    totales.set(mes, (totales.get(mes) ?? 0) + valorDe(f));
+  }
+
+  const hoy = new Date();
+  const salida: { mes: string; total: number }[] = [];
+  for (let i = cantidadMeses - 1; i >= 0; i--) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+    const mes = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    salida.push({ mes, total: totales.get(mes) ?? 0 });
+  }
+
+  return salida;
+}
 // ===== [P3] Rutinas: auxiliares =====
 const DIAS: DiaSemana[] = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"];
 
@@ -238,7 +725,7 @@ const DIAS: DiaSemana[] = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", 
 function validarReferencias(idInstructor: string, idCliente: string): string | null {
   if (!db.read<Instructor>("instructores").some((i) => i.numero_identificacion === idInstructor))
     return "El instructor no existe";
-  if (!db.read<Cliente>("clientes").some((c) => c.numero_identificacion === idCliente))
+  if (!db.readTenant<Cliente>("clientes").some((c) => c.numero_identificacion === idCliente))
     return "El cliente no existe";
   return null;
 }
@@ -267,91 +754,328 @@ export const api = {
     return new Promise<void>((res) => setTimeout(res, ms));
   },
 
+  // [multitenant] Catalogo de la plataforma: no pasa por readTenant porque
+  // es la tabla que define a los tenants.
+  gimnasios: {
+    async list(): Promise<Gimnasio[]> {
+      await api._delay();
+      return db.read<Gimnasio>("gimnasios");
+    },
+
+    // El de la sesion abierta, para mostrar su nombre (ej. en el Topbar).
+    async activo(): Promise<Gimnasio | null> {
+      await api._delay();
+      const gym = gimnasioActivo();
+      return db.read<Gimnasio>("gimnasios").find((g) => g.gimnasio_id === gym) ?? null;
+    },
+
+    // [plataforma] Lo que muestra la pagina de planes.
+    async planesSoftware(): Promise<PlanSoftware[]> {
+      await api._delay();
+      return db.read<PlanSoftware>("planesSoftware");
+    },
+
+    /* [plataforma] Alta de un gimnasio desde /registro: crea el gimnasio, su
+       administrador y el pago de la suscripcion. Es una operacion de
+       plataforma: todavia no hay sesion, asi que lee y escribe las tablas
+       completas con db.read/db.write y no con readTenant, como lo haria el
+       superadmin. El pago es simulado: siempre se aprueba. */
+    async registrar(
+      datos: RegistroGimnasio,
+    ): Promise<ApiResp<{ gimnasio: Gimnasio; pago: PagoSoftware }>> {
+      await api._delay(1200); // el "Procesando pago..." de la pasarela simulada
+
+      const g = {
+        nombre: datos.gimnasio.nombre.trim(),
+        ciudad: datos.gimnasio.ciudad.trim(),
+        telefono: datos.gimnasio.telefono.trim(),
+      };
+      const a = {
+        numero_identificacion: datos.admin.numero_identificacion.trim(),
+        nombre: datos.admin.nombre.trim(),
+        apellidos: datos.admin.apellidos.trim(),
+        correo: datos.admin.correo.trim().toLowerCase(),
+        // auth.login compara la clave ya recortada, asi que se guarda igual.
+        contrasena: datos.admin.contrasena.trim(),
+      };
+
+      if (!g.nombre || !g.ciudad || !g.telefono)
+        return { ok: false, mensaje: "Completa los datos del gimnasio." };
+      if (!a.numero_identificacion || !a.nombre || !a.apellidos || !a.correo)
+        return { ok: false, mensaje: "Completa los datos del administrador." };
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.correo))
+        return { ok: false, mensaje: "El correo no es válido." };
+      if (a.contrasena.length < 6)
+        return { ok: false, mensaje: "La contraseña debe tener al menos 6 caracteres." };
+
+      const plan = db.read<PlanSoftware>("planesSoftware").find((p) => p.id_plan_software === datos.plan);
+      if (!plan) return { ok: false, mensaje: "El plan no existe." };
+
+      // El login busca en toda la plataforma (usuarios.buscarPorNombreOCorreo),
+      // asi que el correo del administrador debe ser unico en todos los
+      // gimnasios, no solo en el suyo (DECISIONES.md, login por usuario).
+      const usuarios = db.read<Usuario>("usuarios");
+      if (usuarios.some((u) => u.correo.toLowerCase() === a.correo))
+        return { ok: false, mensaje: "Ya hay una cuenta con ese correo. Inicia sesión o usa otro." };
+
+      const gimnasios = db.read<Gimnasio>("gimnasios");
+      const hoy = utils.isoDate();
+
+      const gimnasio: Gimnasio = {
+        gimnasio_id: idDeGimnasio(g.nombre, gimnasios),
+        nombre: g.nombre,
+        ciudad: g.ciudad,
+        telefono: g.telefono,
+        estado: "ACTIVO",
+        plan_software: plan.id_plan_software,
+        fecha_registro: hoy,
+        vence_suscripcion: sumarDias(hoy, 30),
+      };
+
+      const admin: Usuario = {
+        gimnasio_id: gimnasio.gimnasio_id,
+        ...a,
+        estado: "ACTIVO",
+        tipo_usuario: "ADMINISTRADOR",
+        rol: "ADMINISTRADOR",
+      };
+
+      const pago: PagoSoftware = {
+        id_pago_software: db.siguienteId<PagoSoftware>("pagosSoftware", (p) => p.id_pago_software),
+        gimnasio_id: gimnasio.gimnasio_id,
+        id_plan_software: plan.id_plan_software,
+        valor: plan.precio_mensual,
+        metodo_pago: datos.metodo_pago,
+        fecha_pago: hoy,
+        referencia: "GB-" + Date.now().toString(36).toUpperCase(),
+      };
+
+      db.write("gimnasios", gimnasios.concat(gimnasio));
+      db.write("usuarios", usuarios.concat(admin));
+      db.write("pagosSoftware", db.read<PagoSoftware>("pagosSoftware").concat(pago));
+
+      return { ok: true, mensaje: "Pago aprobado y gimnasio registrado", data: { gimnasio, pago } };
+    },
+  },
+
+  usuarios: {
+    /* Todas las filas del gimnasio, para que Clientes sepa de un vistazo quien
+       tiene ya codigo de acceso. byIdentificacion resuelve un solo cliente y
+       cuesta un delay por fila: en una tabla de siete socios serian siete
+       idas y vueltas para lo que es un conjunto de identificaciones. */
+    async list(): Promise<Usuario[]> {
+      await api._delay();
+      return db.readTenant<Usuario>("usuarios");
+    },
+
+    // El legacy busca por nombre o correo en el mismo campo
+    // (UsuarioDAO.buscarPorNombreOCorreo, loginController.java:153), asi que
+    // 'admin' y 'admin@gymbrot.com' resuelven al mismo usuario.
+    //
+    // Global a proposito, la unica lectura de usuarios sin readTenant: al
+    // iniciar sesion todavia no hay gimnasio activo, y es el usuario que se
+    // encuentra aqui el que decide a cual se entra. Por eso el nombre y el
+    // correo de quien inicia sesion deben ser unicos en toda la plataforma.
+    async buscarPorNombreOCorreo(texto: string): Promise<Usuario | null> {
+      await api._delay();
+      const clave = texto.trim().toLowerCase();
+      if (!clave) return null;
+      return (
+        db.read<Usuario>("usuarios").find(
+          (u) => u.nombre.toLowerCase() === clave || u.correo.toLowerCase() === clave,
+        ) ?? null
+      );
+    },
+
+    // El modo manual de control de acceso busca por el numero de documento,
+    // no por nombre ni correo: es lo que escribe el socio en la puerta
+    // (RegistroEntradaController.handleValidarIngreso, ClienteDAO.buscarPorId).
+    async byIdentificacion(id: string): Promise<Usuario | null> {
+      await api._delay();
+      const clave = id.trim();
+      if (!clave) return null;
+      return db.readTenant<Usuario>("usuarios").find((u) => u.numero_identificacion === clave) ?? null;
+    },
+
+    /* Crea o actualiza la clave de un cliente. Va por `usuarios`, no por
+       `clientes`: el password vive en su propia tabla desde el legacy
+       (CLIENTE.contrasena_hash), y meterlo en Cliente romperia el esquema
+       cuando haya backend. Si el cliente no tenia fila, se crea con los datos
+       que ya estan en `clientes`. */
+    async asignar(id: string, contrasena: string): Promise<ApiResp<Usuario>> {
+      await api._delay();
+      const limpia = contrasena.trim();
+      if (!limpia) return { ok: false, mensaje: "La contraseña no puede quedar vacía" };
+
+      const cliente = db.readTenant<Cliente>("clientes").find((c) => c.numero_identificacion === id);
+      if (!cliente) return { ok: false, mensaje: "El cliente no existe" };
+
+      const usuarios = db.readTenant<Usuario>("usuarios");
+      let usuario = usuarios.find((u) => u.numero_identificacion === id);
+
+      if (usuario) {
+        usuario.contrasena = limpia;
+      } else {
+        usuario = {
+          gimnasio_id: cliente.gimnasio_id,
+          numero_identificacion: id,
+          nombre: cliente.nombre,
+          apellidos: cliente.apellidos,
+          correo: cliente.correo,
+          contrasena: limpia,
+          estado: cliente.estado,
+          tipo_usuario: "CLIENTE",
+          rol: "CLIENTE",
+        };
+        usuarios.push(usuario);
+      }
+
+      db.writeTenant("usuarios", usuarios);
+      return { ok: true, mensaje: "Contraseña guardada", data: usuario };
+    },
+
+    /* Espejo de api.clientes.setEstado: el estado del usuario nunca se decide
+       solo, siempre sigue al del cliente. Sin esto, suspender a alguien en
+       Clientes dejaria su usuario ACTIVO en `usuarios`, y las dos pantallas
+       volarian a contar reglas distintas. */
+    async setEstado(id: string, estado: Usuario["estado"]): Promise<ApiResp<Usuario>> {
+      await api._delay();
+      const usuarios = db.readTenant<Usuario>("usuarios");
+      const u = usuarios.find((x) => x.numero_identificacion === id);
+      // Un cliente todavia sin fila en `usuarios` no tiene nada que espejar:
+      // devolver error dejaria el alta como fallida por un dato cosmético. Y
+      // crear la fila aqui sin contraseña haria que el modo manual respondiera
+      // "contraseña incorrecta" en vez de "no tiene código de acceso".
+      if (!u) return { ok: true, mensaje: "Cliente sin usuario: nada que sincronizar" };
+      u.estado = estado;
+      db.writeTenant("usuarios", usuarios);
+      return { ok: true, mensaje: "Estado actualizado", data: u };
+    },
+  },
+
+  /* Estado del lector de huella. Va en su propia clave y no en el SEED porque
+     describe hardware, no datos de dominio: sembrarlo con el resto lo
+     reiniciaria en cada bump de SEED_VERSION, que es justo lo contrario de
+     lo que se quiere (el fallo de conexion debe persistir). El legacy lo
+     sondea desde HuellaService con su listener de estado
+     (HuellaService.java:120-170, loginController.java:59). */
+  lector: {
+    estaConectado(): boolean {
+      const guardado = localStorage.getItem(CLAVE_LECTOR);
+      return guardado === null ? true : guardado === "true";
+    },
+
+    setConectado(conectado: boolean): void {
+      localStorage.setItem(CLAVE_LECTOR, String(conectado));
+    },
+  },
+
+  /* [multitenant] Implementacion de referencia: toda lectura va por
+     db.readTenant y toda escritura por db.writeTenant. Las demas entidades
+     por gimnasio copian este patron. */
   clientes: {
     async list(): Promise<Cliente[]> {
       await api._delay();
-      return db.read<Cliente>("clientes");
+      return db.readTenant<Cliente>("clientes");
     },
 
     async get(id: string): Promise<Cliente | null> {
       await api._delay();
-      return db.read<Cliente>("clientes").find((c) => c.numero_identificacion === id) ?? null;
+      return db.readTenant<Cliente>("clientes").find((c) => c.numero_identificacion === id) ?? null;
     },
 
-    async create(data: Omit<Cliente, "estado" | "fecha_registro">): Promise<ApiResp<Cliente>> {
+    // La cedula es unica dentro de cada gimnasio (D3): la misma persona puede
+    // estar registrada en otro gimnasio sin que eso cuente como duplicado.
+    async create(data: ClienteNuevo): Promise<ApiResp<Cliente>> {
       await api._delay();
-      const arr = db.read<Cliente>("clientes");
+      const arr = db.readTenant<Cliente>("clientes");
       if (arr.some((c) => c.numero_identificacion === data.numero_identificacion))
-        return { ok: false, mensaje: "Ya existe un cliente con esa identificación" };
-      const nuevo: Cliente = { ...data, estado: "ACTIVO", fecha_registro: utils.isoDate() };
+        return { ok: false, mensaje: "Ya existe un cliente con esa identificación en este gimnasio" };
+      const nuevo: Cliente = {
+        ...data,
+        gimnasio_id: gimnasioParaEscribir(),
+        estado: "ACTIVO",
+        fecha_registro: utils.isoDate(),
+      };
       arr.push(nuevo);
-      db.write("clientes", arr);
+      db.writeTenant("clientes", arr);
       return { ok: true, mensaje: "Cliente registrado", data: nuevo };
     },
 
-    async update(id: string, data: Partial<Cliente>): Promise<ApiResp<Cliente>> {
+    async update(id: string, data: Partial<ClienteNuevo>): Promise<ApiResp<Cliente>> {
       await api._delay();
-      const arr = db.read<Cliente>("clientes");
+      const arr = db.readTenant<Cliente>("clientes");
       const c = arr.find((x) => x.numero_identificacion === id);
       if (!c) return { ok: false, mensaje: "Cliente no encontrado" };
       Object.assign(c, data);
-      db.write("clientes", arr);
+      db.writeTenant("clientes", arr);
       return { ok: true, mensaje: "Cliente actualizado", data: c };
     },
 
     async setEstado(id: string, estado: Cliente["estado"]): Promise<ApiResp<Cliente>> {
       await api._delay();
-      const arr = db.read<Cliente>("clientes");
+      const arr = db.readTenant<Cliente>("clientes");
       const c = arr.find((x) => x.numero_identificacion === id);
       if (!c) return { ok: false, mensaje: "Cliente no encontrado" };
       c.estado = estado;
-      db.write("clientes", arr);
+      db.writeTenant("clientes", arr);
+      await api.usuarios.setEstado(id, estado); // ← espejo: el estado del usuario sigue al del cliente
       return { ok: true, mensaje: "Estado actualizado", data: c };
+    },
+  },
+
+  // Catalogo global por ahora: si los planes son de cada gimnasio sigue
+  // pendiente en DECISIONES.md (catalogos globales vs por gimnasio).
+  planes: {
+    async list(): Promise<PlanMembresia[]> {
+      await api._delay();
+      return db.read<PlanMembresia>("planes").filter((p) => p.estado === "ACTIVO");
     },
   },
 
   membresias: {
     async list(): Promise<Membresia[]> {
       await api._delay();
-      return db.read<Membresia>("membresias");
+      return db.readTenant<Membresia>("membresias");
     },
     async byCliente(id: string): Promise<Membresia[]> {
       await api._delay();
-      return db.read<Membresia>("membresias").filter((m) => m.id_cliente === id);
+      return db.readTenant<Membresia>("membresias").filter((m) => m.id_cliente === id);
     },
 
-    async create(data: Omit<Membresia, "id_membresia">): Promise<ApiResp<Membresia>> {
+    async create(data: MembresiaNueva): Promise<ApiResp<Membresia>> {
       await api._delay();
-      const arr = db.read<Membresia>("membresias");
-      const nuevoId = arr.length > 0
-        ? Math.max(...arr.map((m) => m.id_membresia)) + 1
-        : 1;
-      const nueva: Membresia = { ...data, id_membresia: nuevoId };
+      const arr = db.readTenant<Membresia>("membresias");
+      const nueva: Membresia = {
+        ...data,
+        gimnasio_id: gimnasioParaEscribir(),
+        id_membresia: db.siguienteId<Membresia>("membresias", (m) => m.id_membresia),
+      };
       arr.push(nueva);
-      db.write("membresias", arr);
+      db.writeTenant("membresias", arr);
       return { ok: true, mensaje: "Membresía registrada", data: nueva };
     },
 
     async update(
       id: number,
-      data: Partial<Omit<Membresia, "id_membresia">>
+      data: Partial<MembresiaNueva>
     ): Promise<ApiResp<Membresia>> {
       await api._delay();
-      const arr = db.read<Membresia>("membresias");
+      const arr = db.readTenant<Membresia>("membresias");
       const membresia = arr.find((m) => m.id_membresia === id);
       if (!membresia) return { ok: false, mensaje: "Membresía no encontrada" };
       Object.assign(membresia, data, { id_membresia: id });
-      db.write("membresias", arr);
+      db.writeTenant("membresias", arr);
       return { ok: true, mensaje: "Membresía actualizada", data: membresia };
     },
 
     async setEstado(id: number, estado: Membresia["estado"]): Promise<ApiResp<Membresia>> {
       await api._delay();
-      const arr = db.read<Membresia>("membresias");
+      const arr = db.readTenant<Membresia>("membresias");
       const membresia = arr.find((m) => m.id_membresia === id);
       if (!membresia) return { ok: false, mensaje: "Membresía no encontrada" };
       membresia.estado = estado;
-      db.write("membresias", arr);
+      db.writeTenant("membresias", arr);
       return { ok: true, mensaje: "Estado de membresía actualizado", data: membresia };
     },
   },
@@ -359,23 +1083,369 @@ export const api = {
   pagos: {
     async  list(): Promise<Pago[]> {
       await api._delay();
-      return db.read<Pago>("pagos");
+      return db.readTenant<Pago>("pagos");
     },
     async byCliente(id: string): Promise<Pago[]> {
       await api._delay();
-      return db.read<Pago>("pagos").filter((p) => p.id_cliente === id);
+      return db.readTenant<Pago>("pagos").filter((p) => p.id_cliente === id);
+    },
+
+    /* Registra un cobro y activa la membresia. El orden importa y es el que
+       sigue PagoMembresiaController.java:205-247: membresia, historial, pago.
+       Si algo falla, se revierte lo que se haya escrito en lugar de dejar
+       membresia sin historial o sin pago. */
+    async crear(input: NuevoPago): Promise<ApiResp<Pago>> {
+      await api._delay();
+
+      const idCliente = input.id_cliente.trim();
+      const monto = Number(input.valor);
+
+      if (!idCliente) return { ok: false, mensaje: "Selecciona un socio" };
+      if (!input.id_plan) return { ok: false, mensaje: "Selecciona un plan" };
+      // El legacy solo valida que el monto no este vacio y que se pueda
+      // parsear (PagoMembresiaController.java:181-191), asi que acepta 0 y
+      // negativos, y queda una membresia activa sin cobrar nada.
+      if (!Number.isFinite(monto) || monto <= 0)
+        return { ok: false, mensaje: "El monto debe ser mayor que cero" };
+      if (!input.metodo_pago) return { ok: false, mensaje: "Selecciona un metodo de pago" };
+
+      const clientes = db.readTenant<Cliente>("clientes");
+      const cliente = clientes.find((c) => c.numero_identificacion === idCliente);
+      if (!cliente) return { ok: false, mensaje: "El cliente no existe" };
+      if (cliente.estado !== "ACTIVO")
+        return { ok: false, mensaje: "El cliente no esta activo. Activalo en Clientes antes de cobrarle." };
+
+      const planes = db.read<PlanMembresia>("planes");
+      const plan = planes.find((p) => p.id_plan === input.id_plan);
+      if (!plan) return { ok: false, mensaje: "El plan no existe" };
+
+      // Idempotencia por referencia: la misma transaccion no se cobra dos
+      // veces. El legacy no lo hace, asi que un doble clic en Procesar cobra
+      // dos veces y crea dos membresias (PagoMembresiaController.java:215).
+      // La referencia se busca dentro del gimnasio: la numeracion de recibos
+      // es de cada uno, y un gimnasio no debe enterarse de las del otro.
+      const referencia = input.referencia_transaccion.trim().toUpperCase();
+      const pagos = db.readTenant<Pago>("pagos");
+
+      if (referencia && pagos.some((p) => p.referencia_transaccion.toUpperCase() === referencia))
+        return { ok: false, mensaje: "Esa referencia ya tiene un pago registrado" };
+
+      const hoy = utils.isoDate();
+      const gym = gimnasioParaEscribir();
+      const membresias = db.readTenant<Membresia>("membresias");
+      const historial = db.readTenant<HistorialMembresia>("historialMembresias");
+
+      // El cobro solo renueva la membresia vigente: si el cliente ya tiene una,
+      // el plan y la modalidad van dados y cambiar alguno exige cancelar antes
+      // en Clientes. Antes se aceptaba el cambio aqui y la renovacion apagaba
+      // sola la membresia anterior (linea "anterior.estado = CANCELADA"), con
+      // lo que un simple cobro dejaba al cliente sin plan.
+      const vigente = membresias.find(
+        (m) => m.id_cliente === idCliente && m.estado === "ACTIVA" && m.fecha_vencimiento >= hoy,
+      );
+      if (vigente) {
+        if (vigente.id_plan !== plan.id_plan || vigente.modalidad_pago !== input.modalidad_pago)
+          return {
+            ok: false,
+            mensaje:
+              "El cliente ya tiene una membresia vigente " +
+              (vigente.tipo_membresia + " " + vigente.modalidad_pago) +
+              ". Cancela esa membresia en Clientes antes de activar otra.",
+          };
+      }
+
+      // Copias para poder deshacer: se escriben todas o ninguna.
+      const membresiasPrevias = membresias.map((m) => ({ ...m }));
+      const historialPrevio = historial.map((h) => ({ ...h }));
+
+      try {
+        // Duracion segun modalidad (PagoMembresiaController.java:198).
+        const dias = input.modalidad_pago === "SEMESTRAL" ? 180 : input.modalidad_pago === "ANUAL" ? 365 : 30;
+
+        const membresia: Membresia = {
+          gimnasio_id: gym,
+          id_membresia: db.siguienteId<Membresia>("membresias", (m) => m.id_membresia),
+          id_cliente: idCliente,
+          id_plan: plan.id_plan,
+          tipo_membresia: plan.nombre,
+          modalidad_pago: input.modalidad_pago,
+          valor: monto,
+          fecha_inicio: hoy,
+          fecha_vencimiento: sumarDias(hoy, dias),
+          estado: "ACTIVA",
+        };
+
+        // Renovar apaga la membresia anterior en vez de dejarla vigente.
+        // Es `vigente`, ya resuelto mas arriba: se cancela porque el cobro es
+        // su renovacion, nunca porque se este cambiando de plan.
+        if (vigente) vigente.estado = "CANCELADA";
+
+        historial.forEach((h) => {
+          if (h.id_cliente === idCliente && h.activa) h.activa = false;
+        });
+
+        historial.push({
+          gimnasio_id: gym,
+          id_historial: db.siguienteId<HistorialMembresia>("historialMembresias", (h) => h.id_historial),
+          id_cliente: idCliente,
+          id_membresia: membresia.id_membresia,
+          fecha_asignacion: hoy,
+          activa: true,
+        });
+
+        const pago: Pago = {
+          gimnasio_id: gym,
+          id_pago: db.siguienteId<Pago>("pagos", (p) => p.id_pago),
+          id_cliente: idCliente,
+          id_membresia: membresia.id_membresia,
+          fecha_pago: input.fecha_pago || hoy,
+          valor: monto,
+          metodo_pago: input.metodo_pago,
+          estado_pago: "EXITOSO",
+          referencia_transaccion: referencia,
+          observaciones: input.observaciones.trim(),
+        };
+
+        pagos.push(pago);
+        membresias.push(membresia);
+
+        db.writeTenant("membresias", membresias);
+        db.writeTenant("historialMembresias", historial);
+        db.writeTenant("pagos", pagos);
+
+        return { ok: true, mensaje: "Pago registrado y membresia activada", data: pago };
+      } catch (e) {
+        // Atraso de las tres escrituras: sin esto, un fallo a medias deja
+        // una membresia activa sin pago registrado. Va por writeTenant: las
+        // copias salieron de readTenant y db.write borraria a los otros
+        // gimnasios.
+        db.writeTenant("membresias", membresiasPrevias);
+        db.writeTenant("historialMembresias", historialPrevio);
+        return {
+          ok: false,
+          mensaje: "No se pudo registrar el pago. Revisa el historial. (" + (e instanceof Error ? e.message : "error") + ")",
+        };
+      }
     }
+  },
+
+  /* Agregados de Finanzas. Cada uno replica el GROUP BY de su consulta en el
+     legacy (FinanzasService.java) pero en memoria sobre las colecciones del
+     mock. Todos exigen estado_pago = EXITOSO: el legacy lo hace en
+     ingresosPorMes (l.23) pero se le olvida en desgloseMetodoPago (l.68), y
+     un pago anulado no es ingreso. */
+  finanzas: {
+    async ingresosPorMes(cantidadMeses = 12): Promise<{ mes: string; total: number }[]> {
+      await api._delay();
+      const pagos = db.readTenant<Pago>("pagos").filter((p) => p.estado_pago === "EXITOSO");
+      return agruparPorMes(pagos, (p) => p.fecha_pago, (p) => p.valor, cantidadMeses);
+    },
+
+    async ingresosPorPlan(): Promise<{ plan: string; total: number }[]> {
+      await api._delay();
+      const membresias = db.readTenant<Membresia>("membresias");
+      const porId = new Map(membresias.map((m) => [m.id_membresia, m.tipo_membresia]));
+      const totales = new Map<string, number>();
+
+      for (const p of db.readTenant<Pago>("pagos")) {
+        if (p.estado_pago !== "EXITOSO") continue;
+        const plan = porId.get(p.id_membresia);
+        if (!plan) continue;   // pago sin membresia asociada: no se puede atribuir
+        totales.set(plan, (totales.get(plan) ?? 0) + p.valor);
+      }
+
+      return [...totales].map(([plan, total]) => ({ plan, total })).sort((a, b) => b.total - a.total);
+    },
+
+    async porMetodoPago(): Promise<{ metodo: string; total: number; cantidad: number }[]> {
+      await api._delay();
+      const totales = new Map<string, { total: number; cantidad: number }>();
+
+      for (const p of db.readTenant<Pago>("pagos")) {
+        if (p.estado_pago !== "EXITOSO") continue;
+        const previo = totales.get(p.metodo_pago) ?? { total: 0, cantidad: 0 };
+        totales.set(p.metodo_pago, {
+          total: previo.total + p.valor,
+          cantidad: previo.cantidad + 1,
+        });
+      }
+
+      return [...totales]
+        .map(([metodo, v]) => ({ metodo, total: v.total, cantidad: v.cantidad }))
+        .sort((a, b) => b.total - a.total);
+    },
+
+    async nuevosClientes(cantidadMeses = 12): Promise<{ mes: string; cantidad: number }[]> {
+      await api._delay();
+      const porMes = agruparPorMes(
+        db.readTenant<Cliente>("clientes"),
+        (c) => c.fecha_registro,
+        () => 1,
+        cantidadMeses,
+      );
+      return porMes.map((m) => ({ mes: m.mes, cantidad: m.total }));
+    },
+
+    /* Pagos que aun no se aplican: el cliente tiene membresia vencida o sin
+       historial vigente. El legacy mira si la membresia sigue ACTIVA
+       (FinanzasService.java:112), que ignora que el pago pudo quedar
+       PENDIENTE aunque la membresia este bien. */
+    async pagosVencidos(): Promise<PagoVencido[]> {
+      await api._delay();
+      const membresias = db.readTenant<Membresia>("membresias");
+      const porId = new Map(membresias.map((m) => [m.id_membresia, m]));
+      const clientes = new Map(db.readTenant<Cliente>("clientes").map((c) => [c.numero_identificacion, c]));
+      const hoy = utils.isoDate();
+
+      return db
+        .readTenant<Pago>("pagos")
+        .filter((p) => p.estado_pago !== "EXITOSO")
+        .map((p): PagoVencido | null => {
+          const m = porId.get(p.id_membresia);
+          if (!m) return null;
+          const vigente = m.estado === "ACTIVA" && m.fecha_vencimiento >= hoy;
+          if (vigente) return null;
+          const c = clientes.get(p.id_cliente);
+          return {
+            id_pago: p.id_pago,
+            cliente: c ? c.nombre + " " + c.apellidos : p.id_cliente,
+            plan: m.tipo_membresia,
+            valor: p.valor,
+            metodo: p.metodo_pago,
+            fecha: p.fecha_pago,
+            estado: p.estado_pago,
+          };
+        })
+        .filter((x): x is PagoVencido => x !== null);
+    },
+  },
+
+  /* Control de acceso. El legacy delega en SP_REGISTRAR_INGRESO /
+     SP_REGISTRAR_SALIDA y la validacion vive en el controller
+     (RegistroEntradaController:285-341). Aqui validacion y escritura van
+     juntas: registrar una entrada sin pasar por las reglas no deberia ser
+     posible desde ninguna vista. */
+  acceso: {
+    async registrarEntrada(intento: IntentoAcceso): Promise<ApiResp<Ingreso>> {
+      await api._delay();
+
+      const revisado = clienteAceptado(intento);
+      if ("error" in revisado) return { ok: false, mensaje: revisado.error };
+      const { cliente } = revisado;
+
+      // El mismo predicado con el que Finanzas cuenta "Membresías vigentes":
+      // si esa tarjeta no lo cuenta, la puerta no lo deja pasar.
+      const hoy = utils.isoDate();
+      const id = cliente.numero_identificacion;
+      const vigente = db.readTenant<Membresia>("membresias").some(
+        (m) => m.id_cliente === id && membresiaVigente(m, hoy, cliente),
+      );
+      if (!vigente) {
+        return {
+          ok: false,
+          mensaje: `${cliente.nombre} ${cliente.apellidos} no tiene una membresía activa. Debe adquirir o renovar su membresía para ingresar.`,
+        };
+      }
+
+      // Solo cuenta una entrada abierta en este gimnasio: estar dentro de otro
+      // con la misma cedula no impide entrar aqui.
+      const ingresos = db.readTenant<Ingreso>("ingresos");
+      const abierto = ingresos.find(
+        (i) => i.id_cliente === id && i.fecha === hoy && i.hora_salida === null,
+      );
+      if (abierto) {
+        return {
+          ok: false,
+          mensaje: `Ya está dentro del gimnasio desde las ${utils.hora(abierto.hora_entrada)}.`,
+        };
+      }
+
+      const registro: Ingreso = {
+        gimnasio_id: gimnasioParaEscribir(),
+        id_ingreso: db.siguienteId<Ingreso>("ingresos", (i) => i.id_ingreso),
+        id_cliente: id,
+        fecha: hoy,
+        hora_entrada: hoy + "T" + relojLocal(),
+        hora_salida: null,
+        metodo_verificacion: intento.metodo,
+        estado_verificacion: "APROBADO",
+      };
+      ingresos.push(registro);
+      db.writeTenant("ingresos", ingresos);
+
+      return {
+        ok: true,
+        mensaje: `Entrada registrada para ${cliente.nombre} ${cliente.apellidos}`,
+        data: registro,
+      };
+    },
+
+    /* Cierra la entrada abierta del dia.
+
+       A diferencia de la entrada NO exige membresia vigente ni cliente ACTIVO.
+       El legacy las pedia en las dos (RegistroEntradaController:307) y el
+       resultado es que alguien suspendido o con la membresia vencida no podia
+       registrar su salida y quedaba "dentro" para siempre, inflando el KPI
+       "Activos ahora" del Dashboard.
+
+       `metodo` es opcional: el panel manual lo manda para identificar al
+       socio, el atajo de la fila del listado cierra directo. */
+    async registrarSalida(datos: {
+      id_cliente: string;
+      metodo?: Ingreso["metodo_verificacion"];
+      contrasena?: string;
+    }): Promise<ApiResp<Ingreso>> {
+      await api._delay();
+
+      const id = datos.id_cliente.trim();
+      const cliente = db.readTenant<Cliente>("clientes").find((c) => c.numero_identificacion === id);
+      if (!cliente) return { ok: false, mensaje: "No se encontró un cliente con ese número de identificación" };
+
+      if (datos.metodo === "CONTRASENA") {
+        const rechazo = claveRechazada(id, datos.contrasena);
+        if (rechazo) return { ok: false, mensaje: rechazo };
+      }
+
+      const hoy = utils.isoDate();
+      const ingresos = db.readTenant<Ingreso>("ingresos");
+      const abierto = ingresos.find(
+        (i) => i.id_cliente === id && i.fecha === hoy && i.hora_salida === null,
+      );
+      if (!abierto) {
+        return { ok: false, mensaje: "No hay una entrada registrada hoy para este cliente." };
+      }
+
+      const ahora = hoy + "T" + relojLocal();
+      // Las horas del seed de hoy van escritas a mano y no se mueven con el
+      // reloj, así que a primera hora puede haber una entrada "futura". Sin
+      // este tope saldria un registro con la salida antes que la entrada.
+      abierto.hora_salida = ahora < abierto.hora_entrada ? abierto.hora_entrada : ahora;
+      db.writeTenant("ingresos", ingresos);
+
+      return {
+        ok: true,
+        mensaje: `Salida registrada para ${cliente.nombre} ${cliente.apellidos}`,
+        data: abierto,
+      };
+    },
   },
 
   ingresos: {
     async list(): Promise<Ingreso[]> {
       await api._delay();
-      return db.read<Ingreso>("ingresos");
+      return db.readTenant<Ingreso>("ingresos");
     },
     async byCliente(id: string): Promise<Ingreso[]> {
       await api._delay();
-      return db.read<Ingreso>("ingresos").filter((i) => i.id_cliente === id);
-    }
+      return db.readTenant<Ingreso>("ingresos").filter((i) => i.id_cliente === id);
+    },
+    /* Lo que muestra el listado de control de acceso: un solo dia. Dashboard y
+       Finanzas usan list() con el historial completo; aqui leer los seis dias
+       anteriores solo serviria para filtrarlos en el componente. */
+    async delDia(fecha: string): Promise<Ingreso[]> {
+      await api._delay();
+      return db.readTenant<Ingreso>("ingresos").filter((i) => i.fecha === fecha);
+    },
   },
 
   // ===== [P4] Ejercicios =====
@@ -628,19 +1698,19 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
   progreso: {
     async list(): Promise<Progreso[]> {
       await api._delay();
-      return db.read<Progreso>("progreso");
+      return db.readTenant<Progreso>("progreso");
     },
     async byCliente(id: string): Promise<Progreso[]> {
       await api._delay();
-      return db.read<Progreso>("progreso").filter((p) => p.id_cliente === id);
+      return db.readTenant<Progreso>("progreso").filter((p) => p.id_cliente === id);
     },
-    async create(data: Omit<Progreso, "id_progreso">): Promise<ApiResp<Progreso>> {
+    async create(data: ProgresoNuevo): Promise<ApiResp<Progreso>> {
       await api._delay();
-      const arr = db.read<Progreso>("progreso");
-      const nuevoId = arr.reduce((max, p) => Math.max(max, p.id_progreso), 0) + 1;
-      const nuevo: Progreso = { id_progreso: nuevoId, ...data };
+      const arr = db.readTenant<Progreso>("progreso");
+      const nuevoId = db.siguienteId<Progreso>("progreso", (p) => p.id_progreso);
+      const nuevo: Progreso = { gimnasio_id: gimnasioParaEscribir(), id_progreso: nuevoId, ...data };
       arr.push(nuevo);
-      db.write("progreso", arr);
+      db.writeTenant("progreso", arr);
       return { ok: true, mensaje: "Medición registrada", data: nuevo };
     },
   },
@@ -650,37 +1720,37 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
   citas: {
     async list(): Promise<Cita[]> {
       await api._delay();
-      return db.read<Cita>("citas");
+      return db.readTenant<Cita>("citas");
     },
     async byCliente(id: string): Promise<Cita[]> {
       await api._delay();
-      return db.read<Cita>("citas").filter((c) => c.id_cliente === id);
+      return db.readTenant<Cita>("citas").filter((c) => c.id_cliente === id);
     },
     async create(data: CitaNueva): Promise<ApiResp<Cita>> {
       await api._delay();
-      const arr = db.read<Cita>("citas");
-      const nuevoId = arr.reduce((max, c) => Math.max(max, c.id_cita), 0) + 1;
-      const nueva: Cita = { id_cita: nuevoId, estado: "PENDIENTE", ...data };
+      const arr = db.readTenant<Cita>("citas");
+      const nuevoId = db.siguienteId<Cita>("citas", (c) => c.id_cita);
+      const nueva: Cita = { gimnasio_id: gimnasioParaEscribir(), id_cita: nuevoId, estado: "PENDIENTE", ...data };
       arr.push(nueva);
-      db.write("citas", arr);
+      db.writeTenant("citas", arr);
       return { ok: true, mensaje: "Cita registrada", data: nueva };
     },
-    async update(id: number, data: Partial<Omit<Cita, "id_cita">>): Promise<ApiResp<Cita>> {
+    async update(id: number, data: Partial<CitaNueva>): Promise<ApiResp<Cita>> {
       await api._delay();
-      const arr = db.read<Cita>("citas");
+      const arr = db.readTenant<Cita>("citas");
       const cita = arr.find((c) => c.id_cita === id);
       if (!cita) return { ok: false, mensaje: "Cita no encontrada" };
       Object.assign(cita, data, { id_cita: id });
-      db.write("citas", arr);
+      db.writeTenant("citas", arr);
       return { ok: true, mensaje: "Cita actualizada", data: cita };
     },
     async setEstado(id: number, estado: Cita["estado"]): Promise<ApiResp<Cita>> {
       await api._delay();
-      const arr = db.read<Cita>("citas");
+      const arr = db.readTenant<Cita>("citas");
       const cita = arr.find((c) => c.id_cita === id);
       if (!cita) return { ok: false, mensaje: "Cita no encontrada" };
       cita.estado = estado;
-      db.write("citas", arr);
+      db.writeTenant("citas", arr);
       return { ok: true, mensaje: "Estado actualizado", data: cita };
     },
   },

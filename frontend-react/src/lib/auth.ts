@@ -23,10 +23,14 @@ function fallo(motivo: MotivoFallo, mensaje: string): ResultadoLogin {
   return { ok: false, motivo, mensaje };
 }
 
+/* Una sesion guardada antes del multitenant no trae gimnasio_id: no pasa
+   esta validacion, leer() la descarta y el usuario vuelve a entrar por el
+   login, que ya le asigna su gimnasio. */
 function esSesion(datos: unknown): datos is Sesion {
   if (datos === null || typeof datos !== "object") return false;
   const s = datos as Record<string, unknown>;
   return (
+    typeof s.gimnasio_id === "string" &&
     typeof s.numero_identificacion === "string" &&
     typeof s.usuario === "string" &&
     typeof s.nombre === "string" &&
@@ -62,6 +66,7 @@ function leer(): Sesion | null {
    muestra en el Topbar aunque el nombre real del usuario sea otro. */
 function sesionDe(u: Usuario, escrito: string): Sesion {
   return {
+    gimnasio_id: u.gimnasio_id,
     numero_identificacion: u.numero_identificacion,
     usuario: escrito,
     nombre: u.nombre,

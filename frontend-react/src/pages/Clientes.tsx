@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
-import type { Cliente, Usuario } from "../types";
+import type { Cliente, ClienteNuevo, Usuario } from "../types";
 
 type FormCliente = {
   tipo_identificacion: string;
@@ -111,10 +111,8 @@ export function Clientes() {
     }
 
     const res = editandoId
-      ? await api.clientes.update(editandoId, form as Partial<Cliente>)
-      : await api.clientes.create(
-          form as Omit<Cliente, "estado" | "fecha_registro">,
-        );
+      ? await api.clientes.update(editandoId, form as Partial<ClienteNuevo>)
+      : await api.clientes.create(form as ClienteNuevo);
     if (!res.ok) {
       setError(res.mensaje);
       return;

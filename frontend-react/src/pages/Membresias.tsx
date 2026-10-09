@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
+import { Paginador } from "../components/Paginador";
 import type { Cliente, Membresia, MembresiaNueva } from "../types";
 
 type FormMembresia = Omit<MembresiaNueva, "valor" | "estado" | "id_plan"> & { valor: string; id_plan: number | null };
@@ -31,6 +32,10 @@ export function Membresias() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [avisoClientes, setAvisoClientes] = useState("");
+
+  // Paginación: 10 por página; al cambiar búsqueda o filtros se vuelve a la 1
+  const POR_PAGINA = 10;
+  const [pagina, setPagina] = useState(1);
 
   useEffect(() => {
     let activo = true;
@@ -65,6 +70,12 @@ export function Membresias() {
       (!filtroModalidad || membresia.modalidad_pago === filtroModalidad);
   });
   const hayFiltros = busqueda !== "" || filtroEstado !== "" || filtroModalidad !== "";
+
+  // La página se recorta a un rango válido ("paginaSegura") cuando la lista
+  // filtrada es más corta; así al filtrar se vuelve solo al rango disponible.
+  const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
+  const paginaSegura = Math.min(pagina, totalPaginas);
+  const paginadas = filtradas.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA);
 
   function limpiarFiltros() {
     setBusqueda("");
@@ -236,7 +247,7 @@ export function Membresias() {
       </div>
 
       <div className="table-wrap">
-        <table className="table-g" aria-label="Listado de membresías" aria-busy={cargando}>
+        <table className="table-g tabla-stack" aria-label="Listado de membresías" aria-busy={cargando}>
           <thead>
             <tr>
               <th scope="col">ID</th>
@@ -264,18 +275,18 @@ export function Membresias() {
             ) : filtradas.length === 0 ? (
               <tr><td colSpan={9} className="empty-state">No hay membresías que coincidan con los filtros.</td></tr>
             ) : (
-              filtradas.map((membresia) => {
+              paginadas.map((membresia) => {
                 const cliente = clientesPorId.get(membresia.id_cliente);
                 return (
                   <tr key={membresia.id_membresia}>
-                    <td>{membresia.id_membresia}</td>
-                    <td>{cliente ? [cliente.nombre, cliente.apellidos].join(" ").trim() || membresia.id_cliente : membresia.id_cliente}</td>
-                    <td>{membresia.tipo_membresia}</td>
-                    <td>{membresia.modalidad_pago}</td>
-                    <td>{utils.money(membresia.valor)}</td>
-                    <td>{utils.fecha(membresia.fecha_inicio)}</td>
-                    <td>{utils.fecha(membresia.fecha_vencimiento)}</td>
-                    <td><span className={"badge-g " + utils.badgeClass(membresia.estado)}>{membresia.estado}</span></td>
+                    <td data-label="ID">{membresia.id_membresia}</td>
+                    <td data-label="Cliente">{cliente ? [cliente.nombre, cliente.apellidos].join(" ").trim() || membresia.id_cliente : membresia.id_cliente}</td>
+                    <td data-label="Tipo de membresía">{membresia.tipo_membresia}</td>
+                    <td data-label="Modalidad">{membresia.modalidad_pago}</td>
+                    <td data-label="Valor">{utils.money(membresia.valor)}</td>
+                    <td data-label="Inicio">{utils.fecha(membresia.fecha_inicio)}</td>
+                    <td data-label="Vencimiento">{utils.fecha(membresia.fecha_vencimiento)}</td>
+                    <td data-label="Estado"><span className={"badge-g " + utils.badgeClass(membresia.estado)}>{membresia.estado}</span></td>
                     <td>
                       <div className="cell-actions">
                       <button
@@ -295,6 +306,12 @@ export function Membresias() {
             )}
           </tbody>
         </table>
+        <Paginador
+          pagina={paginaSegura}
+          total={filtradas.length}
+          porPagina={POR_PAGINA}
+          onCambiar={setPagina}
+        />
       </div>
       <Modal show={show} onHide={cerrarModal} backdrop={guardando ? "static" : true} keyboard={!guardando} centered size="lg">
         <Modal.Header closeButton={!guardando}>

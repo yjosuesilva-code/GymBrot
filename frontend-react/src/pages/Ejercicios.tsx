@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
+import { Paginador } from "../components/Paginador";
 import type { Ejercicio } from "../types";
 
 const VACIO = {
@@ -21,6 +22,10 @@ export function Ejercicios() {
   const [error, setError] = useState("");
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState("");
+
+  // Paginación: 10 ejercicios por página (100 en el seed); al buscar se vuelve a la 1
+  const POR_PAGINA = 10;
+  const [pagina, setPagina] = useState(1);
 
   const [alerta, setAlerta] = useState<{ tipo: "ok" | "error"; mensaje: string } | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -153,6 +158,9 @@ export function Ejercicios() {
   const filtrados = ejercicios.filter((e) =>
     [e.nombre, e.grupoMuscular, e.nivel].some((campo) => normalizar(campo).includes(consulta))
   );
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const paginaSegura = Math.min(pagina, totalPaginas);
+  const paginados = filtrados.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA);
 
   return (
     <section className="card-g">
@@ -219,7 +227,7 @@ export function Ejercicios() {
             ) : filtrados.length === 0 ? (
               <tr><td colSpan={6} className="empty-state">No hay ejercicios que coincidan con la búsqueda.</td></tr>
             ) : (
-              filtrados.map((e) => (
+              paginados.map((e) => (
                 <tr key={e.idEjercicio}>
                   <td>
                     <strong>{e.nombre}</strong>
@@ -257,6 +265,12 @@ export function Ejercicios() {
             )}
           </tbody>
         </table>
+        <Paginador
+          pagina={paginaSegura}
+          total={filtrados.length}
+          porPagina={POR_PAGINA}
+          onCambiar={setPagina}
+        />
       </div>
 
       <Modal show={show} onHide={() => { if (!guardando) setShow(false); }} backdrop={guardando ? "static" : true} keyboard={!guardando} centered size="lg">

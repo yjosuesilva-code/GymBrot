@@ -61,4 +61,7 @@
   .tabla-stack td[data-label="Acciones"]::before { display: none; }
   .log-row { align-items: flex-start; }
   .log-salida { margin-left: auto; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbar .btn-acceso,
+  .toolbar .btn-neon { width: 100%; }
 }

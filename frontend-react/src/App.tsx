@@ -1,10 +1,9 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "./components/layout/Layout";
 import { Dashboard } from "./pages/Dashboard";
 import { Clientes } from "./pages/Clientes";
 import { ClienteDetalle } from "./pages/ClienteDetalle";
 import { Finanzas } from "./pages/Finanzas";          // [P1]
-import { Acceso } from "./pages/Acceso";              // [P1]
 import { GymbrotAI } from "./pages/GymbrotAI";        // [P1]
 import { Login } from "./pages/Login";
 import { Instructores } from "./pages/Instructores";          // [P3]
@@ -29,7 +28,7 @@ function App() {
         <Route path="/clientes" element={<Clientes />} />
         <Route path="/clientes/:id" element={<ClienteDetalle />} />
         <Route path="/finanzas" element={<Finanzas />} />           {/* [P1] */}
-        <Route path="/acceso" element={<Acceso />} />               {/* [P1] */}
+        <Route path="/acceso" element={<Navigate to="/clientes" replace />} />
         <Route path="/gymbrot-ai" element={<GymbrotAI />} />        {/* [P1] */}
         {/* [P3] Instructores */}
         <Route path="/instructores" element={<Instructores />} />

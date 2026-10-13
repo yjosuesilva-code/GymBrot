@@ -443,13 +443,17 @@ const SEED: Seed = {
   // ===== [P3] Rutinas =====
   // Fechas relativas (dia(n) = hace n días; dia(-n) = dentro de n días) para que siempre
   // haya una rutina vigente, una por vencer, una vencida y una sin fecha fin.
-  // Instructores y clientes existen en este SEED. Sin ejercicios a propósito:
-  // api.ejercicios (P4) todavía no existe y no queremos referencias falsas.
+  // Cada rutina usa clientes e instructores de SU gimnasio. Titan: Ana María tiene la misma cédula
+  // que la Ana de Centro y ambas tienen rutina vigente (la regla es por gimnasio); Mariana queda
+  // libre para crearle una; la Natalia de Titan no tiene rutinas (se puede eliminar).
+  // Sin ejercicios a propósito: el catálogo todavía no tiene ejercicios y no queremos referencias falsas.
   rutinas: [
-    { id_rutina:1, id_instructor:'2000000001', id_cliente:'1000000001', nombre:'Fuerza tren superior', descripcion:'Fuerza para pecho, espalda y brazos.',     fecha_creacion:dia(35), fecha_fin:dia(-55), dias_semana:['LUNES','MIERCOLES','VIERNES'], objetivo:'Ganancia muscular' },
-    { id_rutina:2, id_instructor:'2000000001', id_cliente:'1000000002', nombre:'Quema de grasa',       descripcion:'Circuitos de cardio y funcional.',         fecha_creacion:dia(50), fecha_fin:dia(-10), dias_semana:['MARTES','JUEVES','SABADO'],    objetivo:'Pérdida de peso' },
-    { id_rutina:3, id_instructor:'2000000002', id_cliente:'1000000005', nombre:'Movilidad y espalda',  descripcion:'Estiramientos y fortalecimiento de core.', fecha_creacion:dia(15), fecha_fin:null,     dias_semana:['LUNES','JUEVES'],              objetivo:'Rehabilitación' },
-    { id_rutina:4, id_instructor:'2000000002', id_cliente:'1000000007', nombre:'Resistencia básica',   descripcion:'Base aeróbica para principiantes.',        fecha_creacion:dia(90), fecha_fin:dia(5),  dias_semana:['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES'], objetivo:'Resistencia' },
+    { gimnasio_id:'gym-centro', id_rutina:1, id_instructor:'2000000001', id_cliente:'1000000001', nombre:'Fuerza tren superior', descripcion:'Fuerza para pecho, espalda y brazos.',     fecha_creacion:dia(35), fecha_fin:dia(-55), dias_semana:['LUNES','MIERCOLES','VIERNES'], objetivo:'Ganancia muscular' },
+    { gimnasio_id:'gym-centro', id_rutina:2, id_instructor:'2000000001', id_cliente:'1000000002', nombre:'Quema de grasa',       descripcion:'Circuitos de cardio y funcional.',         fecha_creacion:dia(50), fecha_fin:dia(-10), dias_semana:['MARTES','JUEVES','SABADO'],    objetivo:'Pérdida de peso' },
+    { gimnasio_id:'gym-centro', id_rutina:3, id_instructor:'2000000002', id_cliente:'1000000005', nombre:'Movilidad y espalda',  descripcion:'Estiramientos y fortalecimiento de core.', fecha_creacion:dia(15), fecha_fin:null,     dias_semana:['LUNES','JUEVES'],              objetivo:'Rehabilitación' },
+    { gimnasio_id:'gym-centro', id_rutina:4, id_instructor:'2000000002', id_cliente:'1000000007', nombre:'Resistencia básica',   descripcion:'Base aeróbica para principiantes.',        fecha_creacion:dia(90), fecha_fin:dia(5),  dias_semana:['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES'], objetivo:'Resistencia' },
+    { gimnasio_id:'gym-titan',  id_rutina:5, id_instructor:'2000000101', id_cliente:'1000000001', nombre:'Fuerza general',       descripcion:'Básicos con barra y mancuernas.',          fecha_creacion:dia(20), fecha_fin:dia(-40), dias_semana:['LUNES','MIERCOLES','VIERNES'], objetivo:'Ganancia muscular' },
+    { gimnasio_id:'gym-titan',  id_rutina:6, id_instructor:'2000000101', id_cliente:'1000000101', nombre:'Inicio en el gimnasio', descripcion:'Adaptación para principiantes.',           fecha_creacion:dia(70), fecha_fin:dia(10),  dias_semana:['MARTES','JUEVES'],             objetivo:'Tonificación' },
   ],
   rutina_ejercicios: [],
   // ===== [/P3] Rutinas =====
@@ -744,8 +748,9 @@ function esVigente(r: Pick<Rutina, "fecha_fin">): boolean {
 // y el cliente ya tiene otra vigente (distinta de idPropio), devuelve el mensaje de error.
 function validarUnaVigente(idCliente: string, fechaFin: string | null, idPropio: number | null): string | null {
   if (!esVigente({ fecha_fin: fechaFin })) return null;
+  // readTenant: la Ana de otro gimnasio (misma cédula) no cuenta
   const otra = db
-    .read<Rutina>("rutinas")
+    .readTenant<Rutina>("rutinas")
     .find((r) => r.id_cliente === idCliente && r.id_rutina !== idPropio && esVigente(r));
   return otra
     ? "El cliente ya tiene la rutina vigente «" + otra.nombre + "». Solo puede tener una vigente a la vez."
@@ -1586,8 +1591,9 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
       const arr = db.readTenant<Instructor>("instructores");
       const ins = arr.find((i) => i.numero_identificacion === id);
       if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
-      // Como un FK con RESTRICT: no se borra si tiene rutinas que lo referencian
-      const rutinas = db.read<Rutina>("rutinas").filter((r) => r.id_instructor === id).length;
+      // Como un FK con RESTRICT: no se borra si tiene rutinas que lo referencian.
+      // Solo cuentan las rutinas de este gimnasio (la misma cédula puede tener rutinas en otro).
+      const rutinas = db.readTenant<Rutina>("rutinas").filter((r) => r.id_instructor === id).length;
       if (rutinas > 0)
         return {
           ok: false,
@@ -1611,35 +1617,41 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
 
   // ===== [P3] Rutinas =====
   rutinas: {
+    // Igual que instructores: se lee con readTenant y se guarda con writeTenant.
     async list(): Promise<Rutina[]> {
       await api._delay();
-      return db.read<Rutina>("rutinas");
+      return db.readTenant<Rutina>("rutinas");
     },
 
     async get(id: number): Promise<Rutina | null> {
       await api._delay();
-      return db.read<Rutina>("rutinas").find((r) => r.id_rutina === id) ?? null;
+      return db.readTenant<Rutina>("rutinas").find((r) => r.id_rutina === id) ?? null;
     },
 
-    // id_rutina = el mayor id + 1; fecha_creacion = hoy
+    // id_rutina = siguiente id de la tabla completa (global, ningún gimnasio lo repite);
+    // gimnasio_id = el de la sesión; fecha_creacion = hoy
     async create(data: RutinaNueva): Promise<ApiResp<Rutina>> {
       await api._delay();
       const error =
         validarReferencias(data.id_instructor, data.id_cliente) ??
         validarUnaVigente(data.id_cliente, data.fecha_fin, null);
       if (error) return { ok: false, mensaje: error };
-      const arr = db.read<Rutina>("rutinas");
-      const id = arr.reduce((max, r) => Math.max(max, r.id_rutina), 0) + 1;
-      const nueva: Rutina = { ...data, id_rutina: id, fecha_creacion: utils.isoDate() };
+      const arr = db.readTenant<Rutina>("rutinas");
+      const nueva: Rutina = {
+        ...data,
+        gimnasio_id: gimnasioParaEscribir(),
+        id_rutina: db.siguienteId<Rutina>("rutinas", (r) => r.id_rutina),
+        fecha_creacion: utils.isoDate(),
+      };
       arr.push(nueva);
-      db.write("rutinas", arr);
+      db.writeTenant("rutinas", arr);
       return { ok: true, mensaje: "Rutina creada", data: nueva };
     },
 
-    // id_rutina y fecha_creacion no se dejan cambiar al editar
+    // id_rutina y fecha_creacion no se dejan cambiar al editar (gimnasio_id lo vuelve a sellar writeTenant)
     async update(id: number, data: Partial<RutinaNueva>): Promise<ApiResp<Rutina>> {
       await api._delay();
-      const arr = db.read<Rutina>("rutinas");
+      const arr = db.readTenant<Rutina>("rutinas");
       const r = arr.find((x) => x.id_rutina === id);
       if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
       // Cómo quedaría la rutina con los cambios, para validar con los valores finales
@@ -1649,7 +1661,7 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
         validarUnaVigente(final.id_cliente, final.fecha_fin, id);
       if (error) return { ok: false, mensaje: error };
       Object.assign(r, data, { id_rutina: id, fecha_creacion: r.fecha_creacion });
-      db.write("rutinas", arr);
+      db.writeTenant("rutinas", arr);
       return { ok: true, mensaje: "Rutina actualizada", data: r };
     },
 
@@ -1657,7 +1669,7 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
     // Una rutina creada hoy no se puede finalizar: ayer quedaría antes de su fecha_creacion.
     async finalizar(id: number): Promise<ApiResp<Rutina>> {
       await api._delay();
-      const arr = db.read<Rutina>("rutinas");
+      const arr = db.readTenant<Rutina>("rutinas");
       const r = arr.find((x) => x.id_rutina === id);
       if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
       if (!esVigente(r)) return { ok: false, mensaje: "La rutina ya está en el historial" };
@@ -1668,19 +1680,19 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
           mensaje: "Esta rutina se creó hoy y no se puede finalizar. Si quieres cambiarla, edítala.",
         };
       r.fecha_fin = ayer;
-      db.write("rutinas", arr);
+      db.writeTenant("rutinas", arr);
       return { ok: true, mensaje: "Rutina «" + r.nombre + "» finalizada", data: r };
     },
 
-    // Borra la rutina y también sus ejercicios (como un ON DELETE CASCADE)
+    // Borra la rutina y también sus ejercicios (como un ON DELETE CASCADE), todo dentro del gimnasio
     async remove(id: number): Promise<ApiResp<Rutina>> {
       await api._delay();
-      const arr = db.read<Rutina>("rutinas");
+      const arr = db.readTenant<Rutina>("rutinas");
       const r = arr.find((x) => x.id_rutina === id);
       if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
-      db.write("rutinas", arr.filter((x) => x.id_rutina !== id));
-      const ejercicios = db.read<RutinaEjercicio>("rutina_ejercicios");
-      db.write("rutina_ejercicios", ejercicios.filter((e) => e.id_rutina !== id));
+      db.writeTenant("rutinas", arr.filter((x) => x.id_rutina !== id));
+      const ejercicios = db.readTenant<RutinaEjercicio>("rutina_ejercicios");
+      db.writeTenant("rutina_ejercicios", ejercicios.filter((e) => e.id_rutina !== id));
       return { ok: true, mensaje: "Rutina eliminada", data: r };
     },
 
@@ -1688,23 +1700,28 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
     async ejercicios(id: number): Promise<RutinaEjercicio[]> {
       await api._delay();
       return db
-        .read<RutinaEjercicio>("rutina_ejercicios")
+        .readTenant<RutinaEjercicio>("rutina_ejercicios")
         .filter((e) => e.id_rutina === id)
         .sort((a, b) => DIAS.indexOf(a.dia_semana) - DIAS.indexOf(b.dia_semana) || a.orden - b.orden);
     },
 
     // Reemplaza todos los ejercicios de la rutina por la lista recibida.
-    // Solo acepta ejercicios que existan en la colección de P4 ("ejercicios").
-    async guardarEjercicios(id: number, lista: Omit<RutinaEjercicio, "id_rutina">[]): Promise<ApiResp<RutinaEjercicio[]>> {
+    // Solo acepta ejercicios que existan en el catálogo. El catálogo todavía se lee completo (db.read):
+    // se decidirá si es global, por gimnasio o mixto antes de tocarlo.
+    async guardarEjercicios(
+      id: number,
+      lista: Omit<RutinaEjercicio, "id_rutina" | "gimnasio_id">[]
+    ): Promise<ApiResp<RutinaEjercicio[]>> {
       await api._delay();
-      if (!db.read<Rutina>("rutinas").some((r) => r.id_rutina === id))
+      if (!db.readTenant<Rutina>("rutinas").some((r) => r.id_rutina === id))
         return { ok: false, mensaje: "Rutina no encontrada" };
       const catalogo = db.read<Ejercicio>("ejercicios");
       const faltante = lista.find((e) => !catalogo.some((c) => c.idEjercicio === e.id_ejercicio));
       if (faltante) return { ok: false, mensaje: "El ejercicio " + faltante.id_ejercicio + " no existe" };
-      const nuevos: RutinaEjercicio[] = lista.map((e) => ({ ...e, id_rutina: id }));
-      const otros = db.read<RutinaEjercicio>("rutina_ejercicios").filter((e) => e.id_rutina !== id);
-      db.write("rutina_ejercicios", otros.concat(nuevos));
+      const gym = gimnasioParaEscribir();
+      const nuevos: RutinaEjercicio[] = lista.map((e) => ({ ...e, gimnasio_id: gym, id_rutina: id }));
+      const otros = db.readTenant<RutinaEjercicio>("rutina_ejercicios").filter((e) => e.id_rutina !== id);
+      db.writeTenant("rutina_ejercicios", otros.concat(nuevos));
       return { ok: true, mensaje: "Ejercicios guardados", data: nuevos };
     },
   },

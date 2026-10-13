@@ -241,7 +241,8 @@ export type ObjetivoRutina =
   | 'Rehabilitación';
 
 export interface Rutina {
-  id_rutina: number;               // llave, autoincremental
+  gimnasio_id: Gimnasio['gimnasio_id']; // tenant: lo pone api.ts, la vista no lo conoce
+  id_rutina: number;               // llave, autoincremental global (como un SERIAL)
   id_instructor: string;           // Instructor.numero_identificacion
   id_cliente: string;              // Cliente.numero_identificacion
   nombre: string;
@@ -254,6 +255,7 @@ export interface Rutina {
 
 // Un ejercicio dentro de una rutina (tabla intermedia Rutina <-> Ejercicio del diagrama ER)
 export interface RutinaEjercicio {
+  gimnasio_id: Gimnasio['gimnasio_id']; // el mismo de su rutina
   id_rutina: number;               // Rutina.id_rutina
   id_ejercicio: number;            // Ejercicio.idEjercicio (P4)
   orden: number;                   // posición dentro del día: 1, 2, 3...
@@ -261,8 +263,8 @@ export interface RutinaEjercicio {
   notas_instructor: string;
 }
 
-// Lo que se envía al crear: id_rutina y fecha_creacion los pone api.rutinas.create
-export type RutinaNueva = Omit<Rutina, 'id_rutina' | 'fecha_creacion'>;
+// Lo que se envía al crear: gimnasio_id, id_rutina y fecha_creacion los pone api.rutinas.create
+export type RutinaNueva = Omit<Rutina, 'gimnasio_id' | 'id_rutina' | 'fecha_creacion'>;
 // ===== [/P3] Rutinas =====
 
 // ===== [P2] Citas =====

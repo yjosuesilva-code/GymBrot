@@ -205,7 +205,8 @@ export type Especialidad =
 export type EstadoInstructor = 'ACTIVO' | 'INACTIVO';
 
 export interface Instructor {
-  numero_identificacion: string;   // llave
+  gimnasio_id: Gimnasio['gimnasio_id']; // tenant: lo pone api.ts, la vista no lo conoce
+  numero_identificacion: string;   // llave dentro de cada gimnasio (D3)
   tipo_identificacion: TipoIdentificacion;
   nombre: string;
   apellidos: string;
@@ -217,8 +218,8 @@ export interface Instructor {
   estado: EstadoInstructor;
 }
 
-// Lo que se envía al crear: estado y fecha_contratacion los pone api.instructores.create
-export type InstructorNuevo = Omit<Instructor, 'estado' | 'fecha_contratacion'>;
+// Lo que se envía al crear: gimnasio_id, estado y fecha_contratacion los pone api.instructores.create
+export type InstructorNuevo = Omit<Instructor, 'gimnasio_id' | 'estado' | 'fecha_contratacion'>;
 // ===== [/P3] Instructores =====
 
 // ===== [P3] Rutinas =====

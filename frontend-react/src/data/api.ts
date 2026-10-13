@@ -429,10 +429,14 @@ const SEED: Seed = {
   ejercicios: [],   // la colección de P4 arranca vacía
 
   // ===== [P3] Instructores =====
+  // Centro tiene los 3 de siempre (las rutinas y citas de Centro los usan). Titan tiene 2 propios;
+  // Natalia trabaja en los dos: misma cédula, dos registros (D3), para que una fuga se note.
   instructores: [
-    { numero_identificacion:'2000000001', tipo_identificacion:'CC', nombre:'Camilo',  apellidos:'Herrera Díaz', telefono:'3101234567', correo:'camilo.herrera@gymbrot.com', especialidad:'Entrenador personal', disponibilidad:'Lun-Vie 6:00-14:00',  fecha_contratacion:'2025-02-03', estado:'ACTIVO' },
-    { numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Natalia', apellidos:'Vargas Rojas', telefono:'3112345678', correo:'natalia.vargas@gymbrot.com', especialidad:'Yoga/Pilates',        disponibilidad:'Lun-Mié-Vie 16:00-21:00', fecha_contratacion:'2025-08-18', estado:'ACTIVO' },
-    { numero_identificacion:'2000000003', tipo_identificacion:'CE', nombre:'Mateo',   apellidos:'Silva Castro', telefono:'3123456789', correo:'mateo.silva@gymbrot.com',    especialidad:'Nutrición',           disponibilidad:'Mar-Jue 8:00-12:00',  fecha_contratacion:'2026-01-12', estado:'INACTIVO' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'2000000001', tipo_identificacion:'CC', nombre:'Camilo',  apellidos:'Herrera Díaz', telefono:'3101234567', correo:'camilo.herrera@gymbrot.com', especialidad:'Entrenador personal', disponibilidad:'Lun-Vie 6:00-14:00',  fecha_contratacion:'2025-02-03', estado:'ACTIVO' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Natalia', apellidos:'Vargas Rojas', telefono:'3112345678', correo:'natalia.vargas@gymbrot.com', especialidad:'Yoga/Pilates',        disponibilidad:'Lun-Mié-Vie 16:00-21:00', fecha_contratacion:'2025-08-18', estado:'ACTIVO' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'2000000003', tipo_identificacion:'CE', nombre:'Mateo',   apellidos:'Silva Castro', telefono:'3123456789', correo:'mateo.silva@gymbrot.com',    especialidad:'Nutrición',           disponibilidad:'Mar-Jue 8:00-12:00',  fecha_contratacion:'2026-01-12', estado:'INACTIVO' },
+    { gimnasio_id:'gym-titan',  numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Natalia', apellidos:'Vargas Rojas', telefono:'3112345678', correo:'natalia.vargas@titanfitness.com', especialidad:'Yoga/Pilates', disponibilidad:'Sáb 8:00-12:00', fecha_contratacion:'2026-09-01', estado:'ACTIVO' },
+    { gimnasio_id:'gym-titan',  numero_identificacion:'2000000101', tipo_identificacion:'CC', nombre:'Jorge',   apellidos:'Mendoza Ochoa', telefono:'3134567890', correo:'jorge.mendoza@titanfitness.com', especialidad:'Musculación', disponibilidad:'Lun-Sáb 5:00-11:00', fecha_contratacion:'2026-08-20', estado:'ACTIVO' },
   ],
   // ===== [/P3] Instructores =====
 
@@ -723,7 +727,7 @@ const DIAS: DiaSemana[] = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", 
 
 // Mensaje de error si el instructor o el cliente no existen; null si ambos existen
 function validarReferencias(idInstructor: string, idCliente: string): string | null {
-  if (!db.read<Instructor>("instructores").some((i) => i.numero_identificacion === idInstructor))
+  if (!db.readTenant<Instructor>("instructores").some((i) => i.numero_identificacion === idInstructor))
     return "El instructor no existe";
   if (!db.readTenant<Cliente>("clientes").some((c) => c.numero_identificacion === idCliente))
     return "El cliente no existe";
@@ -1533,41 +1537,53 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
 
   // ===== [P3] Instructores =====
   instructores: {
+    // Todo se lee con readTenant (solo el gimnasio activo) y se guarda con writeTenant,
+    // así el .find() por cédula nunca encuentra al instructor de otro gimnasio (D3).
     async list(): Promise<Instructor[]> {
       await api._delay();
-      return db.read<Instructor>("instructores");
+      return db.readTenant<Instructor>("instructores");
     },
 
     async get(id: string): Promise<Instructor | null> {
       await api._delay();
-      return db.read<Instructor>("instructores").find((i) => i.numero_identificacion === id) ?? null;
+      return db.readTenant<Instructor>("instructores").find((i) => i.numero_identificacion === id) ?? null;
     },
 
+    // La cédula es única dentro de cada gimnasio (D3): la misma persona puede
+    // trabajar en otro gimnasio sin que eso cuente como duplicado.
     async create(data: InstructorNuevo): Promise<ApiResp<Instructor>> {
       await api._delay();
-      const arr = db.read<Instructor>("instructores");
+      const arr = db.readTenant<Instructor>("instructores");
       if (arr.some((i) => i.numero_identificacion === data.numero_identificacion))
-        return { ok: false, mensaje: "Ya existe un instructor con esa identificación" };
-      const nuevo: Instructor = { ...data, estado: "ACTIVO", fecha_contratacion: utils.isoDate() };
+        return { ok: false, mensaje: "Ya existe un instructor con esa identificación en este gimnasio" };
+      const nuevo: Instructor = {
+        ...data,
+        gimnasio_id: gimnasioParaEscribir(),
+        estado: "ACTIVO",
+        fecha_contratacion: utils.isoDate(),
+      };
       arr.push(nuevo);
-      db.write("instructores", arr);
+      db.writeTenant("instructores", arr);
       return { ok: true, mensaje: "Instructor registrado", data: nuevo };
     },
 
-    // La identificación es la llave: no se deja cambiar al editar
-    async update(id: string, data: Partial<Omit<Instructor, "numero_identificacion">>): Promise<ApiResp<Instructor>> {
+    // La identificación es la llave: no se deja cambiar al editar (ni el gimnasio)
+    async update(
+      id: string,
+      data: Partial<Omit<Instructor, "numero_identificacion" | "gimnasio_id">>
+    ): Promise<ApiResp<Instructor>> {
       await api._delay();
-      const arr = db.read<Instructor>("instructores");
+      const arr = db.readTenant<Instructor>("instructores");
       const ins = arr.find((i) => i.numero_identificacion === id);
       if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
       Object.assign(ins, data, { numero_identificacion: id });
-      db.write("instructores", arr);
+      db.writeTenant("instructores", arr);
       return { ok: true, mensaje: "Instructor actualizado", data: ins };
     },
 
     async remove(id: string): Promise<ApiResp<Instructor>> {
       await api._delay();
-      const arr = db.read<Instructor>("instructores");
+      const arr = db.readTenant<Instructor>("instructores");
       const ins = arr.find((i) => i.numero_identificacion === id);
       if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
       // Como un FK con RESTRICT: no se borra si tiene rutinas que lo referencian
@@ -1577,17 +1593,17 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
           ok: false,
           mensaje: "No se puede eliminar: tiene " + rutinas + " rutina(s) asignada(s). Desactívalo en su lugar.",
         };
-      db.write("instructores", arr.filter((i) => i.numero_identificacion !== id));
+      db.writeTenant("instructores", arr.filter((i) => i.numero_identificacion !== id));
       return { ok: true, mensaje: "Instructor eliminado", data: ins };
     },
 
     async setEstado(id: string, estado: EstadoInstructor): Promise<ApiResp<Instructor>> {
       await api._delay();
-      const arr = db.read<Instructor>("instructores");
+      const arr = db.readTenant<Instructor>("instructores");
       const ins = arr.find((i) => i.numero_identificacion === id);
       if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
       ins.estado = estado;
-      db.write("instructores", arr);
+      db.writeTenant("instructores", arr);
       return { ok: true, mensaje: "Estado actualizado", data: ins };
     },
   },

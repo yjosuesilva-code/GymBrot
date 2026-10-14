@@ -183,7 +183,8 @@ export interface Ejercicio {
   tipo_medicion: TipoMedicion;
   // Valores SUGERIDOS (opcionales): la rutina de cada cliente define los reales
   series_sugeridas: number | null;
-  repeticiones_sugeridas: number | null;       // si tipo_medicion es REPETICIONES
+  repeticiones_min_sugeridas: number | null;   // rango, si tipo_medicion es REPETICIONES (ej. 10–12)
+  repeticiones_max_sugeridas: number | null;
   segundos_sugeridos: number | null;           // si tipo_medicion es TIEMPO
   recurso_url: string;                         // video o imagen de referencia ('' si no hay)
   estado: EstadoEjercicio;
@@ -192,18 +193,6 @@ export interface Ejercicio {
 // Lo que manda la vista al crear: id, gimnasio y estado los pone api.ejercicios.create
 export type EjercicioNuevo = Omit<Ejercicio, 'id_ejercicio' | 'gimnasio_id' | 'estado'>;
 
-/** @deprecated Forma vieja (P4, camelCase). Solo la usan api.ejercicios y Ejercicios.tsx mientras se
-    migran en las partes B y D; se borra al terminar. */
-export interface EjercicioV1 {
-    idEjercicio: number;
-    nombre: string;
-    descripcion: string;
-    grupoMuscular: string;
-    nivel: string;
-    series: number;
-    repeticiones: number;
-    recursoUrl: string;
-}
 // ===== [/P3] Ejercicios =====
 
 export interface Progreso {

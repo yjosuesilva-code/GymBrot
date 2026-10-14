@@ -1,23 +1,84 @@
 import { useEffect, useState } from "react";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
-import type { EjercicioV1 as Ejercicio } from "../types"; // temporal hasta la parte D
+import type {
+  Ejercicio,
+  EjercicioNuevo,
+  GrupoMuscular,
+  NivelEjercicio,
+  EquipoEjercicio,
+  TipoMedicion,
+} from "../types";
 
-const VACIO = {
+// Opciones de los selects (las mismas listas cerradas de types/index.ts)
+const GRUPOS: GrupoMuscular[] = [
+  "Pecho", "Espalda", "Hombros", "Bíceps", "Tríceps", "Piernas", "Glúteos", "Abdomen", "Cardio", "Cuerpo completo",
+];
+const NIVELES: NivelEjercicio[] = ["Principiante", "Intermedio", "Avanzado"];
+const EQUIPOS: EquipoEjercicio[] = [
+  "Máquina", "Mancuerna", "Barra", "Polea", "Kettlebell", "Banda elástica", "Peso corporal",
+];
+
+// El formulario guarda los números como texto (así un campo vacío es "" y no 0);
+// se convierten a number | null al guardar
+type FormEjercicio = {
+  nombre: string;
+  descripcion: string;
+  grupo_muscular: GrupoMuscular;
+  nivel: NivelEjercicio;
+  equipo: EquipoEjercicio;
+  tipo_medicion: TipoMedicion;
+  series_sugeridas: string;
+  repeticiones_min_sugeridas: string;
+  repeticiones_max_sugeridas: string;
+  segundos_sugeridos: string;
+  recurso_url: string;
+};
+
+const VACIO: FormEjercicio = {
   nombre: "",
   descripcion: "",
-  grupoMuscular: "",
-  nivel: "",
-  series: "",
-  repeticiones: "",
-  recursoUrl: "",
+  grupo_muscular: "Pecho",
+  nivel: "Principiante",
+  equipo: "Máquina",
+  tipo_medicion: "REPETICIONES",
+  series_sugeridas: "",
+  repeticiones_min_sugeridas: "",
+  repeticiones_max_sugeridas: "",
+  segundos_sugeridos: "",
+  recurso_url: "",
 };
+
+// "" → null; cualquier otro texto → número (si no es un entero > 0, lo rechaza api.ejercicios)
+function aNumero(texto: string): number | null {
+  return texto.trim() === "" ? null : Number(texto);
+}
+
+function aTexto(n: number | null): string {
+  return n === null ? "" : String(n);
+}
+
+// Resumen de lo sugerido, ej. "3 × 10–12", "3 × 30 s" o "—"
+function sugerido(e: Ejercicio): string {
+  let cantidad = "";
+  if (e.tipo_medicion === "TIEMPO") {
+    if (e.segundos_sugeridos !== null) cantidad = e.segundos_sugeridos + " s";
+  } else {
+    const min = e.repeticiones_min_sugeridas;
+    const max = e.repeticiones_max_sugeridas;
+    if (min !== null && max !== null) cantidad = min === max ? String(min) : min + "–" + max;
+    else if (min !== null || max !== null) cantidad = String(min ?? max);
+  }
+  if (e.series_sugeridas !== null && cantidad) return e.series_sugeridas + " × " + cantidad;
+  if (e.series_sugeridas !== null) return e.series_sugeridas + " series";
+  return cantidad || "—";
+}
 
 export function Ejercicios() {
   const [ejercicios, setEjercicios] = useState<Ejercicio[]>([]);
   const [cargando, setCargando] = useState(true);
   const [show, setShow] = useState(false);
-  const [form, setForm] = useState(VACIO);
+  const [form, setForm] = useState<FormEjercicio>(VACIO);
   const [error, setError] = useState("");
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState("");
@@ -50,7 +111,8 @@ export function Ejercicios() {
     return () => { activo = false; };
   }, []);
 
-  function setCampo(campo: keyof typeof VACIO, valor: string) {
+  // Cambia un solo campo; K hace que el valor tenga el tipo correcto de ese campo
+  function setCampo<K extends keyof FormEjercicio>(campo: K, valor: FormEjercicio[K]) {
     setForm((f) => ({ ...f, [campo]: valor }));
   }
 
@@ -62,16 +124,20 @@ export function Ejercicios() {
   }
 
   function abrirEdicion(ejercicio: Ejercicio) {
-    setEditandoId(ejercicio.idEjercicio);
+    setEditandoId(ejercicio.id_ejercicio);
 
     setForm({
       nombre: ejercicio.nombre,
       descripcion: ejercicio.descripcion,
-      grupoMuscular: ejercicio.grupoMuscular,
+      grupo_muscular: ejercicio.grupo_muscular,
       nivel: ejercicio.nivel,
-      series: String(ejercicio.series),
-      repeticiones: String(ejercicio.repeticiones),
-      recursoUrl: ejercicio.recursoUrl,
+      equipo: ejercicio.equipo,
+      tipo_medicion: ejercicio.tipo_medicion,
+      series_sugeridas: aTexto(ejercicio.series_sugeridas),
+      repeticiones_min_sugeridas: aTexto(ejercicio.repeticiones_min_sugeridas),
+      repeticiones_max_sugeridas: aTexto(ejercicio.repeticiones_max_sugeridas),
+      segundos_sugeridos: aTexto(ejercicio.segundos_sugeridos),
+      recurso_url: ejercicio.recurso_url,
     });
 
     setError("");
@@ -80,30 +146,26 @@ export function Ejercicios() {
 
   async function guardar() {
     if (guardando) return;
-    if (!form.nombre.trim() || !form.grupoMuscular.trim() || !form.nivel.trim() ||
-        !form.series.trim() || !form.repeticiones.trim()) {
-      setError("Completa los campos obligatorios.");
+    if (!form.nombre.trim()) {
+      setError("El nombre es obligatorio.");
       return;
     }
 
-    const series = Number(form.series);
-    const repeticiones = Number(form.repeticiones);
-    if (!Number.isInteger(series) || series <= 0 ||
-        !Number.isInteger(repeticiones) || repeticiones <= 0) {
-      setError("Las series y las repeticiones deben ser números enteros mayores que 0.");
-      return;
-    }
-
-    const datos = {
+    const datos: EjercicioNuevo = {
       nombre: form.nombre.trim(),
       descripcion: form.descripcion.trim(),
-      grupoMuscular: form.grupoMuscular.trim(),
-      nivel: form.nivel.trim(),
-      series,
-      repeticiones,
-      recursoUrl: form.recursoUrl.trim(),
+      grupo_muscular: form.grupo_muscular,
+      nivel: form.nivel,
+      equipo: form.equipo,
+      tipo_medicion: form.tipo_medicion,
+      series_sugeridas: aNumero(form.series_sugeridas),
+      repeticiones_min_sugeridas: aNumero(form.repeticiones_min_sugeridas),
+      repeticiones_max_sugeridas: aNumero(form.repeticiones_max_sugeridas),
+      segundos_sugeridos: aNumero(form.segundos_sugeridos),
+      recurso_url: form.recurso_url.trim(),
     };
 
+    // Las demás reglas (enteros > 0, mínimo ≤ máximo, nombre repetido) las valida api.ejercicios
     setGuardando(true);
     setError("");
     setAlerta(null);
@@ -132,7 +194,7 @@ export function Ejercicios() {
     setErrorEliminar("");
     setAlerta(null);
     try {
-      const respuesta = await api.ejercicios.remove(porEliminar.idEjercicio);
+      const respuesta = await api.ejercicios.remove(porEliminar.id_ejercicio);
       if (!respuesta.ok) {
         setErrorEliminar(respuesta.mensaje || "No se pudo eliminar el ejercicio.");
         return;
@@ -148,10 +210,10 @@ export function Ejercicios() {
     }
   }
 
-  const normalizar = (texto: string) => texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const normalizar = (texto: string) => texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const consulta = normalizar(busqueda.trim());
   const filtrados = ejercicios.filter((e) =>
-    [e.nombre, e.grupoMuscular, e.nivel].some((campo) => normalizar(campo).includes(consulta))
+    [e.nombre, e.grupo_muscular, e.nivel, e.equipo].some((campo) => normalizar(campo).includes(consulta))
   );
 
   return (
@@ -182,8 +244,8 @@ export function Ejercicios() {
           <input
             type="search"
             className="form-control-dark"
-            aria-label="Buscar ejercicios por nombre, grupo muscular o nivel"
-            placeholder="Buscar por nombre, grupo muscular o nivel..."
+            aria-label="Buscar ejercicios por nombre, grupo muscular, nivel o equipo"
+            placeholder="Buscar por nombre, grupo muscular, nivel o equipo..."
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
           />
@@ -197,8 +259,8 @@ export function Ejercicios() {
               <th>Ejercicio</th>
               <th>Grupo muscular</th>
               <th>Nivel</th>
-              <th>Series</th>
-              <th>Repeticiones</th>
+              <th>Equipo</th>
+              <th>Sugerido</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -220,20 +282,20 @@ export function Ejercicios() {
               <tr><td colSpan={6} className="empty-state">No hay ejercicios que coincidan con la búsqueda.</td></tr>
             ) : (
               filtrados.map((e) => (
-                <tr key={e.idEjercicio}>
+                <tr key={e.id_ejercicio}>
                   <td>
                     <strong>{e.nombre}</strong>
                     {e.descripcion && <p className="card-sub mb-1">{e.descripcion}</p>}
-                    {e.recursoUrl && (
-                      /^https?:\/\//i.test(e.recursoUrl.trim())
-                        ? <a href={e.recursoUrl.trim()} target="_blank" rel="noopener noreferrer">{e.recursoUrl}</a>
-                        : <span className="d-block">Recurso: {e.recursoUrl}</span>
+                    {e.recurso_url && (
+                      /^https?:\/\//i.test(e.recurso_url.trim())
+                        ? <a href={e.recurso_url.trim()} target="_blank" rel="noopener noreferrer">{e.recurso_url}</a>
+                        : <span className="d-block">Recurso: {e.recurso_url}</span>
                     )}
                   </td>
-                  <td>{e.grupoMuscular}</td>
+                  <td>{e.grupo_muscular}</td>
                   <td>{e.nivel}</td>
-                  <td>{e.series}</td>
-                  <td>{e.repeticiones}</td>
+                  <td>{e.equipo}</td>
+                  <td>{sugerido(e)}</td>
                   <td>
                     <button
                       className="btn-icon"
@@ -249,7 +311,7 @@ export function Ejercicios() {
                       aria-label={`Eliminar ${e.nombre}`}
                       onClick={() => { setPorEliminar(e); setErrorEliminar(""); }}
                     >
-                      {"\u{1F5D1}\uFE0F"}
+                      {"\u{1F5D1}️"}
                     </button>
                   </td>
                 </tr>
@@ -279,45 +341,97 @@ export function Ejercicios() {
               />
             </div>
 
-            <div className="col-md-6">
+            <div className="col-md-4">
               <label className="form-label-g">Grupo muscular *</label>
-              <input
+              <select
                 className="form-control-dark"
-                value={form.grupoMuscular}
-                onChange={(e) => setCampo("grupoMuscular", e.target.value)}
-              />
+                value={form.grupo_muscular}
+                onChange={(e) => setCampo("grupo_muscular", e.target.value as GrupoMuscular)}
+              >
+                {GRUPOS.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
             </div>
 
-            <div className="col-md-6">
+            <div className="col-md-4">
               <label className="form-label-g">Nivel *</label>
-              <input
+              <select
                 className="form-control-dark"
                 value={form.nivel}
-                onChange={(e) => setCampo("nivel", e.target.value)}
-              />
+                onChange={(e) => setCampo("nivel", e.target.value as NivelEjercicio)}
+              >
+                {NIVELES.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
             </div>
 
-            <div className="col-md-6">
-              <label className="form-label-g">Series *</label>
+            <div className="col-md-4">
+              <label className="form-label-g">Equipo *</label>
+              <select
+                className="form-control-dark"
+                value={form.equipo}
+                onChange={(e) => setCampo("equipo", e.target.value as EquipoEjercicio)}
+              >
+                {EQUIPOS.map((q) => <option key={q} value={q}>{q}</option>)}
+              </select>
+            </div>
+
+            <div className="col-md-4">
+              <label className="form-label-g">Se mide por *</label>
+              <select
+                className="form-control-dark"
+                value={form.tipo_medicion}
+                onChange={(e) => setCampo("tipo_medicion", e.target.value as TipoMedicion)}
+              >
+                <option value="REPETICIONES">Repeticiones</option>
+                <option value="TIEMPO">Tiempo</option>
+              </select>
+            </div>
+
+            <div className="col-md-4">
+              <label className="form-label-g">Series sugeridas</label>
               <input
                 type="number"
                 min="1"
                 className="form-control-dark"
-                value={form.series}
-                onChange={(e) => setCampo("series", e.target.value)}
+                value={form.series_sugeridas}
+                onChange={(e) => setCampo("series_sugeridas", e.target.value)}
               />
             </div>
 
-            <div className="col-md-6">
-              <label className="form-label-g">Repeticiones *</label>
-              <input
-                type="number"
-                min="1"
-                className="form-control-dark"
-                value={form.repeticiones}
-                onChange={(e) => setCampo("repeticiones", e.target.value)}
-              />
-            </div>
+            {/* Según cómo se mide, se pide un rango de repeticiones o los segundos */}
+            {form.tipo_medicion === "REPETICIONES" ? (
+              <div className="col-md-4">
+                <label className="form-label-g">Repeticiones sugeridas (mín – máx)</label>
+                <div className="d-flex gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    className="form-control-dark"
+                    aria-label="Repeticiones mínimas"
+                    value={form.repeticiones_min_sugeridas}
+                    onChange={(e) => setCampo("repeticiones_min_sugeridas", e.target.value)}
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    className="form-control-dark"
+                    aria-label="Repeticiones máximas"
+                    value={form.repeticiones_max_sugeridas}
+                    onChange={(e) => setCampo("repeticiones_max_sugeridas", e.target.value)}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="col-md-4">
+                <label className="form-label-g">Segundos sugeridos</label>
+                <input
+                  type="number"
+                  min="1"
+                  className="form-control-dark"
+                  value={form.segundos_sugeridos}
+                  onChange={(e) => setCampo("segundos_sugeridos", e.target.value)}
+                />
+              </div>
+            )}
 
             <div className="col-12">
               <label className="form-label-g">Descripción</label>
@@ -332,8 +446,8 @@ export function Ejercicios() {
               <label className="form-label-g">Recurso URL</label>
               <input
                 className="form-control-dark"
-                value={form.recursoUrl}
-                onChange={(e) => setCampo("recursoUrl", e.target.value)}
+                value={form.recurso_url}
+                onChange={(e) => setCampo("recurso_url", e.target.value)}
               />
             </div>
           </div>

@@ -616,7 +616,12 @@ const SEED: Seed = {
 // un pago propios de la Ana de Titan.
 // v11 agrega planesSoftware y pagosSoftware (pagina de planes y registro de
 // gimnasios) y los datos de suscripcion de cada gimnasio.
-const SEED_VERSION = "11";
+// v12 lleva gimnasio_id a instructores, rutinas y rutina_ejercicios (con
+// instructores y rutinas propios de Titan) y estrena el catalogo mixto de
+// ejercicios: 40 base (gimnasio_id null) y 5 propios repartidos entre los dos
+// gimnasios. Sin el bump, esas colecciones seguirian sin gimnasio_id y
+// readTenant las dejaria vacias.
+const SEED_VERSION = "12";
 const CLAVE_VERSION = "gymbrot_seed_version";
 const CLAVE_LECTOR = "gymbrot_lector_conectado";
 

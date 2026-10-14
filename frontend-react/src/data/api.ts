@@ -12,7 +12,8 @@ import type {
   Pago,
   Ingreso,
   Ejercicio,
-  EjercicioV1, // [P3] temporal: forma vieja hasta reescribir api.ejercicios (parte B)
+  EjercicioNuevo, // [P3]
+  EstadoEjercicio, // [P3]
   Usuario,
   ApiResp,
   PlanMembresia,
@@ -310,6 +311,57 @@ function finDe(serie: Pago[], diasExtra: number): string {
   return sumarDias(ultimo, diasExtra);
 }
 
+// ===== [P3] Ejercicios: generadores de la semilla =====
+// Para no escribir los 14 campos en cada fila. Orden de los argumentos:
+// id, gimnasio (null = base), nombre, grupo, nivel, equipo, series, ...medida, descripción.
+function ejReps(
+  id: number,
+  gimnasio_id: string | null,
+  nombre: string,
+  grupo_muscular: Ejercicio["grupo_muscular"],
+  nivel: Ejercicio["nivel"],
+  equipo: Ejercicio["equipo"],
+  series: number,
+  repsMin: number,
+  repsMax: number,
+  descripcion: string
+): Ejercicio {
+  return {
+    id_ejercicio: id, gimnasio_id, nombre, descripcion, grupo_muscular, nivel, equipo,
+    tipo_medicion: "REPETICIONES",
+    series_sugeridas: series,
+    repeticiones_min_sugeridas: repsMin,
+    repeticiones_max_sugeridas: repsMax,
+    segundos_sugeridos: null,
+    recurso_url: "",
+    estado: "ACTIVO",
+  };
+}
+
+function ejTiempo(
+  id: number,
+  gimnasio_id: string | null,
+  nombre: string,
+  grupo_muscular: Ejercicio["grupo_muscular"],
+  nivel: Ejercicio["nivel"],
+  equipo: Ejercicio["equipo"],
+  series: number,
+  segundos: number,
+  descripcion: string
+): Ejercicio {
+  return {
+    id_ejercicio: id, gimnasio_id, nombre, descripcion, grupo_muscular, nivel, equipo,
+    tipo_medicion: "TIEMPO",
+    series_sugeridas: series,
+    repeticiones_min_sugeridas: null,
+    repeticiones_max_sugeridas: null,
+    segundos_sugeridos: segundos,
+    recurso_url: "",
+    estado: "ACTIVO",
+  };
+}
+// ===== [/P3] Ejercicios: generadores de la semilla =====
+
 const SEED: Seed = {
   // Lo que la plataforma vende a los gimnasios (pagina de planes y registro).
   // max_clientes todavia no se hace cumplir: solo se muestra.
@@ -427,7 +479,70 @@ const SEED: Seed = {
     .concat([pagoTitanAna]),
 
   ingresos: ingresosPasados().concat(ingresosDeHoy()),
-  ejercicios: [],   // la colección de P4 arranca vacía
+  // ===== [P3] Ejercicios (catálogo mixto, DECISIONES.md D4) =====
+  // 1–40: catálogo BASE (gimnasio_id null). 41–45: propios de cada gimnasio, con un "personalizado"
+  // en cada uno. Todavía no se usan en rutinas: eso llega con el modelo de Rutinas v2.
+  ejercicios: [
+    // Pecho
+    ejReps(1,  null, 'Press de banca plano',            'Pecho', 'Intermedio',   'Barra',         4, 6, 10,  'Acostado en banco plano, baja la barra al pecho medio y empuja hasta extender los brazos.'),
+    ejReps(2,  null, 'Press inclinado con mancuernas',  'Pecho', 'Intermedio',   'Mancuerna',     3, 8, 12,  'Banco a 30–45°. Baja las mancuernas a los lados del pecho y empuja juntándolas arriba.'),
+    ejReps(3,  null, 'Flexiones de pecho',              'Pecho', 'Principiante', 'Peso corporal', 3, 8, 15,  'Manos a la altura de los hombros y cuerpo recto. Baja el pecho casi al suelo y sube.'),
+    ejReps(4,  null, 'Cruce de poleas',                 'Pecho', 'Intermedio',   'Polea',         3, 12, 15, 'Poleas altas, codos semiflexionados. Junta las manos al frente apretando el pecho.'),
+    ejReps(5,  null, 'Press de pecho en máquina',       'Pecho', 'Principiante', 'Máquina',       3, 10, 12, 'Espalda apoyada en el respaldo; empuja las agarraderas sin bloquear los codos.'),
+    // Espalda
+    ejReps(6,  null, 'Jalón al pecho en polea',         'Espalda', 'Principiante', 'Polea',         3, 10, 12, 'Agarre ancho. Lleva la barra a la parte alta del pecho juntando las escápulas.'),
+    ejReps(7,  null, 'Remo con barra',                  'Espalda', 'Intermedio',   'Barra',         4, 8, 10,  'Torso inclinado y espalda neutra. Lleva la barra al abdomen y baja controlado.'),
+    ejReps(8,  null, 'Remo con mancuerna a una mano',   'Espalda', 'Principiante', 'Mancuerna',     3, 10, 12, 'Rodilla y mano apoyadas en el banco. Sube la mancuerna hacia la cadera.'),
+    ejReps(9,  null, 'Dominadas',                       'Espalda', 'Avanzado',     'Peso corporal', 4, 5, 8,   'Desde brazos extendidos, sube hasta pasar la barbilla sobre la barra.'),
+    ejReps(10, null, 'Peso muerto convencional',        'Espalda', 'Avanzado',     'Barra',         4, 4, 6,   'Barra pegada a las piernas y espalda neutra. Empuja el suelo y extiende cadera y rodillas.'),
+    // Hombros
+    ejReps(11, null, 'Press militar con barra',         'Hombros', 'Intermedio',   'Barra',     4, 6, 8,   'De pie y con el abdomen firme, empuja la barra desde la clavícula hasta arriba de la cabeza.'),
+    ejReps(12, null, 'Elevaciones laterales',           'Hombros', 'Principiante', 'Mancuerna', 3, 12, 15, 'Sube las mancuernas a los lados hasta la altura de los hombros, codos apenas flexionados.'),
+    ejReps(13, null, 'Face pull en polea',              'Hombros', 'Intermedio',   'Polea',     3, 12, 15, 'Polea alta con cuerda. Tira hacia la cara separando las manos y abriendo los codos.'),
+    // Bíceps
+    ejReps(14, null, 'Curl con barra',                  'Bíceps', 'Principiante', 'Barra',     3, 8, 12,  'Codos pegados al cuerpo. Sube la barra sin balancear el torso.'),
+    ejReps(15, null, 'Curl martillo',                   'Bíceps', 'Principiante', 'Mancuerna', 3, 10, 12, 'Palmas mirándose entre sí. Sube las mancuernas alternando o a la vez.'),
+    // Tríceps
+    ejReps(16, null, 'Extensión de tríceps en polea',   'Tríceps', 'Principiante', 'Polea',         3, 12, 15, 'Codos fijos a los lados. Empuja la barra o cuerda hacia abajo hasta extender los brazos.'),
+    ejReps(17, null, 'Press francés con barra',         'Tríceps', 'Intermedio',   'Barra',         3, 8, 12,  'Acostado, baja la barra hacia la frente doblando solo los codos y vuelve a extender.'),
+    ejReps(18, null, 'Fondos en paralelas',             'Tríceps', 'Avanzado',     'Peso corporal', 3, 6, 10,  'Torso erguido. Baja hasta que los codos formen 90° y empuja hacia arriba.'),
+    // Piernas
+    ejReps(19, null, 'Sentadilla con barra',            'Piernas', 'Intermedio',   'Barra',      4, 6, 10,  'Barra sobre los trapecios. Baja con la espalda neutra hasta que los muslos queden paralelos al suelo.'),
+    ejReps(20, null, 'Prensa de piernas',               'Piernas', 'Principiante', 'Máquina',    3, 10, 12, 'Pies al ancho de los hombros. Baja la plataforma sin despegar la zona lumbar del respaldo.'),
+    ejReps(21, null, 'Zancadas con mancuernas',         'Piernas', 'Intermedio',   'Mancuerna',  3, 10, 12, 'Paso largo al frente y baja hasta que la rodilla de atrás casi toque el suelo. Repeticiones por pierna.'),
+    ejReps(22, null, 'Curl femoral acostado',           'Piernas', 'Principiante', 'Máquina',    3, 10, 12, 'Boca abajo, lleva los talones hacia los glúteos y baja despacio.'),
+    ejReps(23, null, 'Sentadilla goblet',               'Piernas', 'Principiante', 'Kettlebell', 3, 10, 12, 'Kettlebell pegada al pecho. Baja manteniendo el torso erguido y los codos entre las rodillas.'),
+    ejReps(24, null, 'Elevación de talones de pie',     'Piernas', 'Principiante', 'Máquina',    4, 15, 20, 'Sube en puntas de pie lo más alto posible y baja estirando la pantorrilla.'),
+    // Glúteos
+    ejReps(25, null, 'Hip thrust con barra',            'Glúteos', 'Intermedio',   'Barra',          4, 8, 12,  'Espalda alta apoyada en el banco. Eleva la cadera apretando los glúteos arriba.'),
+    ejReps(26, null, 'Peso muerto rumano con mancuernas','Glúteos', 'Intermedio',  'Mancuerna',      3, 10, 12, 'Rodillas apenas flexionadas. Lleva la cadera hacia atrás bajando las mancuernas pegadas a las piernas.'),
+    ejReps(27, null, 'Patada de glúteo en polea',       'Glúteos', 'Principiante', 'Polea',          3, 12, 15, 'Tobillera en la polea baja. Lleva la pierna hacia atrás sin arquear la espalda. Repeticiones por pierna.'),
+    ejReps(28, null, 'Puente de glúteo con banda',      'Glúteos', 'Principiante', 'Banda elástica', 3, 15, 20, 'Banda sobre las rodillas. Acostado, eleva la cadera empujando las rodillas hacia afuera.'),
+    // Abdomen
+    ejTiempo(29, null, 'Plancha frontal',               'Abdomen', 'Principiante', 'Peso corporal', 3, 30, 'Apoyado en antebrazos y puntas de pie, cuerpo recto sin dejar caer la cadera.'),
+    ejTiempo(30, null, 'Plancha lateral',               'Abdomen', 'Intermedio',   'Peso corporal', 3, 30, 'Apoyado en un antebrazo, cuerpo alineado de cabeza a pies. Segundos por lado.'),
+    ejReps(31, null, 'Crunch abdominal',                'Abdomen', 'Principiante', 'Peso corporal', 3, 15, 20, 'Acostado con rodillas flexionadas, despega los hombros del suelo contrayendo el abdomen.'),
+    ejReps(32, null, 'Elevación de piernas colgado',    'Abdomen', 'Avanzado',     'Peso corporal', 3, 8, 12,  'Colgado de la barra, sube las piernas sin balancearte y baja controlado.'),
+    ejReps(33, null, 'Press Pallof con banda',          'Abdomen', 'Intermedio',   'Banda elástica', 3, 10, 12, 'De lado al anclaje, empuja la banda al frente sin dejar que el torso gire. Repeticiones por lado.'),
+    // Cardio
+    ejTiempo(34, null, 'Trote en caminadora',           'Cardio', 'Principiante', 'Máquina', 1, 1200, 'Ritmo cómodo en el que todavía puedas hablar (20 minutos).'),
+    ejTiempo(35, null, 'Bicicleta estática',            'Cardio', 'Principiante', 'Máquina', 1, 900,  'Resistencia moderada y cadencia constante (15 minutos).'),
+    ejTiempo(36, null, 'Remo en máquina',               'Cardio', 'Intermedio',   'Máquina', 1, 600,  'Empuja con las piernas, luego inclina el torso y termina tirando con los brazos (10 minutos).'),
+    // Cuerpo completo
+    ejReps(37, null, 'Swing con kettlebell',            'Cuerpo completo', 'Intermedio', 'Kettlebell',    4, 15, 20, 'Bisagra de cadera: impulsa la kettlebell hasta la altura del pecho con la fuerza de la cadera.'),
+    ejReps(38, null, 'Burpees',                         'Cuerpo completo', 'Intermedio', 'Peso corporal', 4, 10, 15, 'Baja a cuclillas, lleva los pies atrás a plancha, regresa y salta con los brazos arriba.'),
+    ejReps(39, null, 'Thruster con mancuernas',         'Cuerpo completo', 'Avanzado',   'Mancuerna',     4, 8, 10,  'Sentadilla con las mancuernas en los hombros y, al subir, empújalas sobre la cabeza.'),
+    ejReps(40, null, 'Levantamiento turco',             'Cuerpo completo', 'Avanzado',   'Kettlebell',    3, 3, 5,   'De acostado a de pie con la kettlebell siempre arriba y el brazo extendido. Repeticiones por lado.'),
+
+    // Propios de GymBrot Centro
+    ejTiempo(41, 'gym-centro', 'Circuito funcional del Centro',    'Cuerpo completo', 'Intermedio', 'Peso corporal', 3, 45, 'Circuito de la clase de los sábados: sentadilla, flexión y salto sin pausa.'),
+    ejReps(42, 'gym-centro', 'Sentadilla con barra (personalizado)', 'Piernas',       'Avanzado',   'Barra',         5, 5, 5,  'Versión de fuerza del gimnasio: 5×5 con descanso de 3 minutos.'),
+    ejReps(43, 'gym-centro', 'Remo en máquina Hammer',             'Espalda',         'Principiante', 'Máquina',     3, 10, 12, 'Máquina de remo con apoyo de pecho de la sala 2.'),
+    // Propios de Titan Fitness
+    ejReps(44, 'gym-titan', 'Press inclinado con mancuernas (personalizado)', 'Pecho', 'Intermedio', 'Mancuerna', 4, 6, 8, 'Variante de Titan: banco a 30° y bajada lenta de 3 segundos.'),
+    ejTiempo(45, 'gym-titan', 'Circuito Titan con kettlebell',   'Cuerpo completo', 'Avanzado', 'Kettlebell', 5, 40, 'Swing, goblet y remo con kettlebell; 40 s por estación.'),
+  ],
+  // ===== [/P3] Ejercicios =====
 
   // ===== [P3] Instructores =====
   // Centro tiene los 3 de siempre (las rutinas y citas de Centro los usan). Titan tiene 2 propios;
@@ -758,6 +873,60 @@ function validarUnaVigente(idCliente: string, fechaFin: string | null, idPropio:
     : null;
 }
 // ===== [/P3] Rutinas: auxiliares =====
+
+// ===== [P3] Ejercicios: auxiliares =====
+/* Catálogo MIXTO (DECISIONES.md, D4): en la misma tabla viven los ejercicios BASE (gimnasio_id null,
+   de todos y de solo lectura) y los PROPIOS de cada gimnasio.
+
+   - Los propios se leen y escriben con readTenant/writeTenant. Para eso se usa el tipo
+     EjercicioPropio (gimnasio_id: string), que es lo que piden esos helpers.
+   - readTenant compara gimnasio_id === gimnasio activo, así que NUNCA devuelve un base.
+   - writeTenant conserva todas las filas con otro gimnasio_id, y null es "otro": las filas base
+     quedan intactas siempre que solo le pasemos filas que salieron de readTenant. */
+type EjercicioPropio = Ejercicio & { gimnasio_id: string };
+
+// Lo que ve un gimnasio: base + propios. Sin sesión, nada (igual que readTenant).
+function leerCatalogo(): Ejercicio[] {
+  const gym = gimnasioActivo();
+  if (!gym) return [];
+  return db.read<Ejercicio>("ejercicios").filter((e) => e.gimnasio_id === null || e.gimnasio_id === gym);
+}
+
+// Para comparar nombres sin importar mayúsculas, tildes ni espacios de más
+function normalizarNombre(texto: string): string {
+  return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+// Mensaje de error si los datos no son válidos; null si están bien
+function validarEjercicio(e: EjercicioNuevo): string | null {
+  if (!e.nombre.trim()) return "El nombre es obligatorio";
+  const numeros = [e.series_sugeridas, e.repeticiones_min_sugeridas, e.repeticiones_max_sugeridas, e.segundos_sugeridos];
+  if (numeros.some((n) => n !== null && (!Number.isInteger(n) || n <= 0)))
+    return "Los valores sugeridos deben ser números enteros mayores que 0";
+  const min = e.repeticiones_min_sugeridas;
+  const max = e.repeticiones_max_sugeridas;
+  if (min !== null && max !== null && min > max)
+    return "Las repeticiones mínimas no pueden ser mayores que las máximas";
+  return null;
+}
+
+// Un ejercicio de tiempo no lleva repeticiones y uno de repeticiones no lleva segundos
+function limpiarSegunMedicion(e: EjercicioNuevo): EjercicioNuevo {
+  return e.tipo_medicion === "TIEMPO"
+    ? { ...e, repeticiones_min_sugeridas: null, repeticiones_max_sugeridas: null }
+    : { ...e, segundos_sugeridos: null };
+}
+
+// Nombre repetido dentro de lo que ve el gimnasio (base + propios), sin contar el ejercicio idPropio
+function nombreRepetido(nombre: string, idPropio: number | null): Ejercicio | undefined {
+  return leerCatalogo().find(
+    (e) => e.id_ejercicio !== idPropio && normalizarNombre(e.nombre) === normalizarNombre(nombre)
+  );
+}
+
+// Mensaje común cuando se intenta cambiar un ejercicio base
+const MENSAJE_BASE = "Es un ejercicio del catálogo base: no se puede cambiar. Personalízalo para tener tu propia copia.";
+// ===== [/P3] Ejercicios: auxiliares =====
 
 export const api = {
   _delay(ms = 200) {
@@ -1458,88 +1627,124 @@ export const api = {
     },
   },
 
-  // ===== [P4] Ejercicios =====
+  // ===== [P3] Ejercicios (antes P4) =====
   ejercicios: {
-    async list(): Promise<EjercicioV1[]> {
+    // Base + propios del gimnasio activo, ordenados por nombre
+    async list(): Promise<Ejercicio[]> {
       await api._delay();
-      return db.read<EjercicioV1>("ejercicios");
+      return leerCatalogo().sort((a, b) => a.nombre.localeCompare(b.nombre));
     },
 
-    async create(
-      data: Omit<EjercicioV1, "idEjercicio">
-    ): Promise<ApiResp<EjercicioV1>> {
+    async get(id: number): Promise<Ejercicio | null> {
       await api._delay();
+      return leerCatalogo().find((e) => e.id_ejercicio === id) ?? null;
+    },
 
-      const arr = db.read<EjercicioV1>("ejercicios");
-
-      const nuevoId =
-        arr.length > 0
-          ? Math.max(...arr.map((e) => e.idEjercicio)) + 1
-          : 1;
-
-      const nuevo: EjercicioV1 = {
-        ...data,
-        idEjercicio: nuevoId,
+    // Desde un gimnasio solo se crean ejercicios PROPIOS
+    async create(data: EjercicioNuevo): Promise<ApiResp<Ejercicio>> {
+      await api._delay();
+      const datos = limpiarSegunMedicion({ ...data, nombre: data.nombre.trim() });
+      const error = validarEjercicio(datos);
+      if (error) return { ok: false, mensaje: error };
+      const repetido = nombreRepetido(datos.nombre, null);
+      if (repetido)
+        return {
+          ok: false,
+          mensaje:
+            repetido.gimnasio_id === null
+              ? "Ya existe un ejercicio base con ese nombre. Personalízalo si quieres tu propia versión."
+              : "Ya existe un ejercicio con ese nombre en este gimnasio",
+        };
+      const arr = db.readTenant<EjercicioPropio>("ejercicios");
+      const nuevo: EjercicioPropio = {
+        ...datos,
+        id_ejercicio: db.siguienteId<Ejercicio>("ejercicios", (e) => e.id_ejercicio),
+        gimnasio_id: gimnasioParaEscribir(),
+        estado: "ACTIVO",
       };
-
       arr.push(nuevo);
-      db.write("ejercicios", arr);
-
-      return {
-        ok: true,
-        mensaje: "Ejercicio registrado",
-        data: nuevo,
-      };
+      db.writeTenant("ejercicios", arr);
+      return { ok: true, mensaje: "Ejercicio registrado", data: nuevo };
     },
-    async update(
-  id: number,
-  data: Partial<Omit<EjercicioV1, "idEjercicio">>
-): Promise<ApiResp<EjercicioV1>> {
-  await api._delay();
 
-  const arr = db.read<EjercicioV1>("ejercicios");
-  const ejercicio = arr.find((e) => e.idEjercicio === id);
+    // Solo propios. Sobre un base responde que es del catálogo base.
+    async update(id: number, data: Partial<EjercicioNuevo>): Promise<ApiResp<Ejercicio>> {
+      await api._delay();
+      const arr = db.readTenant<EjercicioPropio>("ejercicios");
+      const ej = arr.find((e) => e.id_ejercicio === id);
+      if (!ej) {
+        const esBase = leerCatalogo().some((e) => e.id_ejercicio === id && e.gimnasio_id === null);
+        return { ok: false, mensaje: esBase ? MENSAJE_BASE : "Ejercicio no encontrado" };
+      }
+      // Cómo quedaría con los cambios, para validar con los valores finales
+      const { id_ejercicio, gimnasio_id, estado, ...actual } = ej;
+      const final = limpiarSegunMedicion({ ...actual, ...data, nombre: (data.nombre ?? actual.nombre).trim() });
+      const error = validarEjercicio(final);
+      if (error) return { ok: false, mensaje: error };
+      if (nombreRepetido(final.nombre, id)) return { ok: false, mensaje: "Ya existe otro ejercicio con ese nombre" };
+      Object.assign(ej, final, { id_ejercicio, gimnasio_id, estado });
+      db.writeTenant("ejercicios", arr);
+      return { ok: true, mensaje: "Ejercicio actualizado", data: ej };
+    },
 
-  if (!ejercicio) {
-    return { ok: false, mensaje: "Ejercicio no encontrado" };
-  }
+    async setEstado(id: number, estado: EstadoEjercicio): Promise<ApiResp<Ejercicio>> {
+      await api._delay();
+      const arr = db.readTenant<EjercicioPropio>("ejercicios");
+      const ej = arr.find((e) => e.id_ejercicio === id);
+      if (!ej) {
+        const esBase = leerCatalogo().some((e) => e.id_ejercicio === id && e.gimnasio_id === null);
+        return { ok: false, mensaje: esBase ? MENSAJE_BASE : "Ejercicio no encontrado" };
+      }
+      ej.estado = estado;
+      db.writeTenant("ejercicios", arr);
+      return { ok: true, mensaje: "Estado actualizado", data: ej };
+    },
 
-  Object.assign(ejercicio, data);
+    // Solo propios, y con RESTRICT: no se borra si lo usa alguna rutina de este gimnasio
+    async remove(id: number): Promise<ApiResp<Ejercicio>> {
+      await api._delay();
+      const arr = db.readTenant<EjercicioPropio>("ejercicios");
+      const ej = arr.find((e) => e.id_ejercicio === id);
+      if (!ej) {
+        const esBase = leerCatalogo().some((e) => e.id_ejercicio === id && e.gimnasio_id === null);
+        return { ok: false, mensaje: esBase ? MENSAJE_BASE : "Ejercicio no encontrado" };
+      }
+      const usos = db.readTenant<RutinaEjercicio>("rutina_ejercicios").filter((e) => e.id_ejercicio === id);
+      const rutinas = new Set(usos.map((e) => e.id_rutina)).size; // una rutina puede usarlo varias veces
+      if (rutinas > 0)
+        return {
+          ok: false,
+          mensaje: "No se puede eliminar: lo usan " + rutinas + " rutina(s). Desactívalo en su lugar.",
+        };
+      db.writeTenant("ejercicios", arr.filter((e) => e.id_ejercicio !== id));
+      return { ok: true, mensaje: "Ejercicio eliminado", data: ej };
+    },
 
-  db.write("ejercicios", arr);
-
-  return {
-    ok: true,
-    mensaje: "Ejercicio actualizado",
-    data: ejercicio,
-  };
-},
-
-async remove(id: number): Promise<ApiResp<EjercicioV1>> {
-  await api._delay();
-
-  const arr = db.read<EjercicioV1>("ejercicios");
-  const ejercicio = arr.find((e) => e.idEjercicio === id);
-
-  if (!ejercicio) {
-    return { ok: false, mensaje: "Ejercicio no encontrado" };
-  }
-
-  db.write(
-    "ejercicios",
-    arr.filter((e) => e.idEjercicio !== id)
-  );
-
-  return {
-    ok: true,
-    mensaje: "Ejercicio eliminado",
-    data: ejercicio,
-  };
-},
-    
-
+    // Copia un ejercicio BASE como propio del gimnasio, para poder editarlo.
+    // El nombre lleva "(personalizado)" porque un propio no puede llamarse igual que un base.
+    async personalizar(id: number): Promise<ApiResp<Ejercicio>> {
+      await api._delay();
+      const original = leerCatalogo().find((e) => e.id_ejercicio === id);
+      if (!original) return { ok: false, mensaje: "Ejercicio no encontrado" };
+      if (original.gimnasio_id !== null)
+        return { ok: false, mensaje: "Este ejercicio ya es propio del gimnasio: puedes editarlo directamente" };
+      const nombre = original.nombre + " (personalizado)";
+      if (nombreRepetido(nombre, null))
+        return { ok: false, mensaje: "Ya personalizaste este ejercicio: busca «" + nombre + "»" };
+      const arr = db.readTenant<EjercicioPropio>("ejercicios");
+      const copia: EjercicioPropio = {
+        ...original,
+        nombre,
+        id_ejercicio: db.siguienteId<Ejercicio>("ejercicios", (e) => e.id_ejercicio),
+        gimnasio_id: gimnasioParaEscribir(),
+        estado: "ACTIVO",
+      };
+      arr.push(copia);
+      db.writeTenant("ejercicios", arr);
+      return { ok: true, mensaje: "Se creó «" + nombre + "» como ejercicio propio", data: copia };
+    },
   },
-  // ===== [/P4] Ejercicios =====
+  // ===== [/P3] Ejercicios =====
 
   // ===== [P3] Instructores =====
   instructores: {
@@ -1707,8 +1912,7 @@ async remove(id: number): Promise<ApiResp<EjercicioV1>> {
     },
 
     // Reemplaza todos los ejercicios de la rutina por la lista recibida.
-    // Solo acepta ejercicios que existan en el catálogo. El catálogo todavía se lee completo (db.read):
-    // se decidirá si es global, por gimnasio o mixto antes de tocarlo.
+    // Solo acepta ejercicios que existan en el catálogo que ve el gimnasio (base + propios).
     async guardarEjercicios(
       id: number,
       lista: Omit<RutinaEjercicio, "id_rutina" | "gimnasio_id">[]
@@ -1716,8 +1920,8 @@ async remove(id: number): Promise<ApiResp<EjercicioV1>> {
       await api._delay();
       if (!db.readTenant<Rutina>("rutinas").some((r) => r.id_rutina === id))
         return { ok: false, mensaje: "Rutina no encontrada" };
-      const catalogo = db.read<EjercicioV1>("ejercicios"); // se pasa a la forma nueva en la parte B
-      const faltante = lista.find((e) => !catalogo.some((c) => c.idEjercicio === e.id_ejercicio));
+      const catalogo = leerCatalogo();
+      const faltante = lista.find((e) => !catalogo.some((c) => c.id_ejercicio === e.id_ejercicio));
       if (faltante) return { ok: false, mensaje: "El ejercicio " + faltante.id_ejercicio + " no existe" };
       const gym = gimnasioParaEscribir();
       const nuevos: RutinaEjercicio[] = lista.map((e) => ({ ...e, gimnasio_id: gym, id_rutina: id }));

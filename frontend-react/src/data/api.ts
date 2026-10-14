@@ -12,6 +12,7 @@ import type {
   Pago,
   Ingreso,
   Ejercicio,
+  EjercicioV1, // [P3] temporal: forma vieja hasta reescribir api.ejercicios (parte B)
   Usuario,
   ApiResp,
   PlanMembresia,
@@ -1459,24 +1460,24 @@ export const api = {
 
   // ===== [P4] Ejercicios =====
   ejercicios: {
-    async list(): Promise<Ejercicio[]> {
+    async list(): Promise<EjercicioV1[]> {
       await api._delay();
-      return db.read<Ejercicio>("ejercicios");
+      return db.read<EjercicioV1>("ejercicios");
     },
 
     async create(
-      data: Omit<Ejercicio, "idEjercicio">
-    ): Promise<ApiResp<Ejercicio>> {
+      data: Omit<EjercicioV1, "idEjercicio">
+    ): Promise<ApiResp<EjercicioV1>> {
       await api._delay();
 
-      const arr = db.read<Ejercicio>("ejercicios");
+      const arr = db.read<EjercicioV1>("ejercicios");
 
       const nuevoId =
         arr.length > 0
           ? Math.max(...arr.map((e) => e.idEjercicio)) + 1
           : 1;
 
-      const nuevo: Ejercicio = {
+      const nuevo: EjercicioV1 = {
         ...data,
         idEjercicio: nuevoId,
       };
@@ -1492,11 +1493,11 @@ export const api = {
     },
     async update(
   id: number,
-  data: Partial<Omit<Ejercicio, "idEjercicio">>
-): Promise<ApiResp<Ejercicio>> {
+  data: Partial<Omit<EjercicioV1, "idEjercicio">>
+): Promise<ApiResp<EjercicioV1>> {
   await api._delay();
 
-  const arr = db.read<Ejercicio>("ejercicios");
+  const arr = db.read<EjercicioV1>("ejercicios");
   const ejercicio = arr.find((e) => e.idEjercicio === id);
 
   if (!ejercicio) {
@@ -1514,10 +1515,10 @@ export const api = {
   };
 },
 
-async remove(id: number): Promise<ApiResp<Ejercicio>> {
+async remove(id: number): Promise<ApiResp<EjercicioV1>> {
   await api._delay();
 
-  const arr = db.read<Ejercicio>("ejercicios");
+  const arr = db.read<EjercicioV1>("ejercicios");
   const ejercicio = arr.find((e) => e.idEjercicio === id);
 
   if (!ejercicio) {
@@ -1715,7 +1716,7 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
       await api._delay();
       if (!db.readTenant<Rutina>("rutinas").some((r) => r.id_rutina === id))
         return { ok: false, mensaje: "Rutina no encontrada" };
-      const catalogo = db.read<Ejercicio>("ejercicios");
+      const catalogo = db.read<EjercicioV1>("ejercicios"); // se pasa a la forma nueva en la parte B
       const faltante = lista.find((e) => !catalogo.some((c) => c.idEjercicio === e.id_ejercicio));
       if (faltante) return { ok: false, mensaje: "El ejercicio " + faltante.id_ejercicio + " no existe" };
       const gym = gimnasioParaEscribir();

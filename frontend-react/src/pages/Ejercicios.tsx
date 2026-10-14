@@ -89,6 +89,15 @@ export function Ejercicios() {
   const [porEliminar, setPorEliminar] = useState<Ejercicio | null>(null);
   const [errorEliminar, setErrorEliminar] = useState("");
 
+  // Filtros ("" = todos). Origen: BASE = catálogo común, PROPIO = creados por este gimnasio
+  const [filtroGrupo, setFiltroGrupo] = useState<GrupoMuscular | "">("");
+  const [filtroNivel, setFiltroNivel] = useState<NivelEjercicio | "">("");
+  const [filtroEquipo, setFiltroEquipo] = useState<EquipoEjercicio | "">("");
+  const [filtroOrigen, setFiltroOrigen] = useState<"" | "BASE" | "PROPIO">("");
+
+  // Ejercicio base abierto en el modal de solo lectura (null = cerrado)
+  const [verEjercicio, setVerEjercicio] = useState<Ejercicio | null>(null);
+
   async function cargar() {
     try {
       const data = await api.ejercicios.list();
@@ -210,11 +219,52 @@ export function Ejercicios() {
     }
   }
 
+  // Copia un ejercicio base como propio y abre la copia para editarla
+  async function personalizar(ejercicio: Ejercicio) {
+    setAlerta(null);
+    const respuesta = await api.ejercicios.personalizar(ejercicio.id_ejercicio);
+    setVerEjercicio(null);
+    if (!respuesta.ok || !respuesta.data) {
+      setAlerta({ tipo: "error", mensaje: respuesta.mensaje });
+      return;
+    }
+    setAlerta({ tipo: "ok", mensaje: respuesta.mensaje });
+    await cargar();
+    abrirEdicion(respuesta.data);
+  }
+
+  // Activa o desactiva un ejercicio propio (uno inactivo sigue en las rutinas que ya lo usan)
+  async function cambiarEstado(ejercicio: Ejercicio) {
+    const nuevo = ejercicio.estado === "ACTIVO" ? "INACTIVO" : "ACTIVO";
+    const respuesta = await api.ejercicios.setEstado(ejercicio.id_ejercicio, nuevo);
+    setAlerta(
+      respuesta.ok
+        ? { tipo: "ok", mensaje: `«${ejercicio.nombre}» ahora está ${nuevo}` }
+        : { tipo: "error", mensaje: respuesta.mensaje }
+    );
+    await cargar();
+  }
+
+  function limpiarFiltros() {
+    setBusqueda("");
+    setFiltroGrupo("");
+    setFiltroNivel("");
+    setFiltroEquipo("");
+    setFiltroOrigen("");
+  }
+
   const normalizar = (texto: string) => texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const consulta = normalizar(busqueda.trim());
+  // Base = gimnasio_id null (la vista no sabe de qué gimnasio es un propio: solo si es base o no)
   const filtrados = ejercicios.filter((e) =>
-    [e.nombre, e.grupo_muscular, e.nivel, e.equipo].some((campo) => normalizar(campo).includes(consulta))
+    [e.nombre, e.grupo_muscular, e.nivel, e.equipo].some((campo) => normalizar(campo).includes(consulta)) &&
+    (filtroGrupo === "" || e.grupo_muscular === filtroGrupo) &&
+    (filtroNivel === "" || e.nivel === filtroNivel) &&
+    (filtroEquipo === "" || e.equipo === filtroEquipo) &&
+    (filtroOrigen === "" || (filtroOrigen === "BASE") === (e.gimnasio_id === null))
   );
+  const hayFiltros =
+    consulta !== "" || filtroGrupo !== "" || filtroNivel !== "" || filtroEquipo !== "" || filtroOrigen !== "";
 
   return (
     <section className="card-g">
@@ -250,7 +300,53 @@ export function Ejercicios() {
             onChange={(e) => setBusqueda(e.target.value)}
           />
         </div>
+        <select
+          className="form-control-dark"
+          style={{ width: "auto" }}
+          aria-label="Filtrar por grupo muscular"
+          value={filtroGrupo}
+          onChange={(e) => setFiltroGrupo(e.target.value as GrupoMuscular | "")}
+        >
+          <option value="">Todos los grupos</option>
+          {GRUPOS.map((g) => <option key={g} value={g}>{g}</option>)}
+        </select>
+        <select
+          className="form-control-dark"
+          style={{ width: "auto" }}
+          aria-label="Filtrar por nivel"
+          value={filtroNivel}
+          onChange={(e) => setFiltroNivel(e.target.value as NivelEjercicio | "")}
+        >
+          <option value="">Todos los niveles</option>
+          {NIVELES.map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>
+        <select
+          className="form-control-dark"
+          style={{ width: "auto" }}
+          aria-label="Filtrar por equipo"
+          value={filtroEquipo}
+          onChange={(e) => setFiltroEquipo(e.target.value as EquipoEjercicio | "")}
+        >
+          <option value="">Todo el equipo</option>
+          {EQUIPOS.map((q) => <option key={q} value={q}>{q}</option>)}
+        </select>
+        <select
+          className="form-control-dark"
+          style={{ width: "auto" }}
+          aria-label="Filtrar por origen"
+          value={filtroOrigen}
+          onChange={(e) => setFiltroOrigen(e.target.value as "" | "BASE" | "PROPIO")}
+        >
+          <option value="">Base y propios</option>
+          <option value="BASE">Solo catálogo base</option>
+          <option value="PROPIO">Solo propios</option>
+        </select>
+        {hayFiltros && <button className="btn-dark" onClick={limpiarFiltros}>Limpiar</button>}
       </div>
+
+      {!cargando && ejercicios.length > 0 && (
+        <p className="card-sub mb-3">Mostrando {filtrados.length} de {ejercicios.length} ejercicios</p>
+      )}
 
       <div className="table-wrap">
         <table className="table-g">
@@ -279,12 +375,14 @@ export function Ejercicios() {
                 </td>
               </tr>
             ) : filtrados.length === 0 ? (
-              <tr><td colSpan={6} className="empty-state">No hay ejercicios que coincidan con la búsqueda.</td></tr>
+              <tr><td colSpan={6} className="empty-state">No hay ejercicios que coincidan con la búsqueda o los filtros.</td></tr>
             ) : (
               filtrados.map((e) => (
                 <tr key={e.id_ejercicio}>
                   <td>
                     <strong>{e.nombre}</strong>
+                    {e.gimnasio_id === null && <span className="badge-g badge-confirmada ms-2">Base</span>}
+                    {e.estado === "INACTIVO" && <span className="badge-g badge-inactivo ms-2">Inactivo</span>}
                     {e.descripcion && <p className="card-sub mb-1">{e.descripcion}</p>}
                     {e.recurso_url && (
                       /^https?:\/\//i.test(e.recurso_url.trim())
@@ -297,22 +395,54 @@ export function Ejercicios() {
                   <td>{e.equipo}</td>
                   <td>{sugerido(e)}</td>
                   <td>
-                    <button
-                      className="btn-icon"
-                      title="Editar"
-                      aria-label={`Editar ${e.nombre}`}
-                      onClick={() => abrirEdicion(e)}
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      className="btn-icon ms-1"
-                      title="Eliminar"
-                      aria-label={`Eliminar ${e.nombre}`}
-                      onClick={() => { setPorEliminar(e); setErrorEliminar(""); }}
-                    >
-                      {"\u{1F5D1}️"}
-                    </button>
+                    {/* Acciones según el origen: un base solo se ve y se personaliza; un propio se gestiona */}
+                    {e.gimnasio_id === null ? (
+                      <div className="cell-actions">
+                        <button
+                          className="btn-icon"
+                          title="Ver detalle"
+                          aria-label={`Ver ${e.nombre}`}
+                          onClick={() => setVerEjercicio(e)}
+                        >
+                          👁
+                        </button>
+                        <button
+                          className="btn-icon"
+                          title="Personalizar (crear una copia propia)"
+                          aria-label={`Personalizar ${e.nombre}`}
+                          onClick={() => personalizar(e)}
+                        >
+                          📋
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="cell-actions">
+                        <button
+                          className="btn-icon"
+                          title="Editar"
+                          aria-label={`Editar ${e.nombre}`}
+                          onClick={() => abrirEdicion(e)}
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="btn-icon"
+                          title={e.estado === "ACTIVO" ? "Desactivar" : "Activar"}
+                          aria-label={`${e.estado === "ACTIVO" ? "Desactivar" : "Activar"} ${e.nombre}`}
+                          onClick={() => cambiarEstado(e)}
+                        >
+                          {e.estado === "ACTIVO" ? "🚫" : "✅"}
+                        </button>
+                        <button
+                          className="btn-icon"
+                          title="Eliminar"
+                          aria-label={`Eliminar ${e.nombre}`}
+                          onClick={() => { setPorEliminar(e); setErrorEliminar(""); }}
+                        >
+                          {"\u{1F5D1}️"}
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))
@@ -474,6 +604,37 @@ export function Ejercicios() {
         <Modal.Footer>
           <button className="btn-dark" disabled={eliminando} onClick={() => setPorEliminar(null)}>Cancelar</button>
           <button className="btn-danger-g" disabled={eliminando} onClick={eliminar}>{eliminando ? "Eliminando..." : "Sí, eliminar"}</button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Detalle de solo lectura de un ejercicio base */}
+      <Modal show={verEjercicio !== null} onHide={() => setVerEjercicio(null)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>{verEjercicio?.nombre}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="card-sub">
+            Ejercicio del catálogo base: lo comparten todos los gimnasios y no se puede modificar. Si quieres
+            ajustarlo, personalízalo para crear tu propia copia.
+          </p>
+          {verEjercicio && (
+            <div className="table-wrap">
+              <table className="table-g">
+                <tbody>
+                  <tr><th>Grupo muscular</th><td>{verEjercicio.grupo_muscular}</td></tr>
+                  <tr><th>Nivel</th><td>{verEjercicio.nivel}</td></tr>
+                  <tr><th>Equipo</th><td>{verEjercicio.equipo}</td></tr>
+                  <tr><th>Se mide por</th><td>{verEjercicio.tipo_medicion === "TIEMPO" ? "Tiempo" : "Repeticiones"}</td></tr>
+                  <tr><th>Sugerido</th><td>{sugerido(verEjercicio)}</td></tr>
+                  <tr><th>Descripción</th><td>{verEjercicio.descripcion || "—"}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <button className="btn-dark" onClick={() => setVerEjercicio(null)}>Cerrar</button>
+          <button className="btn-neon" onClick={() => verEjercicio && personalizar(verEjercicio)}>Personalizar</button>
         </Modal.Footer>
       </Modal>
     </section>

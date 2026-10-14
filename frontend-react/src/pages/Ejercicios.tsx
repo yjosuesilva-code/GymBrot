@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
-import type { Ejercicio } from "../types";
+import type { EjercicioV1 as Ejercicio } from "../types"; // temporal hasta la parte D
 
 const VACIO = {
   nombre: "",

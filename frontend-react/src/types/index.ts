@@ -140,7 +140,61 @@ export interface Ingreso {
     estado_verificacion: 'APROBADO' | 'RECHAZADO';
 }
 
+// ===== [P3] Ejercicios (antes P4) =====
+/* Catálogo MIXTO (DECISIONES.md): los ejercicios base tienen gimnasio_id null y los ven todos los
+   gimnasios (solo lectura); los propios llevan el gimnasio_id de quien los creó. */
+
+export type GrupoMuscular =
+  | 'Pecho'
+  | 'Espalda'
+  | 'Hombros'
+  | 'Bíceps'
+  | 'Tríceps'
+  | 'Piernas'
+  | 'Glúteos'
+  | 'Abdomen'
+  | 'Cardio'
+  | 'Cuerpo completo';
+
+export type NivelEjercicio = 'Principiante' | 'Intermedio' | 'Avanzado';
+
+export type EquipoEjercicio =
+  | 'Máquina'
+  | 'Mancuerna'
+  | 'Barra'
+  | 'Polea'
+  | 'Kettlebell'
+  | 'Banda elástica'
+  | 'Peso corporal';
+
+// Cómo se mide: por repeticiones (ej. 12 sentadillas) o por tiempo (ej. 30 s de plancha)
+export type TipoMedicion = 'REPETICIONES' | 'TIEMPO';
+
+export type EstadoEjercicio = 'ACTIVO' | 'INACTIVO';
+
 export interface Ejercicio {
+  id_ejercicio: number;                        // llave, global (como un SERIAL)
+  gimnasio_id: Gimnasio['gimnasio_id'] | null; // null = catálogo base (de todos, solo lectura)
+  nombre: string;
+  descripcion: string;
+  grupo_muscular: GrupoMuscular;
+  nivel: NivelEjercicio;
+  equipo: EquipoEjercicio;
+  tipo_medicion: TipoMedicion;
+  // Valores SUGERIDOS (opcionales): la rutina de cada cliente define los reales
+  series_sugeridas: number | null;
+  repeticiones_sugeridas: number | null;       // si tipo_medicion es REPETICIONES
+  segundos_sugeridos: number | null;           // si tipo_medicion es TIEMPO
+  recurso_url: string;                         // video o imagen de referencia ('' si no hay)
+  estado: EstadoEjercicio;
+}
+
+// Lo que manda la vista al crear: id, gimnasio y estado los pone api.ejercicios.create
+export type EjercicioNuevo = Omit<Ejercicio, 'id_ejercicio' | 'gimnasio_id' | 'estado'>;
+
+/** @deprecated Forma vieja (P4, camelCase). Solo la usan api.ejercicios y Ejercicios.tsx mientras se
+    migran en las partes B y D; se borra al terminar. */
+export interface EjercicioV1 {
     idEjercicio: number;
     nombre: string;
     descripcion: string;
@@ -150,6 +204,7 @@ export interface Ejercicio {
     repeticiones: number;
     recursoUrl: string;
 }
+// ===== [/P3] Ejercicios =====
 
 export interface Progreso {
   gimnasio_id: Gimnasio['gimnasio_id'];
@@ -257,7 +312,7 @@ export interface Rutina {
 export interface RutinaEjercicio {
   gimnasio_id: Gimnasio['gimnasio_id']; // el mismo de su rutina
   id_rutina: number;               // Rutina.id_rutina
-  id_ejercicio: number;            // Ejercicio.idEjercicio (P4)
+  id_ejercicio: number;            // Ejercicio.id_ejercicio (base o propio del mismo gimnasio)
   orden: number;                   // posición dentro del día: 1, 2, 3...
   dia_semana: DiaSemana;
   notas_instructor: string;

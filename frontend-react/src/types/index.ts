@@ -15,6 +15,11 @@ export interface PlanSoftware {
    produccion lo hace cumplir RLS en la base. */
 export interface Gimnasio {
   gimnasio_id: string;
+  /* [multitenant-slug] Identificador publico en la URL (/g/:slug/...).
+     Unico en toda la plataforma y estable: gimnasio_id sigue siendo la llave
+     de todas las FKs, el slug solo sirve para encontrar al tenant. Reglas en
+     lib/slug.ts. */
+  slug: string;
   nombre: string;
   ciudad: string;
   telefono: string;
@@ -23,6 +28,13 @@ export interface Gimnasio {
   fecha_registro: string;        // 'YYYY-MM-DD'
   vence_suscripcion: string;     // 'YYYY-MM-DD', pagada hasta este dia
 }
+
+/* [multitenant-slug] Lo que cualquiera puede saber de un gimnasio a partir
+   de su slug, sin sesion: lo necesita /g/:slug/login para mostrar el nombre.
+   En Supabase lo devuelve la funcion gimnasio_por_slug(): la tabla gimnasios
+   no se expone a anon, y una funcion que responde por un slug exacto no
+   permite listar todos los gimnasios como lo haria una vista. */
+export type GimnasioPublico = Pick<Gimnasio, 'gimnasio_id' | 'slug' | 'nombre' | 'ciudad' | 'estado'>;
 
 /* Pago de la suscripcion de un gimnasio a la plataforma. Simulado: no hay
    pasarela, y por eso no guarda ningun dato de tarjeta. */
@@ -177,8 +189,24 @@ export interface ApiResp<T = unknown> {
    Guarda tipo_usuario desde ya porque el login solo admite ADMINISTRADOR
    (loginController.java:156), pero viene preparado para que cada rol entre
    a su propio dashboard. */
-export interface Sesion {
+/* [multitenant-slug] Un gimnasio al que la sesion puede entrar. Hoy hay uno
+   solo (cada Usuario pertenece a un gimnasio); con Supabase sale de
+   gym_members y una persona puede tener varios. */
+export interface AccesoGimnasio {
   gimnasio_id: Gimnasio['gimnasio_id'];
+  slug: Gimnasio['slug'];
+  rol: string;
+}
+
+export interface Sesion {
+  /* Gimnasio con el que se inicio sesion. Ya NO decide que datos se leen: eso
+     lo hace el slug de la URL (TenantProvider). Se conserva para redirigir
+     las rutas viejas (/dashboard) y por compatibilidad con sesiones guardadas
+     antes del slug. */
+  gimnasio_id: Gimnasio['gimnasio_id'];
+  /* Opcional: las sesiones guardadas antes del slug no lo traen y siguen
+     siendo validas; auth.accesosDe() lo completa con gimnasio_id. */
+  accesos?: AccesoGimnasio[];
   numero_identificacion: string;
   usuario: string;
   nombre: string;

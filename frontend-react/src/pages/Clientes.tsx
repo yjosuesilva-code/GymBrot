@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
+import { useTenant } from "../tenant/TenantContext"; // [multitenant-slug]
 import { utils } from "../lib/utils";
 import type { Cliente, ClienteNuevo, Usuario } from "../types";
 
@@ -28,6 +29,7 @@ const VACIO: FormCliente = {
 };
 
 export function Clientes() {
+  const { ruta } = useTenant(); // [multitenant-slug]
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState("");
@@ -236,7 +238,7 @@ export function Clientes() {
                           className="btn-icon"
                           title="Ver detalle"
                           onClick={() =>
-                            navigate("/clientes/" + c.numero_identificacion)
+                            navigate(ruta("/clientes/" + c.numero_identificacion))
                           }
                         >
                           👁

@@ -501,6 +501,175 @@ body {
   .ia-burbuja { max-width: 88%; }
 }
 
+/* ---- Clientes unificado: KPIs, botones de acceso, monitor de terminal ----
+   La vista de Clientes absorbe el Control de acceso: arriba los tres KPI del
+   desktop (activos, dentro del gym y tasa de ingreso), en la barra los botones
+   de validar entrada/salida, y abajo el monitor de terminal de escaneo con el
+   log del día. */
+
+.gst-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.gst-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+}
+.gst-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--f-label);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--muted);
+}
+.gst-valor {
+  font-family: var(--f-title);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+}
+.gst-nota { font-family: var(--f-label); font-size: 11px; color: var(--muted); }
+.gst-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #bdf4ff;
+  box-shadow: 0 0 8px #bdf4ff;
+  animation: gst-pulso 1.6s ease-in-out infinite;
+}
+@keyframes gst-pulso { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+
+/* Botones de validación al estilo del desktop: borde y texto de color sobre
+   fondo translúcido, rojo para la salida y cian para la entrada. */
+.toolbar-acciones {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.btn-acceso {
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-family: var(--f-title);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  background: transparent;
+  border: 2px solid;
+}
+.btn-acceso-entrada {
+  background: rgba(189,244,255,.08);
+  border-color: #bdf4ff;
+  color: #bdf4ff;
+}
+.btn-acceso-entrada:hover { background: rgba(189,244,255,.16); }
+.btn-acceso-salida {
+  background: rgba(255,180,171,.08);
+  border-color: #ffb4ab;
+  color: #ffb4ab;
+}
+.btn-acceso-salida:hover { background: rgba(255,180,171,.16); }
+
+/* Badges nuevos de la tabla combinada */
+.badge-categoria {
+  background: rgba(189,244,255,.10);
+  color: #bdf4ff;
+  border-color: rgba(189,244,255,.30);
+}
+.badge-sin-ingreso {
+  background: rgba(255,180,171,.10);
+  color: #ffb4ab;
+  border-color: rgba(255,180,171,.30);
+}
+
+/* Monitor de Terminal de Escaneo (SECCION 4 del desktop) */
+.monitor {
+  margin-top: 28px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.monitor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.monitor-title {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 4px solid var(--neon);
+  font-family: var(--f-title);
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+.monitor-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #bdf4ff;
+  box-shadow: 0 0 8px #bdf4ff;
+  animation: gst-pulso 1.6s ease-in-out infinite;
+}
+.monitor-vacio { margin: 0; color: var(--muted); font-size: 13px; }
+.log-lista { display: flex; flex-direction: column; gap: 10px; }
+.log-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+.log-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.log-nombre {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.log-detalle { color: var(--muted); font-size: 11px; }
+.log-estado {
+  font-family: var(--f-label);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.log-estado.dentro { color: var(--neon); }
+.log-salida { font-size: 11px; padding: 6px 10px; }
+
+@media (max-width: 900px) {
+  .gst-grid { grid-template-columns: 1fr; }
+  .toolbar-acciones { margin-left: 0; width: 100%; }
+  .toolbar-acciones .btn-acceso,
+  .toolbar-acciones .btn-neon { flex: 1; }
+}
+@media (max-width: 640px) {
+  .toolbar-acciones .btn-acceso,
+  .toolbar-acciones .btn-neon { width: 100%; flex: none; }
+  .log-row { flex-wrap: wrap; align-items: flex-start; }
+  .log-salida { margin-left: auto; }
+}
+
 
 /* ===== [P2] Estilos propios · clientes, cliente-detalle, progreso, citas ===== */
 /* Las paginas de clientes reutilizan los componentes de la base. Lo de abajo

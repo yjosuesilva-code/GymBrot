@@ -1,4 +1,5 @@
-import { Routes, Route } from "react-router-dom";
+import type { ReactNode } from "react";
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { Layout } from "./components/layout/Layout";
 import { Dashboard } from "./pages/Dashboard";
 import { Clientes } from "./pages/Clientes";
@@ -16,34 +17,69 @@ import { Progreso } from "./pages/Progreso";                  // [P2]
 import { Citas } from "./pages/Citas";                        // [P2]
 import { Landing } from "./pages/Landing";                    // [P2] plataforma
 import { Registro } from "./pages/Registro";                  // [P2] plataforma
+import { Planes } from "./pages/Planes";                      // [multitenant-slug]
+import { Contacto } from "./pages/Contacto";                  // [multitenant-slug]
+import { BuscarGimnasio } from "./pages/BuscarGimnasio";      // [multitenant-slug]
+import { TenantProvider } from "./tenant/TenantProvider";     // [multitenant-slug]
+import { RedirigirAlPortal } from "./tenant/RedirigirAlPortal"; // [multitenant-slug]
+
+/* [multitenant-slug] Rutas privadas de un gimnasio, relativas a /g/:slug.
+   Una sola lista: la usan el portal y las redirecciones de compatibilidad,
+   asi que agregar una pagina aqui la deja disponible en los dos lados. */
+const RUTAS_PORTAL: { path: string; element: ReactNode }[] = [
+  { path: "dashboard", element: <Dashboard /> },
+  { path: "clientes", element: <Clientes /> },
+  { path: "clientes/:id", element: <ClienteDetalle /> },
+  { path: "membresias", element: <Membresias /> },              // [P4]
+  { path: "finanzas", element: <Finanzas /> },                  // [P1]
+  { path: "rutinas", element: <Rutinas /> },                    // [P3]
+  { path: "instructores", element: <Instructores /> },          // [P3]
+  { path: "instructores/:id", element: <InstructorDetalle /> }, // [P3]
+  { path: "citas", element: <Citas /> },                        // [P2]
+  { path: "progreso", element: <Progreso /> },                  // [P2]
+  { path: "acceso", element: <Acceso /> },                      // [P1]
+  { path: "ejercicios", element: <Ejercicios /> },              // [P4]
+  { path: "gymbrot-ai", element: <GymbrotAI /> },               // [P1]
+];
 
 function App() {
   return (
     <Routes>
-      {/* [P2] Plataforma: paginas publicas, sin sesion ni Layout */}
+      {/* Sitio publico: sin sesion, sin tenant, sin Layout */}
       <Route path="/" element={<Landing />} />
+      <Route path="/planes" element={<Planes />} />
+      <Route path="/contacto" element={<Contacto />} />
       <Route path="/registro" element={<Registro />} />
-      <Route path="/login" element={<Login />} />
-      <Route element={<Layout />}>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/clientes" element={<Clientes />} />
-        <Route path="/clientes/:id" element={<ClienteDetalle />} />
-        <Route path="/finanzas" element={<Finanzas />} />           {/* [P1] */}
-        <Route path="/acceso" element={<Acceso />} />               {/* [P1] */}
-        <Route path="/gymbrot-ai" element={<GymbrotAI />} />        {/* [P1] */}
-        {/* [P3] Instructores */}
-        <Route path="/instructores" element={<Instructores />} />
-        <Route path="/instructores/:id" element={<InstructorDetalle />} />
-        <Route path="/rutinas" element={<Rutinas />} />
-        {/* [P4] Ejercicios */}
-        <Route path="/ejercicios" element={<Ejercicios />} />
-        {/* [P4] Membresias */}
-        <Route path="/membresias" element={<Membresias />} />
-        {/* [P2] Progreso */}
-        <Route path="/progreso" element={<Progreso />} />
-        {/* [P2] Citas */}
-        <Route path="/citas" element={<Citas />} />
+      {/* /login ya no autentica: pregunta por el gimnasio y manda a /g/:slug/login */}
+      <Route path="/login" element={<BuscarGimnasio />} />
+
+      {/* Portal de cada gimnasio. TenantProvider resuelve :slug antes de pintar
+          nada; Layout es el guard (sesion con acceso a ESE gimnasio). */}
+      <Route
+        path="/g/:slug"
+        element={
+          <TenantProvider>
+            <Outlet />
+          </TenantProvider>
+        }
+      >
+        <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="login" element={<Login />} />
+        <Route element={<Layout />}>
+          {RUTAS_PORTAL.map((r) => (
+            <Route key={r.path} path={r.path} element={r.element} />
+          ))}
+          <Route path="*" element={<Navigate to="dashboard" replace />} />
+        </Route>
       </Route>
+
+      {/* Compatibilidad (Fases 1-3): las rutas viejas sin slug llevan al mismo
+          path dentro del portal del gimnasio de la sesion. Se borran en la Fase 4. */}
+      {RUTAS_PORTAL.map((r) => (
+        <Route key={"legacy-" + r.path} path={"/" + r.path} element={<RedirigirAlPortal />} />
+      ))}
+
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

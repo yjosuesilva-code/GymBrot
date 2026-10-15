@@ -1,8 +1,11 @@
 import { utils } from "../lib/utils";
 import { membresiaVigente } from "../lib/membresias";
 import { notificarCambioDeDatos } from "../lib/datos";
+import { slugUnico, slugify, validarSlug, normalizarSlugDeUrl } from "../lib/slug"; // [multitenant-slug]
+import { gimnasioFijado } from "../tenant/tenantActivo"; // [multitenant-slug]
 import type {
   Gimnasio, // [multitenant]
+  GimnasioPublico, // [multitenant-slug]
   PlanSoftware, // [plataforma]
   PagoSoftware, // [plataforma]
   Cliente,
@@ -325,8 +328,8 @@ const SEED: Seed = {
   // (misma cedula, datos distintos): si alguna pantalla deja pasar filas del
   // otro gimnasio, se nota al instante (DECISIONES.md, convenciones).
   gimnasios: [
-    { gimnasio_id:'gym-centro', nombre:'GymBrot Centro', ciudad:'Valledupar', telefono:'6055700000', estado:'ACTIVO', plan_software:'PREMIUM', fecha_registro:dia(400), vence_suscripcion:dia(-20) },
-    { gimnasio_id:'gym-titan',  nombre:'Titan Fitness',  ciudad:'Valledupar', telefono:'6055711111', estado:'ACTIVO', plan_software:'BASICO',  fecha_registro:dia(25),  vence_suscripcion:dia(-5) },
+    { gimnasio_id:'gym-centro', slug:'gymbrot-centro', nombre:'GymBrot Centro', ciudad:'Valledupar', telefono:'6055700000', estado:'ACTIVO', plan_software:'PREMIUM', fecha_registro:dia(400), vence_suscripcion:dia(-20) },
+    { gimnasio_id:'gym-titan',  slug:'titan-fitness',  nombre:'Titan Fitness',  ciudad:'Valledupar', telefono:'6055711111', estado:'ACTIVO', plan_software:'BASICO',  fecha_registro:dia(25),  vence_suscripcion:dia(-5) },
   ],
 
   // Pagos de suscripcion que hacen los gimnasios nuevos desde /registro.
@@ -508,22 +511,87 @@ function sembrarSiHaceFalta(): void {
 
 sembrarSiHaceFalta();
 
+/* [multitenant-slug] Migracion sin perdida de datos. No se sube SEED_VERSION:
+   eso reescribiria todas las colecciones y borraria los gimnasios que alguien
+   ya registro desde /registro en su navegador. En cambio, a cada gimnasio
+   guardado sin slug se le genera uno a partir del nombre, sin repetir. Es
+   idempotente: si todos tienen slug no escribe nada. */
+function completarSlugs(): void {
+  const clave = "gymbrot_gimnasios";
+  const raw = localStorage.getItem(clave);
+  if (!raw) return;
+  let gimnasios: Array<Omit<Gimnasio, "slug"> & { slug?: string }>;
+  try {
+    gimnasios = JSON.parse(raw);
+  } catch {
+    return; // un JSON roto lo regenera el siguiente bump del seed
+  }
+  if (gimnasios.every((g) => typeof g.slug === "string" && g.slug)) return;
+
+  const usados = new Set(gimnasios.flatMap((g) => (g.slug ? [g.slug] : [])));
+  const migrados = gimnasios.map((g) => {
+    if (g.slug) return g;
+    const slug = slugUnico(g.nombre, usados);
+    usados.add(slug);
+    return { ...g, slug };
+  });
+  localStorage.setItem(clave, JSON.stringify(migrados));
+}
+
+completarSlugs();
+
 // --- Multitenant ---------------------------------------------------------
 // Misma clave que CLAVE en lib/auth.ts. Se lee directo de localStorage y no
 // con auth.current() porque auth.ts importa api: importarlo aqui armaria un
 // ciclo db <-> auth.
 const CLAVE_SESION = "gymbrot_session";
 
-/* Gimnasio de la sesion abierta, o null si no hay sesion valida. */
-function gimnasioActivo(): string | null {
+/* [multitenant-slug] Fase de transicion. Mientras quede alguna ruta sin
+   /g/:slug (o algun componente que llame al api fuera de TenantProvider), el
+   gimnasio se toma de la sesion como antes. Al terminar la Fase 3 de
+   docs/MULTITENANT-SLUG.md se pone en false: sin slug en la URL, no hay datos. */
+const TENANT_DESDE_SESION = true;
+
+/* Lo que trae la sesion guardada, sin validar el resto de campos (eso lo hace
+   auth.ts). Solo interesa a que gimnasios puede entrar. */
+function sesionGuardada(): { gimnasio_id?: unknown; accesos?: unknown } | null {
   const raw = localStorage.getItem(CLAVE_SESION);
   if (!raw) return null;
   try {
-    const sesion = JSON.parse(raw) as { gimnasio_id?: unknown };
-    return typeof sesion.gimnasio_id === "string" ? sesion.gimnasio_id : null;
+    const sesion = JSON.parse(raw);
+    return sesion !== null && typeof sesion === "object" ? sesion : null;
   } catch {
     return null;
   }
+}
+
+/* Simula la politica RLS "solo filas de gimnasios donde soy miembro"
+   (es_miembro() en docs/MULTITENANT-SLUG.md). Con Supabase esta funcion
+   desaparece: la base hace la comprobacion. Mientras tanto, el mock se
+   comporta igual: pedir datos de un gimnasio ajeno devuelve vacio. */
+function sesionTieneAcceso(gimnasioId: string): boolean {
+  const s = sesionGuardada();
+  if (!s) return false;
+  if (Array.isArray(s.accesos)) {
+    return s.accesos.some(
+      (a) => a !== null && typeof a === "object" && (a as { gimnasio_id?: unknown }).gimnasio_id === gimnasioId,
+    );
+  }
+  return s.gimnasio_id === gimnasioId; // sesion anterior al slug
+}
+
+/* Gimnasio cuyos datos se leen y escriben: el del slug de la URL (lo fija
+   TenantProvider), y solo si la sesion tiene acceso a el. null = sin datos. */
+function gimnasioActivo(): string | null {
+  const s = TENANT_DESDE_SESION ? sesionGuardada() : null;
+  const deSesion = s && typeof s.gimnasio_id === "string" ? s.gimnasio_id : null;
+  const gym = gimnasioFijado() ?? deSesion;
+  if (!gym) return null;
+  return sesionTieneAcceso(gym) ? gym : null;
+}
+
+function publico(g: Gimnasio): GimnasioPublico {
+  return { gimnasio_id: g.gimnasio_id, slug: g.slug, nombre: g.nombre, ciudad: g.ciudad, estado: g.estado };
 }
 
 /* Para escribir. Las vistas estan detras del login (Layout.tsx), asi que
@@ -588,7 +656,10 @@ const db = {
    personas pueden llamarse igual. */
 export interface RegistroGimnasio {
   plan: PlanSoftware["id_plan_software"];
-  gimnasio: { nombre: string; ciudad: string; telefono: string };
+  /* slug opcional: si la vista no lo manda, api.ts lo genera desde el nombre.
+     Si lo manda, se valida y debe estar libre (no se le agrega sufijo, porque
+     el usuario ya vio ese enlace exacto en la vista previa). */
+  gimnasio: { nombre: string; ciudad: string; telefono: string; slug?: string };
   admin: {
     numero_identificacion: string;
     nombre: string;
@@ -769,6 +840,36 @@ export const api = {
       return db.read<Gimnasio>("gimnasios").find((g) => g.gimnasio_id === gym) ?? null;
     },
 
+    /* [multitenant-slug] Resuelve el tenant de /g/:slug/... Es publico (no
+       pide sesion) porque la pantalla de login del gimnasio lo necesita para
+       mostrar su nombre. Devuelve solo GimnasioPublico, igual que la funcion
+       gimnasio_por_slug() de Supabase (docs/MULTITENANT-SLUG.md). */
+    async porSlug(slug: string): Promise<GimnasioPublico | null> {
+      await api._delay(120);
+      const clave = normalizarSlugDeUrl(slug);
+      if (!clave) return null;
+      const g = db.read<Gimnasio>("gimnasios").find((x) => x.slug === clave);
+      return g ? publico(g) : null;
+    },
+
+    /* [multitenant-slug] Para la vista previa de /registro. Responde ok=false
+       con el motivo (formato, reservado o ya usado) y, si se puede, sugiere
+       uno libre en data. Es solo un aviso: registrar() vuelve a validar. */
+    async slugDisponible(slug: string): Promise<ApiResp<{ slug: string; sugerencia?: string }>> {
+      await api._delay(150);
+      const valido = validarSlug(slug);
+      if (!valido.ok) return { ok: false, mensaje: valido.mensaje, data: { slug } };
+      const usados = new Set(db.read<Gimnasio>("gimnasios").map((g) => g.slug));
+      if (usados.has(slug)) {
+        return {
+          ok: false,
+          mensaje: "Ese enlace ya lo usa otro gimnasio.",
+          data: { slug, sugerencia: slugUnico(slug, usados) },
+        };
+      }
+      return { ok: true, mensaje: "Disponible", data: { slug } };
+    },
+
     // [plataforma] Lo que muestra la pagina de planes.
     async planesSoftware(): Promise<PlanSoftware[]> {
       await api._delay();
@@ -789,6 +890,7 @@ export const api = {
         nombre: datos.gimnasio.nombre.trim(),
         ciudad: datos.gimnasio.ciudad.trim(),
         telefono: datos.gimnasio.telefono.trim(),
+        slug: datos.gimnasio.slug?.trim().toLowerCase() ?? "", // [multitenant-slug]
       };
       const a = {
         numero_identificacion: datos.admin.numero_identificacion.trim(),
@@ -821,8 +923,23 @@ export const api = {
       const gimnasios = db.read<Gimnasio>("gimnasios");
       const hoy = utils.isoDate();
 
+      // [multitenant-slug] Unico en toda la plataforma. Con Supabase lo
+      // garantiza el indice UNIQUE de gimnasios.slug; esta comprobacion queda
+      // solo para dar un mensaje claro antes de intentar el INSERT.
+      const usados = new Set(gimnasios.map((x) => x.slug));
+      let slug: string;
+      if (g.slug) {
+        const valido = validarSlug(g.slug);
+        if (!valido.ok) return { ok: false, mensaje: valido.mensaje };
+        if (usados.has(g.slug)) return { ok: false, mensaje: "Ese enlace ya lo usa otro gimnasio. Elige otro." };
+        slug = g.slug;
+      } else {
+        slug = slugUnico(slugify(g.nombre), usados);
+      }
+
       const gimnasio: Gimnasio = {
         gimnasio_id: idDeGimnasio(g.nombre, gimnasios),
+        slug,
         nombre: g.nombre,
         ciudad: g.ciudad,
         telefono: g.telefono,
@@ -883,6 +1000,25 @@ export const api = {
       return (
         db.read<Usuario>("usuarios").find(
           (u) => u.nombre.toLowerCase() === clave || u.correo.toLowerCase() === clave,
+        ) ?? null
+      );
+    },
+
+    /* [multitenant-slug] Login de /g/:slug/login: el gimnasio ya lo dice la
+       URL, asi que el usuario se busca solo dentro de el. Con esto el nombre
+       de usuario deja de tener que ser unico en toda la plataforma (basta con
+       que lo sea en su gimnasio). Lee la tabla completa y filtra a mano porque
+       todavia no hay sesion, y readTenant devolveria vacio.
+       En Supabase: signInWithPassword(correo) + comprobar gym_members. */
+    async buscarEnGimnasio(gimnasioId: string, texto: string): Promise<Usuario | null> {
+      await api._delay();
+      const clave = texto.trim().toLowerCase();
+      if (!clave || !gimnasioId) return null;
+      return (
+        db.read<Usuario>("usuarios").find(
+          (u) =>
+            u.gimnasio_id === gimnasioId &&
+            (u.nombre.toLowerCase() === clave || u.correo.toLowerCase() === clave),
         ) ?? null
       );
     },

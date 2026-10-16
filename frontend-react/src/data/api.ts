@@ -15,6 +15,8 @@ import type {
   Pago,
   Ingreso,
   Ejercicio,
+  EjercicioNuevo, // [P3]
+  EstadoEjercicio, // [P3]
   Usuario,
   ApiResp,
   PlanMembresia,
@@ -312,6 +314,57 @@ function finDe(serie: Pago[], diasExtra: number): string {
   return sumarDias(ultimo, diasExtra);
 }
 
+// ===== [P3] Ejercicios: generadores de la semilla =====
+// Para no escribir los 14 campos en cada fila. Orden de los argumentos:
+// id, gimnasio (null = base), nombre, grupo, nivel, equipo, series, ...medida, descripción.
+function ejReps(
+  id: number,
+  gimnasio_id: string | null,
+  nombre: string,
+  grupo_muscular: Ejercicio["grupo_muscular"],
+  nivel: Ejercicio["nivel"],
+  equipo: Ejercicio["equipo"],
+  series: number,
+  repsMin: number,
+  repsMax: number,
+  descripcion: string
+): Ejercicio {
+  return {
+    id_ejercicio: id, gimnasio_id, nombre, descripcion, grupo_muscular, nivel, equipo,
+    tipo_medicion: "REPETICIONES",
+    series_sugeridas: series,
+    repeticiones_min_sugeridas: repsMin,
+    repeticiones_max_sugeridas: repsMax,
+    segundos_sugeridos: null,
+    recurso_url: "",
+    estado: "ACTIVO",
+  };
+}
+
+function ejTiempo(
+  id: number,
+  gimnasio_id: string | null,
+  nombre: string,
+  grupo_muscular: Ejercicio["grupo_muscular"],
+  nivel: Ejercicio["nivel"],
+  equipo: Ejercicio["equipo"],
+  series: number,
+  segundos: number,
+  descripcion: string
+): Ejercicio {
+  return {
+    id_ejercicio: id, gimnasio_id, nombre, descripcion, grupo_muscular, nivel, equipo,
+    tipo_medicion: "TIEMPO",
+    series_sugeridas: series,
+    repeticiones_min_sugeridas: null,
+    repeticiones_max_sugeridas: null,
+    segundos_sugeridos: segundos,
+    recurso_url: "",
+    estado: "ACTIVO",
+  };
+}
+// ===== [/P3] Ejercicios: generadores de la semilla =====
+
 const SEED: Seed = {
   // Lo que la plataforma vende a los gimnasios (pagina de planes y registro).
   // max_clientes todavia no se hace cumplir: solo se muestra.
@@ -429,26 +482,97 @@ const SEED: Seed = {
     .concat([pagoTitanAna]),
 
   ingresos: ingresosPasados().concat(ingresosDeHoy()),
-  ejercicios: [],   // la colección de P4 arranca vacía
+  // ===== [P3] Ejercicios (catálogo mixto, DECISIONES.md D4) =====
+  // 1–40: catálogo BASE (gimnasio_id null). 41–45: propios de cada gimnasio, con un "personalizado"
+  // en cada uno. Todavía no se usan en rutinas: eso llega con el modelo de Rutinas v2.
+  ejercicios: [
+    // Pecho
+    ejReps(1,  null, 'Press de banca plano',            'Pecho', 'Intermedio',   'Barra',         4, 6, 10,  'Acostado en banco plano, baja la barra al pecho medio y empuja hasta extender los brazos.'),
+    ejReps(2,  null, 'Press inclinado con mancuernas',  'Pecho', 'Intermedio',   'Mancuerna',     3, 8, 12,  'Banco a 30–45°. Baja las mancuernas a los lados del pecho y empuja juntándolas arriba.'),
+    ejReps(3,  null, 'Flexiones de pecho',              'Pecho', 'Principiante', 'Peso corporal', 3, 8, 15,  'Manos a la altura de los hombros y cuerpo recto. Baja el pecho casi al suelo y sube.'),
+    ejReps(4,  null, 'Cruce de poleas',                 'Pecho', 'Intermedio',   'Polea',         3, 12, 15, 'Poleas altas, codos semiflexionados. Junta las manos al frente apretando el pecho.'),
+    ejReps(5,  null, 'Press de pecho en máquina',       'Pecho', 'Principiante', 'Máquina',       3, 10, 12, 'Espalda apoyada en el respaldo; empuja las agarraderas sin bloquear los codos.'),
+    // Espalda
+    ejReps(6,  null, 'Jalón al pecho en polea',         'Espalda', 'Principiante', 'Polea',         3, 10, 12, 'Agarre ancho. Lleva la barra a la parte alta del pecho juntando las escápulas.'),
+    ejReps(7,  null, 'Remo con barra',                  'Espalda', 'Intermedio',   'Barra',         4, 8, 10,  'Torso inclinado y espalda neutra. Lleva la barra al abdomen y baja controlado.'),
+    ejReps(8,  null, 'Remo con mancuerna a una mano',   'Espalda', 'Principiante', 'Mancuerna',     3, 10, 12, 'Rodilla y mano apoyadas en el banco. Sube la mancuerna hacia la cadera.'),
+    ejReps(9,  null, 'Dominadas',                       'Espalda', 'Avanzado',     'Peso corporal', 4, 5, 8,   'Desde brazos extendidos, sube hasta pasar la barbilla sobre la barra.'),
+    ejReps(10, null, 'Peso muerto convencional',        'Espalda', 'Avanzado',     'Barra',         4, 4, 6,   'Barra pegada a las piernas y espalda neutra. Empuja el suelo y extiende cadera y rodillas.'),
+    // Hombros
+    ejReps(11, null, 'Press militar con barra',         'Hombros', 'Intermedio',   'Barra',     4, 6, 8,   'De pie y con el abdomen firme, empuja la barra desde la clavícula hasta arriba de la cabeza.'),
+    ejReps(12, null, 'Elevaciones laterales',           'Hombros', 'Principiante', 'Mancuerna', 3, 12, 15, 'Sube las mancuernas a los lados hasta la altura de los hombros, codos apenas flexionados.'),
+    ejReps(13, null, 'Face pull en polea',              'Hombros', 'Intermedio',   'Polea',     3, 12, 15, 'Polea alta con cuerda. Tira hacia la cara separando las manos y abriendo los codos.'),
+    // Bíceps
+    ejReps(14, null, 'Curl con barra',                  'Bíceps', 'Principiante', 'Barra',     3, 8, 12,  'Codos pegados al cuerpo. Sube la barra sin balancear el torso.'),
+    ejReps(15, null, 'Curl martillo',                   'Bíceps', 'Principiante', 'Mancuerna', 3, 10, 12, 'Palmas mirándose entre sí. Sube las mancuernas alternando o a la vez.'),
+    // Tríceps
+    ejReps(16, null, 'Extensión de tríceps en polea',   'Tríceps', 'Principiante', 'Polea',         3, 12, 15, 'Codos fijos a los lados. Empuja la barra o cuerda hacia abajo hasta extender los brazos.'),
+    ejReps(17, null, 'Press francés con barra',         'Tríceps', 'Intermedio',   'Barra',         3, 8, 12,  'Acostado, baja la barra hacia la frente doblando solo los codos y vuelve a extender.'),
+    ejReps(18, null, 'Fondos en paralelas',             'Tríceps', 'Avanzado',     'Peso corporal', 3, 6, 10,  'Torso erguido. Baja hasta que los codos formen 90° y empuja hacia arriba.'),
+    // Piernas
+    ejReps(19, null, 'Sentadilla con barra',            'Piernas', 'Intermedio',   'Barra',      4, 6, 10,  'Barra sobre los trapecios. Baja con la espalda neutra hasta que los muslos queden paralelos al suelo.'),
+    ejReps(20, null, 'Prensa de piernas',               'Piernas', 'Principiante', 'Máquina',    3, 10, 12, 'Pies al ancho de los hombros. Baja la plataforma sin despegar la zona lumbar del respaldo.'),
+    ejReps(21, null, 'Zancadas con mancuernas',         'Piernas', 'Intermedio',   'Mancuerna',  3, 10, 12, 'Paso largo al frente y baja hasta que la rodilla de atrás casi toque el suelo. Repeticiones por pierna.'),
+    ejReps(22, null, 'Curl femoral acostado',           'Piernas', 'Principiante', 'Máquina',    3, 10, 12, 'Boca abajo, lleva los talones hacia los glúteos y baja despacio.'),
+    ejReps(23, null, 'Sentadilla goblet',               'Piernas', 'Principiante', 'Kettlebell', 3, 10, 12, 'Kettlebell pegada al pecho. Baja manteniendo el torso erguido y los codos entre las rodillas.'),
+    ejReps(24, null, 'Elevación de talones de pie',     'Piernas', 'Principiante', 'Máquina',    4, 15, 20, 'Sube en puntas de pie lo más alto posible y baja estirando la pantorrilla.'),
+    // Glúteos
+    ejReps(25, null, 'Hip thrust con barra',            'Glúteos', 'Intermedio',   'Barra',          4, 8, 12,  'Espalda alta apoyada en el banco. Eleva la cadera apretando los glúteos arriba.'),
+    ejReps(26, null, 'Peso muerto rumano con mancuernas','Glúteos', 'Intermedio',  'Mancuerna',      3, 10, 12, 'Rodillas apenas flexionadas. Lleva la cadera hacia atrás bajando las mancuernas pegadas a las piernas.'),
+    ejReps(27, null, 'Patada de glúteo en polea',       'Glúteos', 'Principiante', 'Polea',          3, 12, 15, 'Tobillera en la polea baja. Lleva la pierna hacia atrás sin arquear la espalda. Repeticiones por pierna.'),
+    ejReps(28, null, 'Puente de glúteo con banda',      'Glúteos', 'Principiante', 'Banda elástica', 3, 15, 20, 'Banda sobre las rodillas. Acostado, eleva la cadera empujando las rodillas hacia afuera.'),
+    // Abdomen
+    ejTiempo(29, null, 'Plancha frontal',               'Abdomen', 'Principiante', 'Peso corporal', 3, 30, 'Apoyado en antebrazos y puntas de pie, cuerpo recto sin dejar caer la cadera.'),
+    ejTiempo(30, null, 'Plancha lateral',               'Abdomen', 'Intermedio',   'Peso corporal', 3, 30, 'Apoyado en un antebrazo, cuerpo alineado de cabeza a pies. Segundos por lado.'),
+    ejReps(31, null, 'Crunch abdominal',                'Abdomen', 'Principiante', 'Peso corporal', 3, 15, 20, 'Acostado con rodillas flexionadas, despega los hombros del suelo contrayendo el abdomen.'),
+    ejReps(32, null, 'Elevación de piernas colgado',    'Abdomen', 'Avanzado',     'Peso corporal', 3, 8, 12,  'Colgado de la barra, sube las piernas sin balancearte y baja controlado.'),
+    ejReps(33, null, 'Press Pallof con banda',          'Abdomen', 'Intermedio',   'Banda elástica', 3, 10, 12, 'De lado al anclaje, empuja la banda al frente sin dejar que el torso gire. Repeticiones por lado.'),
+    // Cardio
+    ejTiempo(34, null, 'Trote en caminadora',           'Cardio', 'Principiante', 'Máquina', 1, 1200, 'Ritmo cómodo en el que todavía puedas hablar (20 minutos).'),
+    ejTiempo(35, null, 'Bicicleta estática',            'Cardio', 'Principiante', 'Máquina', 1, 900,  'Resistencia moderada y cadencia constante (15 minutos).'),
+    ejTiempo(36, null, 'Remo en máquina',               'Cardio', 'Intermedio',   'Máquina', 1, 600,  'Empuja con las piernas, luego inclina el torso y termina tirando con los brazos (10 minutos).'),
+    // Cuerpo completo
+    ejReps(37, null, 'Swing con kettlebell',            'Cuerpo completo', 'Intermedio', 'Kettlebell',    4, 15, 20, 'Bisagra de cadera: impulsa la kettlebell hasta la altura del pecho con la fuerza de la cadera.'),
+    ejReps(38, null, 'Burpees',                         'Cuerpo completo', 'Intermedio', 'Peso corporal', 4, 10, 15, 'Baja a cuclillas, lleva los pies atrás a plancha, regresa y salta con los brazos arriba.'),
+    ejReps(39, null, 'Thruster con mancuernas',         'Cuerpo completo', 'Avanzado',   'Mancuerna',     4, 8, 10,  'Sentadilla con las mancuernas en los hombros y, al subir, empújalas sobre la cabeza.'),
+    ejReps(40, null, 'Levantamiento turco',             'Cuerpo completo', 'Avanzado',   'Kettlebell',    3, 3, 5,   'De acostado a de pie con la kettlebell siempre arriba y el brazo extendido. Repeticiones por lado.'),
+
+    // Propios de GymBrot Centro
+    ejTiempo(41, 'gym-centro', 'Circuito funcional del Centro',    'Cuerpo completo', 'Intermedio', 'Peso corporal', 3, 45, 'Circuito de la clase de los sábados: sentadilla, flexión y salto sin pausa.'),
+    ejReps(42, 'gym-centro', 'Sentadilla con barra (personalizado)', 'Piernas',       'Avanzado',   'Barra',         5, 5, 5,  'Versión de fuerza del gimnasio: 5×5 con descanso de 3 minutos.'),
+    ejReps(43, 'gym-centro', 'Remo en máquina Hammer',             'Espalda',         'Principiante', 'Máquina',     3, 10, 12, 'Máquina de remo con apoyo de pecho de la sala 2.'),
+    // Propios de Titan Fitness
+    ejReps(44, 'gym-titan', 'Press inclinado con mancuernas (personalizado)', 'Pecho', 'Intermedio', 'Mancuerna', 4, 6, 8, 'Variante de Titan: banco a 30° y bajada lenta de 3 segundos.'),
+    ejTiempo(45, 'gym-titan', 'Circuito Titan con kettlebell',   'Cuerpo completo', 'Avanzado', 'Kettlebell', 5, 40, 'Swing, goblet y remo con kettlebell; 40 s por estación.'),
+  ],
+  // ===== [/P3] Ejercicios =====
 
   // ===== [P3] Instructores =====
+  // Centro tiene los 3 de siempre (las rutinas y citas de Centro los usan). Titan tiene 2 propios;
+  // Natalia trabaja en los dos: misma cédula, dos registros (D3), para que una fuga se note.
   instructores: [
-    { numero_identificacion:'2000000001', tipo_identificacion:'CC', nombre:'Camilo',  apellidos:'Herrera Díaz', telefono:'3101234567', correo:'camilo.herrera@gymbrot.com', especialidad:'Entrenador personal', disponibilidad:'Lun-Vie 6:00-14:00',  fecha_contratacion:'2025-02-03', estado:'ACTIVO' },
-    { numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Natalia', apellidos:'Vargas Rojas', telefono:'3112345678', correo:'natalia.vargas@gymbrot.com', especialidad:'Yoga/Pilates',        disponibilidad:'Lun-Mié-Vie 16:00-21:00', fecha_contratacion:'2025-08-18', estado:'ACTIVO' },
-    { numero_identificacion:'2000000003', tipo_identificacion:'CE', nombre:'Mateo',   apellidos:'Silva Castro', telefono:'3123456789', correo:'mateo.silva@gymbrot.com',    especialidad:'Nutrición',           disponibilidad:'Mar-Jue 8:00-12:00',  fecha_contratacion:'2026-01-12', estado:'INACTIVO' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'2000000001', tipo_identificacion:'CC', nombre:'Camilo',  apellidos:'Herrera Díaz', telefono:'3101234567', correo:'camilo.herrera@gymbrot.com', especialidad:'Entrenador personal', disponibilidad:'Lun-Vie 6:00-14:00',  fecha_contratacion:'2025-02-03', estado:'ACTIVO' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Natalia', apellidos:'Vargas Rojas', telefono:'3112345678', correo:'natalia.vargas@gymbrot.com', especialidad:'Yoga/Pilates',        disponibilidad:'Lun-Mié-Vie 16:00-21:00', fecha_contratacion:'2025-08-18', estado:'ACTIVO' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'2000000003', tipo_identificacion:'CE', nombre:'Mateo',   apellidos:'Silva Castro', telefono:'3123456789', correo:'mateo.silva@gymbrot.com',    especialidad:'Nutrición',           disponibilidad:'Mar-Jue 8:00-12:00',  fecha_contratacion:'2026-01-12', estado:'INACTIVO' },
+    { gimnasio_id:'gym-titan',  numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Natalia', apellidos:'Vargas Rojas', telefono:'3112345678', correo:'natalia.vargas@titanfitness.com', especialidad:'Yoga/Pilates', disponibilidad:'Sáb 8:00-12:00', fecha_contratacion:'2026-09-01', estado:'ACTIVO' },
+    { gimnasio_id:'gym-titan',  numero_identificacion:'2000000101', tipo_identificacion:'CC', nombre:'Jorge',   apellidos:'Mendoza Ochoa', telefono:'3134567890', correo:'jorge.mendoza@titanfitness.com', especialidad:'Musculación', disponibilidad:'Lun-Sáb 5:00-11:00', fecha_contratacion:'2026-08-20', estado:'ACTIVO' },
   ],
   // ===== [/P3] Instructores =====
 
   // ===== [P3] Rutinas =====
   // Fechas relativas (dia(n) = hace n días; dia(-n) = dentro de n días) para que siempre
   // haya una rutina vigente, una por vencer, una vencida y una sin fecha fin.
-  // Instructores y clientes existen en este SEED. Sin ejercicios a propósito:
-  // api.ejercicios (P4) todavía no existe y no queremos referencias falsas.
+  // Cada rutina usa clientes e instructores de SU gimnasio. Titan: Ana María tiene la misma cédula
+  // que la Ana de Centro y ambas tienen rutina vigente (la regla es por gimnasio); Mariana queda
+  // libre para crearle una; la Natalia de Titan no tiene rutinas (se puede eliminar).
+  // Sin ejercicios a propósito: el catálogo todavía no tiene ejercicios y no queremos referencias falsas.
   rutinas: [
-    { id_rutina:1, id_instructor:'2000000001', id_cliente:'1000000001', nombre:'Fuerza tren superior', descripcion:'Fuerza para pecho, espalda y brazos.',     fecha_creacion:dia(35), fecha_fin:dia(-55), dias_semana:['LUNES','MIERCOLES','VIERNES'], objetivo:'Ganancia muscular' },
-    { id_rutina:2, id_instructor:'2000000001', id_cliente:'1000000002', nombre:'Quema de grasa',       descripcion:'Circuitos de cardio y funcional.',         fecha_creacion:dia(50), fecha_fin:dia(-10), dias_semana:['MARTES','JUEVES','SABADO'],    objetivo:'Pérdida de peso' },
-    { id_rutina:3, id_instructor:'2000000002', id_cliente:'1000000005', nombre:'Movilidad y espalda',  descripcion:'Estiramientos y fortalecimiento de core.', fecha_creacion:dia(15), fecha_fin:null,     dias_semana:['LUNES','JUEVES'],              objetivo:'Rehabilitación' },
-    { id_rutina:4, id_instructor:'2000000002', id_cliente:'1000000007', nombre:'Resistencia básica',   descripcion:'Base aeróbica para principiantes.',        fecha_creacion:dia(90), fecha_fin:dia(5),  dias_semana:['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES'], objetivo:'Resistencia' },
+    { gimnasio_id:'gym-centro', id_rutina:1, id_instructor:'2000000001', id_cliente:'1000000001', nombre:'Fuerza tren superior', descripcion:'Fuerza para pecho, espalda y brazos.',     fecha_creacion:dia(35), fecha_fin:dia(-55), dias_semana:['LUNES','MIERCOLES','VIERNES'], objetivo:'Ganancia muscular' },
+    { gimnasio_id:'gym-centro', id_rutina:2, id_instructor:'2000000001', id_cliente:'1000000002', nombre:'Quema de grasa',       descripcion:'Circuitos de cardio y funcional.',         fecha_creacion:dia(50), fecha_fin:dia(-10), dias_semana:['MARTES','JUEVES','SABADO'],    objetivo:'Pérdida de peso' },
+    { gimnasio_id:'gym-centro', id_rutina:3, id_instructor:'2000000002', id_cliente:'1000000005', nombre:'Movilidad y espalda',  descripcion:'Estiramientos y fortalecimiento de core.', fecha_creacion:dia(15), fecha_fin:null,     dias_semana:['LUNES','JUEVES'],              objetivo:'Rehabilitación' },
+    { gimnasio_id:'gym-centro', id_rutina:4, id_instructor:'2000000002', id_cliente:'1000000007', nombre:'Resistencia básica',   descripcion:'Base aeróbica para principiantes.',        fecha_creacion:dia(90), fecha_fin:dia(5),  dias_semana:['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES'], objetivo:'Resistencia' },
+    { gimnasio_id:'gym-titan',  id_rutina:5, id_instructor:'2000000101', id_cliente:'1000000001', nombre:'Fuerza general',       descripcion:'Básicos con barra y mancuernas.',          fecha_creacion:dia(20), fecha_fin:dia(-40), dias_semana:['LUNES','MIERCOLES','VIERNES'], objetivo:'Ganancia muscular' },
+    { gimnasio_id:'gym-titan',  id_rutina:6, id_instructor:'2000000101', id_cliente:'1000000101', nombre:'Inicio en el gimnasio', descripcion:'Adaptación para principiantes.',           fecha_creacion:dia(70), fecha_fin:dia(10),  dias_semana:['MARTES','JUEVES'],             objetivo:'Tonificación' },
   ],
   rutina_ejercicios: [],
   // ===== [/P3] Rutinas =====
@@ -495,7 +619,12 @@ const SEED: Seed = {
 // un pago propios de la Ana de Titan.
 // v11 agrega planesSoftware y pagosSoftware (pagina de planes y registro de
 // gimnasios) y los datos de suscripcion de cada gimnasio.
-const SEED_VERSION = "11";
+// v12 lleva gimnasio_id a instructores, rutinas y rutina_ejercicios (con
+// instructores y rutinas propios de Titan) y estrena el catalogo mixto de
+// ejercicios: 40 base (gimnasio_id null) y 5 propios repartidos entre los dos
+// gimnasios. Sin el bump, esas colecciones seguirian sin gimnasio_id y
+// readTenant las dejaria vacias.
+const SEED_VERSION = "12";
 const CLAVE_VERSION = "gymbrot_seed_version";
 const CLAVE_LECTOR = "gymbrot_lector_conectado";
 
@@ -794,7 +923,7 @@ const DIAS: DiaSemana[] = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", 
 
 // Mensaje de error si el instructor o el cliente no existen; null si ambos existen
 function validarReferencias(idInstructor: string, idCliente: string): string | null {
-  if (!db.read<Instructor>("instructores").some((i) => i.numero_identificacion === idInstructor))
+  if (!db.readTenant<Instructor>("instructores").some((i) => i.numero_identificacion === idInstructor))
     return "El instructor no existe";
   if (!db.readTenant<Cliente>("clientes").some((c) => c.numero_identificacion === idCliente))
     return "El cliente no existe";
@@ -811,14 +940,69 @@ function esVigente(r: Pick<Rutina, "fecha_fin">): boolean {
 // y el cliente ya tiene otra vigente (distinta de idPropio), devuelve el mensaje de error.
 function validarUnaVigente(idCliente: string, fechaFin: string | null, idPropio: number | null): string | null {
   if (!esVigente({ fecha_fin: fechaFin })) return null;
+  // readTenant: la Ana de otro gimnasio (misma cédula) no cuenta
   const otra = db
-    .read<Rutina>("rutinas")
+    .readTenant<Rutina>("rutinas")
     .find((r) => r.id_cliente === idCliente && r.id_rutina !== idPropio && esVigente(r));
   return otra
     ? "El cliente ya tiene la rutina vigente «" + otra.nombre + "». Solo puede tener una vigente a la vez."
     : null;
 }
 // ===== [/P3] Rutinas: auxiliares =====
+
+// ===== [P3] Ejercicios: auxiliares =====
+/* Catálogo MIXTO (DECISIONES.md, D4): en la misma tabla viven los ejercicios BASE (gimnasio_id null,
+   de todos y de solo lectura) y los PROPIOS de cada gimnasio.
+
+   - Los propios se leen y escriben con readTenant/writeTenant. Para eso se usa el tipo
+     EjercicioPropio (gimnasio_id: string), que es lo que piden esos helpers.
+   - readTenant compara gimnasio_id === gimnasio activo, así que NUNCA devuelve un base.
+   - writeTenant conserva todas las filas con otro gimnasio_id, y null es "otro": las filas base
+     quedan intactas siempre que solo le pasemos filas que salieron de readTenant. */
+type EjercicioPropio = Ejercicio & { gimnasio_id: string };
+
+// Lo que ve un gimnasio: base + propios. Sin sesión, nada (igual que readTenant).
+function leerCatalogo(): Ejercicio[] {
+  const gym = gimnasioActivo();
+  if (!gym) return [];
+  return db.read<Ejercicio>("ejercicios").filter((e) => e.gimnasio_id === null || e.gimnasio_id === gym);
+}
+
+// Para comparar nombres sin importar mayúsculas, tildes ni espacios de más
+function normalizarNombre(texto: string): string {
+  return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+// Mensaje de error si los datos no son válidos; null si están bien
+function validarEjercicio(e: EjercicioNuevo): string | null {
+  if (!e.nombre.trim()) return "El nombre es obligatorio";
+  const numeros = [e.series_sugeridas, e.repeticiones_min_sugeridas, e.repeticiones_max_sugeridas, e.segundos_sugeridos];
+  if (numeros.some((n) => n !== null && (!Number.isInteger(n) || n <= 0)))
+    return "Los valores sugeridos deben ser números enteros mayores que 0";
+  const min = e.repeticiones_min_sugeridas;
+  const max = e.repeticiones_max_sugeridas;
+  if (min !== null && max !== null && min > max)
+    return "Las repeticiones mínimas no pueden ser mayores que las máximas";
+  return null;
+}
+
+// Un ejercicio de tiempo no lleva repeticiones y uno de repeticiones no lleva segundos
+function limpiarSegunMedicion(e: EjercicioNuevo): EjercicioNuevo {
+  return e.tipo_medicion === "TIEMPO"
+    ? { ...e, repeticiones_min_sugeridas: null, repeticiones_max_sugeridas: null }
+    : { ...e, segundos_sugeridos: null };
+}
+
+// Nombre repetido dentro de lo que ve el gimnasio (base + propios), sin contar el ejercicio idPropio
+function nombreRepetido(nombre: string, idPropio: number | null): Ejercicio | undefined {
+  return leerCatalogo().find(
+    (e) => e.id_ejercicio !== idPropio && normalizarNombre(e.nombre) === normalizarNombre(nombre)
+  );
+}
+
+// Mensaje común cuando se intenta cambiar un ejercicio base
+const MENSAJE_BASE = "Es un ejercicio del catálogo base: no se puede cambiar. Personalízalo para tener tu propia copia.";
+// ===== [/P3] Ejercicios: auxiliares =====
 
 export const api = {
   _delay(ms = 200) {
@@ -1584,146 +1768,195 @@ export const api = {
     },
   },
 
-  // ===== [P4] Ejercicios =====
+  // ===== [P3] Ejercicios (antes P4) =====
   ejercicios: {
+    // Base + propios del gimnasio activo, ordenados por nombre
     async list(): Promise<Ejercicio[]> {
       await api._delay();
-      return db.read<Ejercicio>("ejercicios");
+      return leerCatalogo().sort((a, b) => a.nombre.localeCompare(b.nombre));
     },
 
-    async create(
-      data: Omit<Ejercicio, "idEjercicio">
-    ): Promise<ApiResp<Ejercicio>> {
+    async get(id: number): Promise<Ejercicio | null> {
       await api._delay();
-
-      const arr = db.read<Ejercicio>("ejercicios");
-
-      const nuevoId =
-        arr.length > 0
-          ? Math.max(...arr.map((e) => e.idEjercicio)) + 1
-          : 1;
-
-      const nuevo: Ejercicio = {
-        ...data,
-        idEjercicio: nuevoId,
-      };
-
-      arr.push(nuevo);
-      db.write("ejercicios", arr);
-
-      return {
-        ok: true,
-        mensaje: "Ejercicio registrado",
-        data: nuevo,
-      };
+      return leerCatalogo().find((e) => e.id_ejercicio === id) ?? null;
     },
-    async update(
-  id: number,
-  data: Partial<Omit<Ejercicio, "idEjercicio">>
-): Promise<ApiResp<Ejercicio>> {
-  await api._delay();
 
-  const arr = db.read<Ejercicio>("ejercicios");
-  const ejercicio = arr.find((e) => e.idEjercicio === id);
+    // Desde un gimnasio solo se crean ejercicios PROPIOS
+    async create(data: EjercicioNuevo): Promise<ApiResp<Ejercicio>> {
+      await api._delay();
+      const datos = limpiarSegunMedicion({ ...data, nombre: data.nombre.trim() });
+      const error = validarEjercicio(datos);
+      if (error) return { ok: false, mensaje: error };
+      const repetido = nombreRepetido(datos.nombre, null);
+      if (repetido)
+        return {
+          ok: false,
+          mensaje:
+            repetido.gimnasio_id === null
+              ? "Ya existe un ejercicio base con ese nombre. Personalízalo si quieres tu propia versión."
+              : "Ya existe un ejercicio con ese nombre en este gimnasio",
+        };
+      const arr = db.readTenant<EjercicioPropio>("ejercicios");
+      const nuevo: EjercicioPropio = {
+        ...datos,
+        id_ejercicio: db.siguienteId<Ejercicio>("ejercicios", (e) => e.id_ejercicio),
+        gimnasio_id: gimnasioParaEscribir(),
+        estado: "ACTIVO",
+      };
+      arr.push(nuevo);
+      db.writeTenant("ejercicios", arr);
+      return { ok: true, mensaje: "Ejercicio registrado", data: nuevo };
+    },
 
-  if (!ejercicio) {
-    return { ok: false, mensaje: "Ejercicio no encontrado" };
-  }
+    // Solo propios. Sobre un base responde que es del catálogo base.
+    async update(id: number, data: Partial<EjercicioNuevo>): Promise<ApiResp<Ejercicio>> {
+      await api._delay();
+      const arr = db.readTenant<EjercicioPropio>("ejercicios");
+      const ej = arr.find((e) => e.id_ejercicio === id);
+      if (!ej) {
+        const esBase = leerCatalogo().some((e) => e.id_ejercicio === id && e.gimnasio_id === null);
+        return { ok: false, mensaje: esBase ? MENSAJE_BASE : "Ejercicio no encontrado" };
+      }
+      // Cómo quedaría con los cambios, para validar con los valores finales
+      const { id_ejercicio, gimnasio_id, estado, ...actual } = ej;
+      const final = limpiarSegunMedicion({ ...actual, ...data, nombre: (data.nombre ?? actual.nombre).trim() });
+      const error = validarEjercicio(final);
+      if (error) return { ok: false, mensaje: error };
+      if (nombreRepetido(final.nombre, id)) return { ok: false, mensaje: "Ya existe otro ejercicio con ese nombre" };
+      Object.assign(ej, final, { id_ejercicio, gimnasio_id, estado });
+      db.writeTenant("ejercicios", arr);
+      return { ok: true, mensaje: "Ejercicio actualizado", data: ej };
+    },
 
-  Object.assign(ejercicio, data);
+    async setEstado(id: number, estado: EstadoEjercicio): Promise<ApiResp<Ejercicio>> {
+      await api._delay();
+      const arr = db.readTenant<EjercicioPropio>("ejercicios");
+      const ej = arr.find((e) => e.id_ejercicio === id);
+      if (!ej) {
+        const esBase = leerCatalogo().some((e) => e.id_ejercicio === id && e.gimnasio_id === null);
+        return { ok: false, mensaje: esBase ? MENSAJE_BASE : "Ejercicio no encontrado" };
+      }
+      ej.estado = estado;
+      db.writeTenant("ejercicios", arr);
+      return { ok: true, mensaje: "Estado actualizado", data: ej };
+    },
 
-  db.write("ejercicios", arr);
+    // Solo propios, y con RESTRICT: no se borra si lo usa alguna rutina de este gimnasio
+    async remove(id: number): Promise<ApiResp<Ejercicio>> {
+      await api._delay();
+      const arr = db.readTenant<EjercicioPropio>("ejercicios");
+      const ej = arr.find((e) => e.id_ejercicio === id);
+      if (!ej) {
+        const esBase = leerCatalogo().some((e) => e.id_ejercicio === id && e.gimnasio_id === null);
+        return { ok: false, mensaje: esBase ? MENSAJE_BASE : "Ejercicio no encontrado" };
+      }
+      const usos = db.readTenant<RutinaEjercicio>("rutina_ejercicios").filter((e) => e.id_ejercicio === id);
+      const rutinas = new Set(usos.map((e) => e.id_rutina)).size; // una rutina puede usarlo varias veces
+      if (rutinas > 0)
+        return {
+          ok: false,
+          mensaje: "No se puede eliminar: lo usan " + rutinas + " rutina(s). Desactívalo en su lugar.",
+        };
+      db.writeTenant("ejercicios", arr.filter((e) => e.id_ejercicio !== id));
+      return { ok: true, mensaje: "Ejercicio eliminado", data: ej };
+    },
 
-  return {
-    ok: true,
-    mensaje: "Ejercicio actualizado",
-    data: ejercicio,
-  };
-},
-
-async remove(id: number): Promise<ApiResp<Ejercicio>> {
-  await api._delay();
-
-  const arr = db.read<Ejercicio>("ejercicios");
-  const ejercicio = arr.find((e) => e.idEjercicio === id);
-
-  if (!ejercicio) {
-    return { ok: false, mensaje: "Ejercicio no encontrado" };
-  }
-
-  db.write(
-    "ejercicios",
-    arr.filter((e) => e.idEjercicio !== id)
-  );
-
-  return {
-    ok: true,
-    mensaje: "Ejercicio eliminado",
-    data: ejercicio,
-  };
-},
-    
-
+    // Copia un ejercicio BASE como propio del gimnasio, para poder editarlo.
+    // El nombre lleva "(personalizado)" porque un propio no puede llamarse igual que un base.
+    async personalizar(id: number): Promise<ApiResp<Ejercicio>> {
+      await api._delay();
+      const original = leerCatalogo().find((e) => e.id_ejercicio === id);
+      if (!original) return { ok: false, mensaje: "Ejercicio no encontrado" };
+      if (original.gimnasio_id !== null)
+        return { ok: false, mensaje: "Este ejercicio ya es propio del gimnasio: puedes editarlo directamente" };
+      const nombre = original.nombre + " (personalizado)";
+      if (nombreRepetido(nombre, null))
+        return { ok: false, mensaje: "Ya personalizaste este ejercicio: busca «" + nombre + "»" };
+      const arr = db.readTenant<EjercicioPropio>("ejercicios");
+      const copia: EjercicioPropio = {
+        ...original,
+        nombre,
+        id_ejercicio: db.siguienteId<Ejercicio>("ejercicios", (e) => e.id_ejercicio),
+        gimnasio_id: gimnasioParaEscribir(),
+        estado: "ACTIVO",
+      };
+      arr.push(copia);
+      db.writeTenant("ejercicios", arr);
+      return { ok: true, mensaje: "Se creó «" + nombre + "» como ejercicio propio", data: copia };
+    },
   },
-  // ===== [/P4] Ejercicios =====
+  // ===== [/P3] Ejercicios =====
 
   // ===== [P3] Instructores =====
   instructores: {
+    // Todo se lee con readTenant (solo el gimnasio activo) y se guarda con writeTenant,
+    // así el .find() por cédula nunca encuentra al instructor de otro gimnasio (D3).
     async list(): Promise<Instructor[]> {
       await api._delay();
-      return db.read<Instructor>("instructores");
+      return db.readTenant<Instructor>("instructores");
     },
 
     async get(id: string): Promise<Instructor | null> {
       await api._delay();
-      return db.read<Instructor>("instructores").find((i) => i.numero_identificacion === id) ?? null;
+      return db.readTenant<Instructor>("instructores").find((i) => i.numero_identificacion === id) ?? null;
     },
 
+    // La cédula es única dentro de cada gimnasio (D3): la misma persona puede
+    // trabajar en otro gimnasio sin que eso cuente como duplicado.
     async create(data: InstructorNuevo): Promise<ApiResp<Instructor>> {
       await api._delay();
-      const arr = db.read<Instructor>("instructores");
+      const arr = db.readTenant<Instructor>("instructores");
       if (arr.some((i) => i.numero_identificacion === data.numero_identificacion))
-        return { ok: false, mensaje: "Ya existe un instructor con esa identificación" };
-      const nuevo: Instructor = { ...data, estado: "ACTIVO", fecha_contratacion: utils.isoDate() };
+        return { ok: false, mensaje: "Ya existe un instructor con esa identificación en este gimnasio" };
+      const nuevo: Instructor = {
+        ...data,
+        gimnasio_id: gimnasioParaEscribir(),
+        estado: "ACTIVO",
+        fecha_contratacion: utils.isoDate(),
+      };
       arr.push(nuevo);
-      db.write("instructores", arr);
+      db.writeTenant("instructores", arr);
       return { ok: true, mensaje: "Instructor registrado", data: nuevo };
     },
 
-    // La identificación es la llave: no se deja cambiar al editar
-    async update(id: string, data: Partial<Omit<Instructor, "numero_identificacion">>): Promise<ApiResp<Instructor>> {
+    // La identificación es la llave: no se deja cambiar al editar (ni el gimnasio)
+    async update(
+      id: string,
+      data: Partial<Omit<Instructor, "numero_identificacion" | "gimnasio_id">>
+    ): Promise<ApiResp<Instructor>> {
       await api._delay();
-      const arr = db.read<Instructor>("instructores");
+      const arr = db.readTenant<Instructor>("instructores");
       const ins = arr.find((i) => i.numero_identificacion === id);
       if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
       Object.assign(ins, data, { numero_identificacion: id });
-      db.write("instructores", arr);
+      db.writeTenant("instructores", arr);
       return { ok: true, mensaje: "Instructor actualizado", data: ins };
     },
 
     async remove(id: string): Promise<ApiResp<Instructor>> {
       await api._delay();
-      const arr = db.read<Instructor>("instructores");
+      const arr = db.readTenant<Instructor>("instructores");
       const ins = arr.find((i) => i.numero_identificacion === id);
       if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
-      // Como un FK con RESTRICT: no se borra si tiene rutinas que lo referencian
-      const rutinas = db.read<Rutina>("rutinas").filter((r) => r.id_instructor === id).length;
+      // Como un FK con RESTRICT: no se borra si tiene rutinas que lo referencian.
+      // Solo cuentan las rutinas de este gimnasio (la misma cédula puede tener rutinas en otro).
+      const rutinas = db.readTenant<Rutina>("rutinas").filter((r) => r.id_instructor === id).length;
       if (rutinas > 0)
         return {
           ok: false,
           mensaje: "No se puede eliminar: tiene " + rutinas + " rutina(s) asignada(s). Desactívalo en su lugar.",
         };
-      db.write("instructores", arr.filter((i) => i.numero_identificacion !== id));
+      db.writeTenant("instructores", arr.filter((i) => i.numero_identificacion !== id));
       return { ok: true, mensaje: "Instructor eliminado", data: ins };
     },
 
     async setEstado(id: string, estado: EstadoInstructor): Promise<ApiResp<Instructor>> {
       await api._delay();
-      const arr = db.read<Instructor>("instructores");
+      const arr = db.readTenant<Instructor>("instructores");
       const ins = arr.find((i) => i.numero_identificacion === id);
       if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
       ins.estado = estado;
-      db.write("instructores", arr);
+      db.writeTenant("instructores", arr);
       return { ok: true, mensaje: "Estado actualizado", data: ins };
     },
   },
@@ -1731,35 +1964,41 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
 
   // ===== [P3] Rutinas =====
   rutinas: {
+    // Igual que instructores: se lee con readTenant y se guarda con writeTenant.
     async list(): Promise<Rutina[]> {
       await api._delay();
-      return db.read<Rutina>("rutinas");
+      return db.readTenant<Rutina>("rutinas");
     },
 
     async get(id: number): Promise<Rutina | null> {
       await api._delay();
-      return db.read<Rutina>("rutinas").find((r) => r.id_rutina === id) ?? null;
+      return db.readTenant<Rutina>("rutinas").find((r) => r.id_rutina === id) ?? null;
     },
 
-    // id_rutina = el mayor id + 1; fecha_creacion = hoy
+    // id_rutina = siguiente id de la tabla completa (global, ningún gimnasio lo repite);
+    // gimnasio_id = el de la sesión; fecha_creacion = hoy
     async create(data: RutinaNueva): Promise<ApiResp<Rutina>> {
       await api._delay();
       const error =
         validarReferencias(data.id_instructor, data.id_cliente) ??
         validarUnaVigente(data.id_cliente, data.fecha_fin, null);
       if (error) return { ok: false, mensaje: error };
-      const arr = db.read<Rutina>("rutinas");
-      const id = arr.reduce((max, r) => Math.max(max, r.id_rutina), 0) + 1;
-      const nueva: Rutina = { ...data, id_rutina: id, fecha_creacion: utils.isoDate() };
+      const arr = db.readTenant<Rutina>("rutinas");
+      const nueva: Rutina = {
+        ...data,
+        gimnasio_id: gimnasioParaEscribir(),
+        id_rutina: db.siguienteId<Rutina>("rutinas", (r) => r.id_rutina),
+        fecha_creacion: utils.isoDate(),
+      };
       arr.push(nueva);
-      db.write("rutinas", arr);
+      db.writeTenant("rutinas", arr);
       return { ok: true, mensaje: "Rutina creada", data: nueva };
     },
 
-    // id_rutina y fecha_creacion no se dejan cambiar al editar
+    // id_rutina y fecha_creacion no se dejan cambiar al editar (gimnasio_id lo vuelve a sellar writeTenant)
     async update(id: number, data: Partial<RutinaNueva>): Promise<ApiResp<Rutina>> {
       await api._delay();
-      const arr = db.read<Rutina>("rutinas");
+      const arr = db.readTenant<Rutina>("rutinas");
       const r = arr.find((x) => x.id_rutina === id);
       if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
       // Cómo quedaría la rutina con los cambios, para validar con los valores finales
@@ -1769,7 +2008,7 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
         validarUnaVigente(final.id_cliente, final.fecha_fin, id);
       if (error) return { ok: false, mensaje: error };
       Object.assign(r, data, { id_rutina: id, fecha_creacion: r.fecha_creacion });
-      db.write("rutinas", arr);
+      db.writeTenant("rutinas", arr);
       return { ok: true, mensaje: "Rutina actualizada", data: r };
     },
 
@@ -1777,7 +2016,7 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
     // Una rutina creada hoy no se puede finalizar: ayer quedaría antes de su fecha_creacion.
     async finalizar(id: number): Promise<ApiResp<Rutina>> {
       await api._delay();
-      const arr = db.read<Rutina>("rutinas");
+      const arr = db.readTenant<Rutina>("rutinas");
       const r = arr.find((x) => x.id_rutina === id);
       if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
       if (!esVigente(r)) return { ok: false, mensaje: "La rutina ya está en el historial" };
@@ -1788,19 +2027,19 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
           mensaje: "Esta rutina se creó hoy y no se puede finalizar. Si quieres cambiarla, edítala.",
         };
       r.fecha_fin = ayer;
-      db.write("rutinas", arr);
+      db.writeTenant("rutinas", arr);
       return { ok: true, mensaje: "Rutina «" + r.nombre + "» finalizada", data: r };
     },
 
-    // Borra la rutina y también sus ejercicios (como un ON DELETE CASCADE)
+    // Borra la rutina y también sus ejercicios (como un ON DELETE CASCADE), todo dentro del gimnasio
     async remove(id: number): Promise<ApiResp<Rutina>> {
       await api._delay();
-      const arr = db.read<Rutina>("rutinas");
+      const arr = db.readTenant<Rutina>("rutinas");
       const r = arr.find((x) => x.id_rutina === id);
       if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
-      db.write("rutinas", arr.filter((x) => x.id_rutina !== id));
-      const ejercicios = db.read<RutinaEjercicio>("rutina_ejercicios");
-      db.write("rutina_ejercicios", ejercicios.filter((e) => e.id_rutina !== id));
+      db.writeTenant("rutinas", arr.filter((x) => x.id_rutina !== id));
+      const ejercicios = db.readTenant<RutinaEjercicio>("rutina_ejercicios");
+      db.writeTenant("rutina_ejercicios", ejercicios.filter((e) => e.id_rutina !== id));
       return { ok: true, mensaje: "Rutina eliminada", data: r };
     },
 
@@ -1808,23 +2047,27 @@ async remove(id: number): Promise<ApiResp<Ejercicio>> {
     async ejercicios(id: number): Promise<RutinaEjercicio[]> {
       await api._delay();
       return db
-        .read<RutinaEjercicio>("rutina_ejercicios")
+        .readTenant<RutinaEjercicio>("rutina_ejercicios")
         .filter((e) => e.id_rutina === id)
         .sort((a, b) => DIAS.indexOf(a.dia_semana) - DIAS.indexOf(b.dia_semana) || a.orden - b.orden);
     },
 
     // Reemplaza todos los ejercicios de la rutina por la lista recibida.
-    // Solo acepta ejercicios que existan en la colección de P4 ("ejercicios").
-    async guardarEjercicios(id: number, lista: Omit<RutinaEjercicio, "id_rutina">[]): Promise<ApiResp<RutinaEjercicio[]>> {
+    // Solo acepta ejercicios que existan en el catálogo que ve el gimnasio (base + propios).
+    async guardarEjercicios(
+      id: number,
+      lista: Omit<RutinaEjercicio, "id_rutina" | "gimnasio_id">[]
+    ): Promise<ApiResp<RutinaEjercicio[]>> {
       await api._delay();
-      if (!db.read<Rutina>("rutinas").some((r) => r.id_rutina === id))
+      if (!db.readTenant<Rutina>("rutinas").some((r) => r.id_rutina === id))
         return { ok: false, mensaje: "Rutina no encontrada" };
-      const catalogo = db.read<Ejercicio>("ejercicios");
-      const faltante = lista.find((e) => !catalogo.some((c) => c.idEjercicio === e.id_ejercicio));
+      const catalogo = leerCatalogo();
+      const faltante = lista.find((e) => !catalogo.some((c) => c.id_ejercicio === e.id_ejercicio));
       if (faltante) return { ok: false, mensaje: "El ejercicio " + faltante.id_ejercicio + " no existe" };
-      const nuevos: RutinaEjercicio[] = lista.map((e) => ({ ...e, id_rutina: id }));
-      const otros = db.read<RutinaEjercicio>("rutina_ejercicios").filter((e) => e.id_rutina !== id);
-      db.write("rutina_ejercicios", otros.concat(nuevos));
+      const gym = gimnasioParaEscribir();
+      const nuevos: RutinaEjercicio[] = lista.map((e) => ({ ...e, gimnasio_id: gym, id_rutina: id }));
+      const otros = db.readTenant<RutinaEjercicio>("rutina_ejercicios").filter((e) => e.id_rutina !== id);
+      db.writeTenant("rutina_ejercicios", otros.concat(nuevos));
       return { ok: true, mensaje: "Ejercicios guardados", data: nuevos };
     },
   },

@@ -6,8 +6,9 @@ import { useTenant } from "../tenant/TenantContext"; // [multitenant-slug]
 import { utils } from "../lib/utils";
 import type { Instructor, Especialidad, EstadoInstructor, TipoIdentificacion } from "../types";
 
-// El formulario tiene todos los campos del instructor menos el estado (ese se cambia con activar/desactivar)
-type FormInstructor = Omit<Instructor, "estado">;
+// El formulario tiene todos los campos del instructor menos el estado (se cambia con activar/desactivar)
+// y el gimnasio (lo pone api.ts: la vista no lo conoce)
+type FormInstructor = Omit<Instructor, "estado" | "gimnasio_id">;
 
 const TIPOS: TipoIdentificacion[] = ["CC", "CE", "PP", "TI"];
 

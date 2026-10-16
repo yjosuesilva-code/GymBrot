@@ -1,23 +1,84 @@
 import { useEffect, useState } from "react";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
-import type { Ejercicio } from "../types";
+import type {
+  Ejercicio,
+  EjercicioNuevo,
+  GrupoMuscular,
+  NivelEjercicio,
+  EquipoEjercicio,
+  TipoMedicion,
+} from "../types";
 
-const VACIO = {
+// Opciones de los selects (las mismas listas cerradas de types/index.ts)
+const GRUPOS: GrupoMuscular[] = [
+  "Pecho", "Espalda", "Hombros", "Bíceps", "Tríceps", "Piernas", "Glúteos", "Abdomen", "Cardio", "Cuerpo completo",
+];
+const NIVELES: NivelEjercicio[] = ["Principiante", "Intermedio", "Avanzado"];
+const EQUIPOS: EquipoEjercicio[] = [
+  "Máquina", "Mancuerna", "Barra", "Polea", "Kettlebell", "Banda elástica", "Peso corporal",
+];
+
+// El formulario guarda los números como texto (así un campo vacío es "" y no 0);
+// se convierten a number | null al guardar
+type FormEjercicio = {
+  nombre: string;
+  descripcion: string;
+  grupo_muscular: GrupoMuscular;
+  nivel: NivelEjercicio;
+  equipo: EquipoEjercicio;
+  tipo_medicion: TipoMedicion;
+  series_sugeridas: string;
+  repeticiones_min_sugeridas: string;
+  repeticiones_max_sugeridas: string;
+  segundos_sugeridos: string;
+  recurso_url: string;
+};
+
+const VACIO: FormEjercicio = {
   nombre: "",
   descripcion: "",
-  grupoMuscular: "",
-  nivel: "",
-  series: "",
-  repeticiones: "",
-  recursoUrl: "",
+  grupo_muscular: "Pecho",
+  nivel: "Principiante",
+  equipo: "Máquina",
+  tipo_medicion: "REPETICIONES",
+  series_sugeridas: "",
+  repeticiones_min_sugeridas: "",
+  repeticiones_max_sugeridas: "",
+  segundos_sugeridos: "",
+  recurso_url: "",
 };
+
+// "" → null; cualquier otro texto → número (si no es un entero > 0, lo rechaza api.ejercicios)
+function aNumero(texto: string): number | null {
+  return texto.trim() === "" ? null : Number(texto);
+}
+
+function aTexto(n: number | null): string {
+  return n === null ? "" : String(n);
+}
+
+// Resumen de lo sugerido, ej. "3 × 10–12", "3 × 30 s" o "—"
+function sugerido(e: Ejercicio): string {
+  let cantidad = "";
+  if (e.tipo_medicion === "TIEMPO") {
+    if (e.segundos_sugeridos !== null) cantidad = e.segundos_sugeridos + " s";
+  } else {
+    const min = e.repeticiones_min_sugeridas;
+    const max = e.repeticiones_max_sugeridas;
+    if (min !== null && max !== null) cantidad = min === max ? String(min) : min + "–" + max;
+    else if (min !== null || max !== null) cantidad = String(min ?? max);
+  }
+  if (e.series_sugeridas !== null && cantidad) return e.series_sugeridas + " × " + cantidad;
+  if (e.series_sugeridas !== null) return e.series_sugeridas + " series";
+  return cantidad || "—";
+}
 
 export function Ejercicios() {
   const [ejercicios, setEjercicios] = useState<Ejercicio[]>([]);
   const [cargando, setCargando] = useState(true);
   const [show, setShow] = useState(false);
-  const [form, setForm] = useState(VACIO);
+  const [form, setForm] = useState<FormEjercicio>(VACIO);
   const [error, setError] = useState("");
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState("");
@@ -27,6 +88,15 @@ export function Ejercicios() {
   const [eliminando, setEliminando] = useState(false);
   const [porEliminar, setPorEliminar] = useState<Ejercicio | null>(null);
   const [errorEliminar, setErrorEliminar] = useState("");
+
+  // Filtros ("" = todos). Origen: BASE = catálogo común, PROPIO = creados por este gimnasio
+  const [filtroGrupo, setFiltroGrupo] = useState<GrupoMuscular | "">("");
+  const [filtroNivel, setFiltroNivel] = useState<NivelEjercicio | "">("");
+  const [filtroEquipo, setFiltroEquipo] = useState<EquipoEjercicio | "">("");
+  const [filtroOrigen, setFiltroOrigen] = useState<"" | "BASE" | "PROPIO">("");
+
+  // Ejercicio base abierto en el modal de solo lectura (null = cerrado)
+  const [verEjercicio, setVerEjercicio] = useState<Ejercicio | null>(null);
 
   async function cargar() {
     try {
@@ -50,7 +120,8 @@ export function Ejercicios() {
     return () => { activo = false; };
   }, []);
 
-  function setCampo(campo: keyof typeof VACIO, valor: string) {
+  // Cambia un solo campo; K hace que el valor tenga el tipo correcto de ese campo
+  function setCampo<K extends keyof FormEjercicio>(campo: K, valor: FormEjercicio[K]) {
     setForm((f) => ({ ...f, [campo]: valor }));
   }
 
@@ -62,16 +133,20 @@ export function Ejercicios() {
   }
 
   function abrirEdicion(ejercicio: Ejercicio) {
-    setEditandoId(ejercicio.idEjercicio);
+    setEditandoId(ejercicio.id_ejercicio);
 
     setForm({
       nombre: ejercicio.nombre,
       descripcion: ejercicio.descripcion,
-      grupoMuscular: ejercicio.grupoMuscular,
+      grupo_muscular: ejercicio.grupo_muscular,
       nivel: ejercicio.nivel,
-      series: String(ejercicio.series),
-      repeticiones: String(ejercicio.repeticiones),
-      recursoUrl: ejercicio.recursoUrl,
+      equipo: ejercicio.equipo,
+      tipo_medicion: ejercicio.tipo_medicion,
+      series_sugeridas: aTexto(ejercicio.series_sugeridas),
+      repeticiones_min_sugeridas: aTexto(ejercicio.repeticiones_min_sugeridas),
+      repeticiones_max_sugeridas: aTexto(ejercicio.repeticiones_max_sugeridas),
+      segundos_sugeridos: aTexto(ejercicio.segundos_sugeridos),
+      recurso_url: ejercicio.recurso_url,
     });
 
     setError("");
@@ -80,30 +155,26 @@ export function Ejercicios() {
 
   async function guardar() {
     if (guardando) return;
-    if (!form.nombre.trim() || !form.grupoMuscular.trim() || !form.nivel.trim() ||
-        !form.series.trim() || !form.repeticiones.trim()) {
-      setError("Completa los campos obligatorios.");
+    if (!form.nombre.trim()) {
+      setError("El nombre es obligatorio.");
       return;
     }
 
-    const series = Number(form.series);
-    const repeticiones = Number(form.repeticiones);
-    if (!Number.isInteger(series) || series <= 0 ||
-        !Number.isInteger(repeticiones) || repeticiones <= 0) {
-      setError("Las series y las repeticiones deben ser números enteros mayores que 0.");
-      return;
-    }
-
-    const datos = {
+    const datos: EjercicioNuevo = {
       nombre: form.nombre.trim(),
       descripcion: form.descripcion.trim(),
-      grupoMuscular: form.grupoMuscular.trim(),
-      nivel: form.nivel.trim(),
-      series,
-      repeticiones,
-      recursoUrl: form.recursoUrl.trim(),
+      grupo_muscular: form.grupo_muscular,
+      nivel: form.nivel,
+      equipo: form.equipo,
+      tipo_medicion: form.tipo_medicion,
+      series_sugeridas: aNumero(form.series_sugeridas),
+      repeticiones_min_sugeridas: aNumero(form.repeticiones_min_sugeridas),
+      repeticiones_max_sugeridas: aNumero(form.repeticiones_max_sugeridas),
+      segundos_sugeridos: aNumero(form.segundos_sugeridos),
+      recurso_url: form.recurso_url.trim(),
     };
 
+    // Las demás reglas (enteros > 0, mínimo ≤ máximo, nombre repetido) las valida api.ejercicios
     setGuardando(true);
     setError("");
     setAlerta(null);
@@ -132,7 +203,7 @@ export function Ejercicios() {
     setErrorEliminar("");
     setAlerta(null);
     try {
-      const respuesta = await api.ejercicios.remove(porEliminar.idEjercicio);
+      const respuesta = await api.ejercicios.remove(porEliminar.id_ejercicio);
       if (!respuesta.ok) {
         setErrorEliminar(respuesta.mensaje || "No se pudo eliminar el ejercicio.");
         return;
@@ -148,11 +219,52 @@ export function Ejercicios() {
     }
   }
 
-  const normalizar = (texto: string) => texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  // Copia un ejercicio base como propio y abre la copia para editarla
+  async function personalizar(ejercicio: Ejercicio) {
+    setAlerta(null);
+    const respuesta = await api.ejercicios.personalizar(ejercicio.id_ejercicio);
+    setVerEjercicio(null);
+    if (!respuesta.ok || !respuesta.data) {
+      setAlerta({ tipo: "error", mensaje: respuesta.mensaje });
+      return;
+    }
+    setAlerta({ tipo: "ok", mensaje: respuesta.mensaje });
+    await cargar();
+    abrirEdicion(respuesta.data);
+  }
+
+  // Activa o desactiva un ejercicio propio (uno inactivo sigue en las rutinas que ya lo usan)
+  async function cambiarEstado(ejercicio: Ejercicio) {
+    const nuevo = ejercicio.estado === "ACTIVO" ? "INACTIVO" : "ACTIVO";
+    const respuesta = await api.ejercicios.setEstado(ejercicio.id_ejercicio, nuevo);
+    setAlerta(
+      respuesta.ok
+        ? { tipo: "ok", mensaje: `«${ejercicio.nombre}» ahora está ${nuevo}` }
+        : { tipo: "error", mensaje: respuesta.mensaje }
+    );
+    await cargar();
+  }
+
+  function limpiarFiltros() {
+    setBusqueda("");
+    setFiltroGrupo("");
+    setFiltroNivel("");
+    setFiltroEquipo("");
+    setFiltroOrigen("");
+  }
+
+  const normalizar = (texto: string) => texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const consulta = normalizar(busqueda.trim());
+  // Base = gimnasio_id null (la vista no sabe de qué gimnasio es un propio: solo si es base o no)
   const filtrados = ejercicios.filter((e) =>
-    [e.nombre, e.grupoMuscular, e.nivel].some((campo) => normalizar(campo).includes(consulta))
+    [e.nombre, e.grupo_muscular, e.nivel, e.equipo].some((campo) => normalizar(campo).includes(consulta)) &&
+    (filtroGrupo === "" || e.grupo_muscular === filtroGrupo) &&
+    (filtroNivel === "" || e.nivel === filtroNivel) &&
+    (filtroEquipo === "" || e.equipo === filtroEquipo) &&
+    (filtroOrigen === "" || (filtroOrigen === "BASE") === (e.gimnasio_id === null))
   );
+  const hayFiltros =
+    consulta !== "" || filtroGrupo !== "" || filtroNivel !== "" || filtroEquipo !== "" || filtroOrigen !== "";
 
   return (
     <section className="card-g">
@@ -182,13 +294,59 @@ export function Ejercicios() {
           <input
             type="search"
             className="form-control-dark"
-            aria-label="Buscar ejercicios por nombre, grupo muscular o nivel"
-            placeholder="Buscar por nombre, grupo muscular o nivel..."
+            aria-label="Buscar ejercicios por nombre, grupo muscular, nivel o equipo"
+            placeholder="Buscar por nombre, grupo muscular, nivel o equipo..."
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
           />
         </div>
+        <select
+          className="form-control-dark"
+          style={{ width: "auto" }}
+          aria-label="Filtrar por grupo muscular"
+          value={filtroGrupo}
+          onChange={(e) => setFiltroGrupo(e.target.value as GrupoMuscular | "")}
+        >
+          <option value="">Todos los grupos</option>
+          {GRUPOS.map((g) => <option key={g} value={g}>{g}</option>)}
+        </select>
+        <select
+          className="form-control-dark"
+          style={{ width: "auto" }}
+          aria-label="Filtrar por nivel"
+          value={filtroNivel}
+          onChange={(e) => setFiltroNivel(e.target.value as NivelEjercicio | "")}
+        >
+          <option value="">Todos los niveles</option>
+          {NIVELES.map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>
+        <select
+          className="form-control-dark"
+          style={{ width: "auto" }}
+          aria-label="Filtrar por equipo"
+          value={filtroEquipo}
+          onChange={(e) => setFiltroEquipo(e.target.value as EquipoEjercicio | "")}
+        >
+          <option value="">Todo el equipo</option>
+          {EQUIPOS.map((q) => <option key={q} value={q}>{q}</option>)}
+        </select>
+        <select
+          className="form-control-dark"
+          style={{ width: "auto" }}
+          aria-label="Filtrar por origen"
+          value={filtroOrigen}
+          onChange={(e) => setFiltroOrigen(e.target.value as "" | "BASE" | "PROPIO")}
+        >
+          <option value="">Base y propios</option>
+          <option value="BASE">Solo catálogo base</option>
+          <option value="PROPIO">Solo propios</option>
+        </select>
+        {hayFiltros && <button className="btn-dark" onClick={limpiarFiltros}>Limpiar</button>}
       </div>
+
+      {!cargando && ejercicios.length > 0 && (
+        <p className="card-sub mb-3">Mostrando {filtrados.length} de {ejercicios.length} ejercicios</p>
+      )}
 
       <div className="table-wrap">
         <table className="table-g">
@@ -197,8 +355,8 @@ export function Ejercicios() {
               <th>Ejercicio</th>
               <th>Grupo muscular</th>
               <th>Nivel</th>
-              <th>Series</th>
-              <th>Repeticiones</th>
+              <th>Equipo</th>
+              <th>Sugerido</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -217,40 +375,74 @@ export function Ejercicios() {
                 </td>
               </tr>
             ) : filtrados.length === 0 ? (
-              <tr><td colSpan={6} className="empty-state">No hay ejercicios que coincidan con la búsqueda.</td></tr>
+              <tr><td colSpan={6} className="empty-state">No hay ejercicios que coincidan con la búsqueda o los filtros.</td></tr>
             ) : (
               filtrados.map((e) => (
-                <tr key={e.idEjercicio}>
+                <tr key={e.id_ejercicio}>
                   <td>
                     <strong>{e.nombre}</strong>
+                    {e.gimnasio_id === null && <span className="badge-g badge-confirmada ms-2">Base</span>}
+                    {e.estado === "INACTIVO" && <span className="badge-g badge-inactivo ms-2">Inactivo</span>}
                     {e.descripcion && <p className="card-sub mb-1">{e.descripcion}</p>}
-                    {e.recursoUrl && (
-                      /^https?:\/\//i.test(e.recursoUrl.trim())
-                        ? <a href={e.recursoUrl.trim()} target="_blank" rel="noopener noreferrer">{e.recursoUrl}</a>
-                        : <span className="d-block">Recurso: {e.recursoUrl}</span>
+                    {e.recurso_url && (
+                      /^https?:\/\//i.test(e.recurso_url.trim())
+                        ? <a href={e.recurso_url.trim()} target="_blank" rel="noopener noreferrer">{e.recurso_url}</a>
+                        : <span className="d-block">Recurso: {e.recurso_url}</span>
                     )}
                   </td>
-                  <td>{e.grupoMuscular}</td>
+                  <td>{e.grupo_muscular}</td>
                   <td>{e.nivel}</td>
-                  <td>{e.series}</td>
-                  <td>{e.repeticiones}</td>
+                  <td>{e.equipo}</td>
+                  <td>{sugerido(e)}</td>
                   <td>
-                    <button
-                      className="btn-icon"
-                      title="Editar"
-                      aria-label={`Editar ${e.nombre}`}
-                      onClick={() => abrirEdicion(e)}
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      className="btn-icon ms-1"
-                      title="Eliminar"
-                      aria-label={`Eliminar ${e.nombre}`}
-                      onClick={() => { setPorEliminar(e); setErrorEliminar(""); }}
-                    >
-                      {"\u{1F5D1}\uFE0F"}
-                    </button>
+                    {/* Acciones según el origen: un base solo se ve y se personaliza; un propio se gestiona */}
+                    {e.gimnasio_id === null ? (
+                      <div className="cell-actions">
+                        <button
+                          className="btn-icon"
+                          title="Ver detalle"
+                          aria-label={`Ver ${e.nombre}`}
+                          onClick={() => setVerEjercicio(e)}
+                        >
+                          👁
+                        </button>
+                        <button
+                          className="btn-icon"
+                          title="Personalizar (crear una copia propia)"
+                          aria-label={`Personalizar ${e.nombre}`}
+                          onClick={() => personalizar(e)}
+                        >
+                          📋
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="cell-actions">
+                        <button
+                          className="btn-icon"
+                          title="Editar"
+                          aria-label={`Editar ${e.nombre}`}
+                          onClick={() => abrirEdicion(e)}
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="btn-icon"
+                          title={e.estado === "ACTIVO" ? "Desactivar" : "Activar"}
+                          aria-label={`${e.estado === "ACTIVO" ? "Desactivar" : "Activar"} ${e.nombre}`}
+                          onClick={() => cambiarEstado(e)}
+                        >
+                          {e.estado === "ACTIVO" ? "🚫" : "✅"}
+                        </button>
+                        <button
+                          className="btn-icon"
+                          title="Eliminar"
+                          aria-label={`Eliminar ${e.nombre}`}
+                          onClick={() => { setPorEliminar(e); setErrorEliminar(""); }}
+                        >
+                          {"\u{1F5D1}️"}
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))
@@ -279,45 +471,97 @@ export function Ejercicios() {
               />
             </div>
 
-            <div className="col-md-6">
+            <div className="col-md-4">
               <label className="form-label-g">Grupo muscular *</label>
-              <input
+              <select
                 className="form-control-dark"
-                value={form.grupoMuscular}
-                onChange={(e) => setCampo("grupoMuscular", e.target.value)}
-              />
+                value={form.grupo_muscular}
+                onChange={(e) => setCampo("grupo_muscular", e.target.value as GrupoMuscular)}
+              >
+                {GRUPOS.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
             </div>
 
-            <div className="col-md-6">
+            <div className="col-md-4">
               <label className="form-label-g">Nivel *</label>
-              <input
+              <select
                 className="form-control-dark"
                 value={form.nivel}
-                onChange={(e) => setCampo("nivel", e.target.value)}
-              />
+                onChange={(e) => setCampo("nivel", e.target.value as NivelEjercicio)}
+              >
+                {NIVELES.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
             </div>
 
-            <div className="col-md-6">
-              <label className="form-label-g">Series *</label>
+            <div className="col-md-4">
+              <label className="form-label-g">Equipo *</label>
+              <select
+                className="form-control-dark"
+                value={form.equipo}
+                onChange={(e) => setCampo("equipo", e.target.value as EquipoEjercicio)}
+              >
+                {EQUIPOS.map((q) => <option key={q} value={q}>{q}</option>)}
+              </select>
+            </div>
+
+            <div className="col-md-4">
+              <label className="form-label-g">Se mide por *</label>
+              <select
+                className="form-control-dark"
+                value={form.tipo_medicion}
+                onChange={(e) => setCampo("tipo_medicion", e.target.value as TipoMedicion)}
+              >
+                <option value="REPETICIONES">Repeticiones</option>
+                <option value="TIEMPO">Tiempo</option>
+              </select>
+            </div>
+
+            <div className="col-md-4">
+              <label className="form-label-g">Series sugeridas</label>
               <input
                 type="number"
                 min="1"
                 className="form-control-dark"
-                value={form.series}
-                onChange={(e) => setCampo("series", e.target.value)}
+                value={form.series_sugeridas}
+                onChange={(e) => setCampo("series_sugeridas", e.target.value)}
               />
             </div>
 
-            <div className="col-md-6">
-              <label className="form-label-g">Repeticiones *</label>
-              <input
-                type="number"
-                min="1"
-                className="form-control-dark"
-                value={form.repeticiones}
-                onChange={(e) => setCampo("repeticiones", e.target.value)}
-              />
-            </div>
+            {/* Según cómo se mide, se pide un rango de repeticiones o los segundos */}
+            {form.tipo_medicion === "REPETICIONES" ? (
+              <div className="col-md-4">
+                <label className="form-label-g">Repeticiones sugeridas (mín – máx)</label>
+                <div className="d-flex gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    className="form-control-dark"
+                    aria-label="Repeticiones mínimas"
+                    value={form.repeticiones_min_sugeridas}
+                    onChange={(e) => setCampo("repeticiones_min_sugeridas", e.target.value)}
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    className="form-control-dark"
+                    aria-label="Repeticiones máximas"
+                    value={form.repeticiones_max_sugeridas}
+                    onChange={(e) => setCampo("repeticiones_max_sugeridas", e.target.value)}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="col-md-4">
+                <label className="form-label-g">Segundos sugeridos</label>
+                <input
+                  type="number"
+                  min="1"
+                  className="form-control-dark"
+                  value={form.segundos_sugeridos}
+                  onChange={(e) => setCampo("segundos_sugeridos", e.target.value)}
+                />
+              </div>
+            )}
 
             <div className="col-12">
               <label className="form-label-g">Descripción</label>
@@ -332,8 +576,8 @@ export function Ejercicios() {
               <label className="form-label-g">Recurso URL</label>
               <input
                 className="form-control-dark"
-                value={form.recursoUrl}
-                onChange={(e) => setCampo("recursoUrl", e.target.value)}
+                value={form.recurso_url}
+                onChange={(e) => setCampo("recurso_url", e.target.value)}
               />
             </div>
           </div>
@@ -360,6 +604,37 @@ export function Ejercicios() {
         <Modal.Footer>
           <button className="btn-dark" disabled={eliminando} onClick={() => setPorEliminar(null)}>Cancelar</button>
           <button className="btn-danger-g" disabled={eliminando} onClick={eliminar}>{eliminando ? "Eliminando..." : "Sí, eliminar"}</button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Detalle de solo lectura de un ejercicio base */}
+      <Modal show={verEjercicio !== null} onHide={() => setVerEjercicio(null)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>{verEjercicio?.nombre}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="card-sub">
+            Ejercicio del catálogo base: lo comparten todos los gimnasios y no se puede modificar. Si quieres
+            ajustarlo, personalízalo para crear tu propia copia.
+          </p>
+          {verEjercicio && (
+            <div className="table-wrap">
+              <table className="table-g">
+                <tbody>
+                  <tr><th>Grupo muscular</th><td>{verEjercicio.grupo_muscular}</td></tr>
+                  <tr><th>Nivel</th><td>{verEjercicio.nivel}</td></tr>
+                  <tr><th>Equipo</th><td>{verEjercicio.equipo}</td></tr>
+                  <tr><th>Se mide por</th><td>{verEjercicio.tipo_medicion === "TIEMPO" ? "Tiempo" : "Repeticiones"}</td></tr>
+                  <tr><th>Sugerido</th><td>{sugerido(verEjercicio)}</td></tr>
+                  <tr><th>Descripción</th><td>{verEjercicio.descripcion || "—"}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <button className="btn-dark" onClick={() => setVerEjercicio(null)}>Cerrar</button>
+          <button className="btn-neon" onClick={() => verEjercicio && personalizar(verEjercicio)}>Personalizar</button>
         </Modal.Footer>
       </Modal>
     </section>

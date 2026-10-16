@@ -1,11 +1,32 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import * as auth from "../lib/auth";
 import { api } from "../data/api";
+import { useTenant } from "../tenant/TenantContext";
+
+/* [multitenant-slug] Login del portal de un gimnasio: /g/:slug/login. El
+   gimnasio lo dice la URL (TenantProvider ya lo resolvio), asi que el
+   usuario se busca solo dentro de el. */
+
+// Credenciales de demo del seed, por gimnasio. Solo ayuda visual.
+const DEMO: Record<string, string> = {
+  "gymbrot-centro": "admin / admin  o  admin@gymbrot.com / admin",
+  "titan-fitness": "titan / titan  o  admin@titanfitness.com / titan",
+};
+
+type EstadoLogin = { desde?: string; otroGimnasio?: boolean } | null;
 
 export function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { slug, gimnasio, ruta } = useTenant();
+  const estado = location.state as EstadoLogin;
+
+  // Solo se vuelve a rutas de este mismo portal: un `desde` armado a mano no
+  // puede sacar al usuario a otro gimnasio ni a otro sitio.
+  const destino =
+    estado?.desde && estado.desde.startsWith(ruta("/") + "/") ? estado.desde : ruta("/dashboard");
   const [usuario, setUsuario] = useState("");
   const [clave, setClave] = useState("");
   const [error, setError] = useState("");
@@ -20,6 +41,13 @@ export function Login() {
     return () => clearInterval(t);
   }, []);
 
+  const sesion = auth.current();
+  if (auth.tieneAcceso(sesion, gimnasio.gimnasio_id)) {
+    return <Navigate to={destino} replace />;
+  }
+  // Hay sesion, pero de otro gimnasio: entrar aqui la reemplaza.
+  const sesionAjena = sesion !== null || estado?.otroGimnasio === true;
+
   function alternarLector() {
     const siguiente = !lectorConectado;
     api.lector.setConectado(siguiente);
@@ -33,9 +61,9 @@ export function Login() {
     setError("");
     setEntrando(true);
     try {
-      const res = await auth.login(usuario, clave);
+      const res = await auth.login(usuario, clave, { gimnasio });
       if (res.ok) {
-        navigate("/dashboard", { replace: true });
+        navigate(destino, { replace: true });
         return;
       }
       setError(res.mensaje);
@@ -55,6 +83,10 @@ export function Login() {
           height={180}
         />
         <h2>Iniciar sesión</h2>
+        <p className="login-gym">
+          <i className="bi bi-building me-1" aria-hidden />
+          {gimnasio.nombre}
+        </p>
 
         <span
           className={"reader-status" + (lectorConectado ? " ok" : " off")}
@@ -64,6 +96,12 @@ export function Login() {
           <span className="reader-dot" />
           {lectorConectado ? "LECTOR CONECTADO" : "LECTOR DESCONECTADO"}
         </span>
+
+        {sesionAjena && !error && (
+          <div className="alert-g alert-aviso show" role="status">
+            Tienes una sesión abierta en otro gimnasio. Si entras aquí, esa sesión se cierra.
+          </div>
+        )}
 
         {error && (
           <div className="alert-g alert-error show" role="alert">
@@ -103,9 +141,7 @@ export function Login() {
           {entrando ? "Entrando..." : "Entrar"}
         </button>
 
-        <p className="login-hint">
-          Ingreso: admin / admin &nbsp;o&nbsp; admin@gymbrot.com / admin
-        </p>
+        {DEMO[slug] && <p className="login-hint">Demo: {DEMO[slug]}</p>}
 
         <button type="button" className="reader-toggle" onClick={alternarLector}>
           Simular lector {lectorConectado ? "desconectado" : "conectado"}
@@ -113,7 +149,7 @@ export function Login() {
 
         {/* [P2] plataforma */}
         <p className="login-hint">
-          <Link to="/" className="land-link">¿Tu gimnasio aún no usa GymBrot? Conoce los planes</Link>
+          <Link to="/login" className="land-link">¿No es tu gimnasio? Busca el tuyo</Link>
         </p>
       </form>
     </div>

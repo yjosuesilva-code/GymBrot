@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
+import { useTenant } from "../tenant/TenantContext"; // [multitenant-slug]
 import { utils } from "../lib/utils";
 import { Paginador } from "../components/Paginador";
 import type { Instructor, Especialidad, EstadoInstructor, TipoIdentificacion } from "../types";
 
-// El formulario tiene todos los campos del instructor menos el estado (ese se cambia con activar/desactivar)
-type FormInstructor = Omit<Instructor, "estado">;
+// El formulario tiene todos los campos del instructor menos el estado (se cambia con activar/desactivar)
+// y el gimnasio (lo pone api.ts: la vista no lo conoce)
+type FormInstructor = Omit<Instructor, "estado" | "gimnasio_id">;
 
 const TIPOS: TipoIdentificacion[] = ["CC", "CE", "PP", "TI"];
 
@@ -60,6 +62,7 @@ function validar(f: FormInstructor, editando: boolean): string {
 type Alerta = { tipo: "ok" | "error"; mensaje: string };
 
 export function Instructores() {
+  const { ruta } = useTenant(); // [multitenant-slug]
   const navigate = useNavigate();
   const [instructores, setInstructores] = useState<Instructor[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -314,7 +317,7 @@ export function Instructores() {
                   <td data-label="Estado"><span className={"badge-g " + utils.badgeClass(i.estado)}>{i.estado}</span></td>
                   <td data-label="Acciones">
                     <div className="cell-actions">
-                      <button className="btn-icon" title="Ver perfil" onClick={() => navigate("/instructores/" + i.numero_identificacion)}>👁</button>
+                      <button className="btn-icon" title="Ver perfil" onClick={() => navigate(ruta("/instructores/" + i.numero_identificacion))}>👁</button>
                       <button className="btn-icon" title="Editar" onClick={() => abrirEdicion(i)}>✏️</button>
                       <button className="btn-icon" title={i.estado === "ACTIVO" ? "Desactivar" : "Activar"} onClick={() => cambiarEstado(i)}>
                         {i.estado === "ACTIVO" ? "🚫" : "✅"}

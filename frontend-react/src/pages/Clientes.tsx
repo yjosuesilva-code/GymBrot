@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
+import { useTenant } from "../tenant/TenantContext"; // [multitenant-slug]
 import { utils } from "../lib/utils";
 import { membresiaVigente } from "../lib/membresias";
 import { useVersionDeDatos } from "../lib/datos";
@@ -45,6 +46,7 @@ function categoriaEdad(edad: number | null): string {
 }
 
 export function Clientes() {
+  const { ruta } = useTenant(); // [multitenant-slug]
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [membresias, setMembresias] = useState<Membresia[]>([]);
@@ -370,7 +372,7 @@ export function Clientes() {
                           className="btn-icon"
                           title="Ver detalle"
                           onClick={() =>
-                            navigate("/clientes/" + c.numero_identificacion)
+                            navigate(ruta("/clientes/" + c.numero_identificacion))
                           }
                         >
                           👁

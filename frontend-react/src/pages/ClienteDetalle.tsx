@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../data/api";
+import { useTenant } from "../tenant/TenantContext"; // [multitenant-slug]
 import { utils } from "../lib/utils";
 import type { Cliente, Membresia, Pago, Ingreso } from "../types";
 
 export function ClienteDetalle() {
+  const { ruta } = useTenant(); // [multitenant-slug]
   const { id } = useParams();
 
   const [cliente, setCliente] = useState<Cliente | null>(null);
@@ -40,7 +42,7 @@ export function ClienteDetalle() {
   if (!cliente) {
     return (
       <div className="card-g">
-        <Link to="/clientes" className="btn-dark" style={{ textDecoration: "none" }}>← Volver</Link>
+        <Link to={ruta("/clientes")} className="btn-dark" style={{ textDecoration: "none" }}>← Volver</Link>
         <p className="empty-state">Cliente no encontrado</p>
       </div>
     );
@@ -49,7 +51,7 @@ export function ClienteDetalle() {
   return (
     <>
       <div className="card-g">
-        <Link to="/clientes" className="btn-dark" style={{ textDecoration: "none" }}>← Volver</Link>
+        <Link to={ruta("/clientes")} className="btn-dark" style={{ textDecoration: "none" }}>← Volver</Link>
         <div className="person" style={{ marginTop: 16 }}>
           <div className="person-avatar">{utils.iniciales(cliente.nombre, cliente.apellidos)}</div>
           <div>

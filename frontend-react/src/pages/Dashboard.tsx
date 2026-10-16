@@ -14,6 +14,7 @@ import { utils } from "../lib/utils";
 import { META_INGRESOS_MENSUAL, porcentaje } from "../lib/config";
 import { useVersionDeDatos } from "../lib/datos";
 import { api } from "../data/api";
+import { useTenant } from "../tenant/TenantContext"; // [multitenant-slug]
 import type { Cliente, Ingreso, Pago } from "../types";
 
 function esDelMesActual(fechaIso: string): boolean {
@@ -215,6 +216,7 @@ function GraficaAsistencia({ ingresos }: { ingresos: Ingreso[] }) {
 }
 
 function Demografia({ clientes }: { clientes: Cliente[] }) {
+  const { ruta } = useTenant(); // [multitenant-slug]
   const activos = clientes.filter((c) => c.estado === "ACTIVO");
 
   function contar(min: number, max: number): number {
@@ -257,7 +259,7 @@ function Demografia({ clientes }: { clientes: Cliente[] }) {
         ))}
       </div>
       <div className="mt-auto pt-3">
-        <Link to="/clientes" className="btn-neon" style={{ textDecoration: "none" }}>
+        <Link to={ruta("/clientes")} className="btn-neon" style={{ textDecoration: "none" }}>
           Ver registro detallado
         </Link>
       </div>
@@ -319,10 +321,11 @@ function HorasPico({ ingresos }: { ingresos: Ingreso[] }) {
 }
 
 function AccionesRapidas() {
+  const { ruta } = useTenant(); // [multitenant-slug]
   return (
     <div className="row g-3">
       <div className="col-md-6">
-        <Link to="/clientes" className="card-g quick-action h-100">
+        <Link to={ruta("/clientes")} className="card-g quick-action h-100">
           <span className="qa-badge neon">+</span>
           <div>
             <div className="qa-title">Agregar nuevo cliente</div>
@@ -331,7 +334,7 @@ function AccionesRapidas() {
         </Link>
       </div>
       <div className="col-md-6">
-        <Link to="/finanzas" className="card-g quick-action h-100">
+        <Link to={ruta("/finanzas")} className="card-g quick-action h-100">
           <span className="qa-badge accent">$</span>
           <div>
             <div className="qa-title">Ver resumen financiero</div>

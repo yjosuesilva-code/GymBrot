@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
+import * as auth from "../lib/auth";
 import type { PlanSoftware } from "../types";
 
 /* [plataforma] Pagina publica del software: lo que ve un gimnasio antes de
@@ -102,6 +103,7 @@ const FAQ = [
 const CORREO = "hola@gymbrot.app";
 
 export function Landing() {
+  const conSesion = auth.current() !== null;
   const [planes, setPlanes] = useState<PlanSoftware[]>([]);
   const [socios, setSocios] = useState(200);
   const [faqAbierta, setFaqAbierta] = useState<number | null>(0);
@@ -192,9 +194,14 @@ export function Landing() {
         <nav className="land-nav">
           <a href="#modulos">[ Módulos ]</a>
           <a href="#panel">[ Panel ]</a>
-          <a href="#planes">[ Planes ]</a>
+          <Link to="/planes">[ Planes ]</Link>
+          <Link to="/contacto">[ Contacto ]</Link>
           <a href="#faq">[ Preguntas ]</a>
-          <Link className="land-btn land-btn--neon" to="/login">Iniciar sesión</Link>
+          {conSesion ? (
+            <Link className="land-btn land-btn--neon" to="/dashboard">Ir al panel</Link>
+          ) : (
+            <Link className="land-btn land-btn--neon" to="/login">Iniciar sesión</Link>
+          )}
         </nav>
       </header>
 

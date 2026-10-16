@@ -1,17 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../data/api";
-import * as auth from "../lib/auth";
 import { utils } from "../lib/utils";
 import type { PlanSoftware } from "../types";
 
 /* [plataforma] Pagina publica del software: lo que ve un gimnasio antes de
    tener cuenta. Vive fuera del Layout porque no exige sesion.
 
-   Rediseno con lenguaje brutalista (referencia ploy.ai): tipografia
-   sobredimensionada, retícula visible, bordes rectos, marquesina de
-   telemetria, figuras abstractas y entrada por scroll. Todo con
-   prefers-reduced-motion respetado. */
+   Lenguaje brutalista (referencia ploy.ai): tipografia sobredimensionada,
+   reticula visible, bordes rectos, marquesina de telemetria, figuras
+   abstractas y entrada por scroll tipo barrido. Todo respeta
+   prefers-reduced-motion. */
 
 const MARQUEE = [
   "Clientes",
@@ -24,12 +24,36 @@ const MARQUEE = [
 ];
 
 const FUNCIONES = [
-  { codigo: "MOD-01", icono: "bi-people", titulo: "Clientes y membresías", texto: "Registra socios, planes y vencimientos sin hojas de cálculo." },
-  { codigo: "MOD-02", icono: "bi-fingerprint", titulo: "Control de acceso", texto: "Entrada con huella o código: solo pasa quien tiene la membresía al día." },
-  { codigo: "MOD-03", icono: "bi-cash-coin", titulo: "Pagos y finanzas", texto: "Cobros, ingresos por mes y por plan, y pagos pendientes en un solo lugar." },
-  { codigo: "MOD-04", icono: "bi-person-badge", titulo: "Instructores y rutinas", texto: "Asigna rutinas por día y agenda citas con los entrenadores." },
-  { codigo: "MOD-05", icono: "bi-graph-up-arrow", titulo: "Progreso de los socios", texto: "Peso, altura e IMC de cada medición para mostrar resultados." },
-  { codigo: "MOD-06", icono: "bi-stars", titulo: "Gymbrot AI", texto: "Un asistente que responde sobre tus clientes, membresías y finanzas." },
+  {
+    icono: "bi-people",
+    titulo: "Clientes y membresías",
+    texto: "Centraliza el registro de socios, gestiona sus planes, controla vencimientos y evita duplicados. Todo organizado por gimnasio.",
+  },
+  {
+    icono: "bi-fingerprint",
+    titulo: "Control de acceso",
+    texto: "Valida entradas con huella o código. Solo acceden quienes tienen la membresía al día y cada ingreso queda registrado con hora y resultado.",
+  },
+  {
+    icono: "bi-cash-coin",
+    titulo: "Pagos y finanzas",
+    texto: "Registra cobros, lleva ingresos por mes y por plan, identifica pagos pendientes y mantiene el estado de cada membresía actualizado.",
+  },
+  {
+    icono: "bi-person-badge",
+    titulo: "Instructores y rutinas",
+    texto: "Asigna rutinas personalizadas por cliente, organiza citas con instructores y mantiene el seguimiento de cada entrenamiento.",
+  },
+  {
+    icono: "bi-graph-up-arrow",
+    titulo: "Progreso de los socios",
+    texto: "Registra peso, altura, IMC y evolución en el tiempo. Cada medición queda histórica para ver resultados mes a mes.",
+  },
+  {
+    icono: "bi-stars",
+    titulo: "Gymbrot AI",
+    texto: "Asistente para consultar clientes, membresías, finanzas y accesos en lenguaje natural. Responde con datos del gimnasio activo.",
+  },
 ];
 
 const PASOS = [
@@ -44,21 +68,65 @@ const STATS = [
   { valor: "24/7", etiqueta: "control de acceso" },
 ];
 
+const AISLAMIENTO = [
+  { titulo: "Lectura filtrada", texto: "Cada consulta filtra por el gimnasio de la sesión: nunca se cruzan dos gimnasios." },
+  { titulo: "Cédula por gimnasio", texto: "La misma persona puede ser socio de dos gimnasios: son registros que no se mezclan." },
+  { titulo: "Sesión con su gimnasio", texto: "Al entrar, la cuenta hereda su gimnasio y todo el panel trabaja sobre él." },
+  { titulo: "Listo para RLS", texto: "En producción el aislamiento lo hace cumplir la base; el frontend solo llama a la API." },
+];
+
+const INGRESOS = [62, 55, 70, 64, 79, 72, 86, 81, 94, 89, 103, 112];
+const MESES = ["E", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+
+const ACCESOS = [
+  { nombre: "Ana Restrepo", plan: "Premium", hora: "06:12", ok: true },
+  { nombre: "Carlos Mora", plan: "Básico", hora: "06:40", ok: true },
+  { nombre: "Diego Pérez", plan: "Premium", hora: "07:05", ok: false },
+  { nombre: "Juan Castro", plan: "Pro", hora: "07:31", ok: true },
+  { nombre: "María López", plan: "Premium", hora: "07:48", ok: true },
+  { nombre: "Pedro Torres", plan: "Pro", hora: "08:16", ok: true },
+];
+
+const FAQ = [
+  { q: "¿Necesito instalar algo?", a: "No. GymBrot es web: entras desde cualquier navegador, sin instalar aplicaciones ni dependencias." },
+  { q: "¿Cuántos socios puedo tener?", a: "Depende del plan: Básico hasta 100, Pro hasta 500 y Premium ilimitados. El recomendador te ayuda a elegir." },
+  { q: "¿Puedo cambiar de plan?", a: "Sí. Puedes subir o bajar de plan en cualquier momento. El cobro se ajusta al siguiente ciclo de facturación." },
+  { q: "¿Sirve si tengo varios gimnasios?", a: "Cada gimnasio tiene su propio espacio aislado. La misma cédula puede existir en dos gimnasios sin que se mezclen los datos." },
+  { q: "¿Cómo funciona el control de acceso?", a: "Usa un lector de huella compatible o el modo manual por código cuando no tengas lector. Cada acceso queda registrado." },
+  { q: "¿Hay contrato o permanencia?", a: "No. Es pago mensual sin cláusula de permanencia: puedes dejar de usarlo cuando quieras." },
+  { q: "¿Qué incluye el soporte?", a: "Básico y Pro tienen soporte estándar. Premium incluye soporte prioritario para resolver incidencias con mayor agilidad." },
+  { q: "¿Puedo migrar mis datos?", a: "Puedes registrar a tus socios manualmente desde el panel. Si tienes muchos, el equipo te orienta para hacerlo ordenadamente." },
+  { q: "¿Cuándo se activa mi gimnasio tras registrarlo?", a: "Al registrar tu gimnasio y proceder al pago del plan, ya puedes acceder a tu panel con el usuario administrador creado." },
+];
+
+const CORREO = "hola@gymbrot.app";
+
 export function Landing() {
   const [planes, setPlanes] = useState<PlanSoftware[]>([]);
-  const conSesion = auth.current() !== null;
+  const [socios, setSocios] = useState(200);
+  const [faqAbierta, setFaqAbierta] = useState<number | null>(0);
   const raiz = useRef<HTMLDivElement>(null);
+  const barra = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.gimnasios.planesSoftware().then((p) => setPlanes(p));
   }, []);
 
+  /* El plan que encaja con la cantidad de socios elegida. Si supera todos los
+     topes, cae en el Premium (max_clientes === null). */
+  const recomendado = useMemo(() => {
+    const p = planes.find((pl) => pl.max_clientes === null || socios <= pl.max_clientes);
+    return p ? p.id_plan_software : "PREMIUM";
+  }, [planes, socios]);
+
   /* Entrada por scroll: observa los [data-reveal] y les agrega .is-in al
-     entrar en pantalla. Se manipula la clase (no estado) para no re-renderizar. */
+     entrar en pantalla. Se manipula la clase (no estado) para no re-renderizar.
+     Depende de planes.length porque las filas de planes llegan del API mas
+     tarde: sin volver a observar, nacian ocultas y no aparecian nunca. */
   useEffect(() => {
     const cont = raiz.current;
     if (!cont) return;
-    const nodos = Array.from(cont.querySelectorAll<HTMLElement>("[data-reveal]"));
+    const nodos = Array.from(cont.querySelectorAll<HTMLElement>("[data-reveal]:not(.is-in)"));
     if (typeof IntersectionObserver === "undefined") {
       nodos.forEach((n) => n.classList.add("is-in"));
       return;
@@ -76,10 +144,32 @@ export function Landing() {
     );
     nodos.forEach((n) => obs.observe(n));
     return () => obs.disconnect();
+  }, [planes.length]);
+
+  /* Barra de progreso de lectura (telemetria): refleja cuanto se ha bajado. */
+  useEffect(() => {
+    const onScroll = () => {
+      const h = document.documentElement;
+      const max = h.scrollHeight - h.clientHeight;
+      const r = max > 0 ? h.scrollTop / max : 0;
+      if (barra.current) barra.current.style.transform = `scaleX(${r})`;
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  function enviarContacto(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const d = new FormData(e.currentTarget);
+    const asunto = `Consulta de ${String(d.get("nombre") || "")}`;
+    const cuerpo = `${String(d.get("mensaje") || "")}\n\n— ${String(d.get("correo") || "")}`;
+    window.location.href = `mailto:${CORREO}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+  }
 
   return (
     <div className="land" ref={raiz}>
+      <div className="land-progress" ref={barra} aria-hidden />
       <div className="land-grain" aria-hidden />
       <div className="land-scan" aria-hidden />
 
@@ -101,26 +191,20 @@ export function Landing() {
         </div>
         <nav className="land-nav">
           <a href="#modulos">[ Módulos ]</a>
+          <a href="#panel">[ Panel ]</a>
           <a href="#planes">[ Planes ]</a>
-          {conSesion ? (
-            <Link className="land-btn land-btn--neon" to="/dashboard">Ir al panel</Link>
-          ) : (
-            <Link className="land-btn land-btn--line" to="/login">Iniciar sesión</Link>
-          )}
+          <a href="#faq">[ Preguntas ]</a>
+          <Link className="land-btn land-btn--neon" to="/login">Iniciar sesión</Link>
         </nav>
       </header>
 
       <section className="land-hero">
         <div className="land-hero-txt">
           <span className="land-eyebrow">[ Plataforma / Multi-tenant ]</span>
-          <h1 className="land-h1">
-            Administra tu gimnasio
-            <em>desde un solo lugar</em>
-          </h1>
+          <h1 className="land-h1">Administra tu gimnasio</h1>
           <p className="land-lead">
-            Clientes, membresías, control de acceso, pagos y rutinas en una sola
-            aplicación. Cada gimnasio trabaja con sus propios datos, separados de
-            los demás.
+            Clientes, membresías, control de acceso, pagos y rutinas en un solo
+            panel. Cada gimnasio opera con sus datos aislados de los demás.
           </p>
           <div className="land-cta">
             <a className="land-btn land-btn--neon land-btn--xl" href="#planes">Ver planes</a>
@@ -176,8 +260,8 @@ export function Landing() {
 
       <section className="land-section" id="modulos">
         <header className="land-sec-head" data-reveal>
-          <span className="land-eyebrow">[ 01 / Módulos ]</span>
           <h2 className="land-h2">Todo lo que necesita tu gimnasio</h2>
+          <p className="land-sub">Seis módulos que cubren la operación diaria, del registro del socio al control de la entrada.</p>
         </header>
         <div className="land-modulos">
           {FUNCIONES.map((f, i) => (
@@ -188,33 +272,161 @@ export function Landing() {
               </div>
               <h3>{f.titulo}</h3>
               <p>{f.texto}</p>
-              <span className="land-mod-code">[ {f.codigo} ]</span>
             </article>
           ))}
         </div>
       </section>
 
+      <section className="land-section" id="panel">
+        <header className="land-sec-head" data-reveal>
+          <h2 className="land-h2">El panel de tu gimnasio</h2>
+          <p className="land-sub">Indicadores del mes, ingresos por mes y los últimos accesos, en una sola pantalla. <span className="land-sample">[ datos de ejemplo ]</span></p>
+        </header>
+        <div className="land-panel" data-reveal data-ui>
+          <div className="land-panel-bar">
+            <span className="land-panel-dot" />
+            <span className="land-panel-dot" />
+            <span className="land-panel-dot" />
+            <span className="land-panel-url">gymbrot://panel/gym-centro</span>
+            <span className="land-panel-live">● EN VIVO</span>
+          </div>
+          <div className="land-panel-body">
+            <div className="land-panel-kpis">
+              <div className="land-kpi">
+                <span className="land-kpi-label">Ingresos del mes</span>
+                <b>{utils.money(2480000)}</b>
+                <span className="land-kpi-delta">▲ 12% vs mes anterior</span>
+              </div>
+              <div className="land-kpi">
+                <span className="land-kpi-label">Socios activos</span>
+                <b>{utils.num(100)}</b>
+                <span className="land-kpi-delta">7 por vencer</span>
+              </div>
+              <div className="land-kpi">
+                <span className="land-kpi-label">Accesos hoy</span>
+                <b>{utils.num(84)}</b>
+                <span className="land-kpi-delta">3 rechazados</span>
+              </div>
+            </div>
+            <div className="land-panel-grid">
+              <div className="land-panel-chart">
+                <span className="land-panel-cap">Ingresos por mes (COP)</span>
+                <div className="land-bars">
+                  {INGRESOS.map((v, i) => (
+                    <div className="land-bar" key={i}>
+                      <span className={"land-bar-fill" + (i === INGRESOS.length - 1 ? " is-now" : "")} style={{ height: `${(v / 120) * 100}%` }} />
+                      <span className="land-bar-mes">{MESES[i]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="land-panel-list">
+                <span className="land-panel-cap">Últimos accesos</span>
+                <ul>
+                  {ACCESOS.map((a) => (
+                    <li key={a.hora}>
+                      <span className="land-acc-hora">{a.hora}</span>
+                      <span className="land-acc-nombre">{a.nombre}</span>
+                      <span className="land-acc-plan">{a.plan}</span>
+                      <span className={"land-acc-estado" + (a.ok ? " ok" : " no")}>{a.ok ? "OK" : "VENCIDA"}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="land-section" id="aislamiento">
+        <header className="land-sec-head" data-reveal>
+          <h2 className="land-h2">Aislados por diseño</h2>
+          <p className="land-sub">GymBrot es una plataforma para muchos gimnasios. El aislamiento de los datos no es un adorno: vive en la capa que lee cada consulta.</p>
+        </header>
+        <div className="land-aisla">
+          <ul className="land-aisla-list">
+            {AISLAMIENTO.map((p, i) => (
+              <li key={p.titulo} data-reveal>
+                <span className="land-aisla-num">{String(i + 1).padStart(2, "0")}</span>
+                <div>
+                  <h3>{p.titulo}</h3>
+                  <p>{p.texto}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <figure className="land-aisla-fig" data-reveal data-ui>
+            <figcaption>Misma persona · dos gimnasios</figcaption>
+            <div className="land-aisla-cols">
+              <div className="land-aisla-col">
+                <span className="land-aisla-gym">gym-centro</span>
+                <div className="land-aisla-row"><span>Ana Restrepo</span><b>Premium</b></div>
+                <div className="land-aisla-row"><span>Ingresos del mes</span><b>{utils.money(2480000)}</b></div>
+              </div>
+              <div className="land-aisla-col">
+                <span className="land-aisla-gym">gym-titan</span>
+                <div className="land-aisla-row"><span>Ana Restrepo</span><b>Básico</b></div>
+                <div className="land-aisla-row"><span>Ingresos del mes</span><b>{utils.money(940000)}</b></div>
+              </div>
+            </div>
+            <p className="land-aisla-nota">La misma cédula, dos registros. Ninguna fila cruza de un gimnasio al otro.</p>
+          </figure>
+        </div>
+      </section>
+
       <section className="land-section" id="planes">
         <header className="land-sec-head" data-reveal>
-          <span className="land-eyebrow">[ 02 / Planes ]</span>
           <h2 className="land-h2">Elige tu plan</h2>
-          <p className="land-sub">Pago mensual, sin cláusula de permanencia.</p>
+          <p className="land-sub">Pago mensual, sin cláusula de permanencia. Elige según la cantidad de socios de tu gimnasio.</p>
         </header>
-        <div className="land-planes">
+
+        <div className="land-reco" data-reveal>
+          <label className="land-reco-label" htmlFor="reco">¿Cuántos socios tiene tu gimnasio?</label>
+          <div className="land-reco-row">
+            <input
+              id="reco"
+              type="range"
+              min={10}
+              max={1000}
+              step={10}
+              value={socios}
+              onChange={(e) => setSocios(Number(e.target.value))}
+              className="land-reco-range"
+            />
+            <output className="land-reco-num" htmlFor="reco">{utils.num(socios)} socios</output>
+          </div>
+          <p className="land-reco-out">
+            Te recomendamos el plan <b>{planes.find((p) => p.id_plan_software === recomendado)?.nombre ?? "—"}</b>.
+          </p>
+        </div>
+
+        <div className="land-spec">
+          <div className="land-spec-row land-spec-row--head" aria-hidden>
+            <span>Plan</span>
+            <span>Precio / mes</span>
+            <span>Socios</span>
+            <span>Incluye</span>
+            <span>Acción</span>
+          </div>
           {planes.map((p) => (
-            <div key={p.id_plan_software} className={"land-plan" + (p.destacado ? " land-plan--top" : "")} data-reveal>
-              <div className="land-plan-head">
+            <article
+              key={p.id_plan_software}
+              className={"land-spec-row" + (p.destacado ? " is-top" : "") + (p.id_plan_software === recomendado ? " is-reco" : "")}
+              data-reveal
+            >
+              <div className="land-spec-name">
                 <h3>{p.nombre}</h3>
                 {p.destacado && <span className="land-plan-tag">El más elegido</span>}
+                {p.id_plan_software === recomendado && <span className="land-plan-tag land-plan-tag--reco">Recomendado</span>}
               </div>
-              <div className="land-precio">
+              <div className="land-spec-price">
                 {utils.money(p.precio_mensual)}
                 <span>/mes</span>
               </div>
-              <p className="land-limite">
-                {p.max_clientes === null ? "Clientes ilimitados" : `Hasta ${utils.num(p.max_clientes)} clientes`}
-              </p>
-              <ul>
+              <div className="land-spec-limit">
+                {p.max_clientes === null ? "Ilimitados" : `Hasta ${utils.num(p.max_clientes)}`}
+              </div>
+              <ul className="land-spec-incluye">
                 {p.incluye.map((item) => (
                   <li key={item}>
                     <i className="bi bi-check2" aria-hidden />
@@ -222,33 +434,153 @@ export function Landing() {
                   </li>
                 ))}
               </ul>
-              <Link
-                className={"land-btn land-btn--xl " + (p.destacado ? "land-btn--neon" : "land-btn--line")}
-                to={`/registro?plan=${p.id_plan_software}`}
-              >
-                Comprar
-              </Link>
-            </div>
+              <div className="land-spec-cta">
+                <Link
+                  className={"land-btn " + (p.id_plan_software === recomendado ? "land-btn--neon" : "land-btn--line")}
+                  to={`/registro?plan=${p.id_plan_software}`}
+                >
+                  Comprar
+                </Link>
+              </div>
+            </article>
           ))}
+        </div>
+
+        <div className="land-compara" data-reveal>
+          <span className="land-eyebrow">[ Comparativa de características ]</span>
+          <h3 className="land-h3">Básico / Pro / Premium</h3>
+          <div className="land-compara-grid">
+            <div className="land-compara-row land-compara-head">
+              <span>Característica</span>
+              <span>Básico</span>
+              <span>Pro</span>
+              <span>Premium</span>
+            </div>
+            <div className="land-compara-row">
+              <span>Socios máximo</span>
+              <span>100</span>
+              <span>500</span>
+              <span>Ilimitados</span>
+            </div>
+            <div className="land-compara-row">
+              <span>Clientes y membresías</span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+            </div>
+            <div className="land-compara-row">
+              <span>Control de acceso</span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+            </div>
+            <div className="land-compara-row">
+              <span>Pagos y registro de cobros</span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+            </div>
+            <div className="land-compara-row">
+              <span>Instructores, rutinas y citas</span>
+              <span><i className="bi bi-dash" aria-hidden /></span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+            </div>
+            <div className="land-compara-row">
+              <span>Progreso de los socios</span>
+              <span><i className="bi bi-dash" aria-hidden /></span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+            </div>
+            <div className="land-compara-row">
+              <span>Finanzas y reportes</span>
+              <span><i className="bi bi-dash" aria-hidden /></span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+            </div>
+            <div className="land-compara-row">
+              <span>Gymbrot AI</span>
+              <span><i className="bi bi-dash" aria-hidden /></span>
+              <span><i className="bi bi-dash" aria-hidden /></span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+            </div>
+            <div className="land-compara-row">
+              <span>Soporte prioritario</span>
+              <span><i className="bi bi-dash" aria-hidden /></span>
+              <span><i className="bi bi-dash" aria-hidden /></span>
+              <span><i className="bi bi-check2" aria-hidden /></span>
+            </div>
+          </div>
+          <p className="land-compara-nota">Los datos de los gimnasios quedan aislados entre sí en todos los planes.</p>
         </div>
       </section>
 
-      <section className="land-section">
+      <section className="land-section" id="como">
         <header className="land-sec-head" data-reveal>
-          <span className="land-eyebrow">[ 03 / Flujo ]</span>
           <h2 className="land-h2">Cómo funciona</h2>
+          <p className="land-sub">De la decisión del plan a tu panel operando, en tres pasos.</p>
         </header>
         <ol className="land-pasos">
           {PASOS.map((p, i) => (
             <li key={p.titulo} className="land-paso" data-reveal>
-              <span className="land-paso-num">{String(i + 1).padStart(2, "0")}</span>
-              <div>
-                <h3>{p.titulo}</h3>
-                <p>{p.texto}</p>
-              </div>
+              <span className="land-paso-num">Paso {String(i + 1).padStart(2, "0")}</span>
+              <h3>{p.titulo}</h3>
+              <p>{p.texto}</p>
             </li>
           ))}
         </ol>
+      </section>
+
+      <section className="land-section" id="faq">
+        <header className="land-sec-head" data-reveal>
+          <h2 className="land-h2">Preguntas frecuentes</h2>
+          <p className="land-sub">Lo que suelen preguntar antes de registrar un gimnasio.</p>
+        </header>
+        <div className="land-faq">
+          {FAQ.map((f, i) => {
+            const abierta = faqAbierta === i;
+            return (
+              <div key={f.q} className={"land-faq-item" + (abierta ? " is-open" : "")} data-reveal>
+                <button
+                  type="button"
+                  className="land-faq-q"
+                  aria-expanded={abierta}
+                  onClick={() => setFaqAbierta(abierta ? null : i)}
+                >
+                  <span>{f.q}</span>
+                  <i className="bi bi-plus-lg" aria-hidden />
+                </button>
+                <div className="land-faq-a">
+                  <p>{f.a}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="land-section" id="contacto">
+        <div className="land-contacto">
+          <div className="land-contacto-info" data-reveal>
+            <span className="land-eyebrow">[ Contacto ]</span>
+            <h2 className="land-h2">Habla con nosotros</h2>
+            <p className="land-sub">¿Dudas sobre los planes o quieres ver una demostración? Escríbenos y te respondemos.</p>
+            <ul className="land-contacto-datos">
+              <li><i className="bi bi-envelope" aria-hidden /> {CORREO}</li>
+              <li><i className="bi bi-geo-alt" aria-hidden /> Valledupar, Colombia</li>
+              <li><i className="bi bi-clock" aria-hidden /> Lunes a viernes, 8:00–18:00</li>
+            </ul>
+          </div>
+          <form className="land-contacto-form" onSubmit={enviarContacto} data-reveal>
+            <label htmlFor="c-nombre">Nombre</label>
+            <input id="c-nombre" name="nombre" type="text" required placeholder="Tu nombre" />
+            <label htmlFor="c-correo">Correo</label>
+            <input id="c-correo" name="correo" type="email" required placeholder="tucorreo@ejemplo.com" />
+            <label htmlFor="c-mensaje">Mensaje</label>
+            <textarea id="c-mensaje" name="mensaje" rows={4} required placeholder="Cuéntanos qué necesitas" />
+            <button type="submit" className="land-btn land-btn--neon land-btn--xl">Enviar mensaje</button>
+          </form>
+        </div>
       </section>
 
       <section className="land-cta-band" data-reveal>
@@ -259,8 +591,36 @@ export function Landing() {
       </section>
 
       <footer className="land-footer">
-        <span>© {new Date().getFullYear()} Gymbrot — Software de gestión para gimnasios</span>
-        <span>[ GYM-CENTRO ] · REV 2.6</span>
+        <div className="land-footer-top">
+          <div className="land-footer-brand">
+            <img src="/logos/gymbrot-logo.png" alt="GYMBROT" width={348} height={180} />
+            <p>Software de gestión para gimnasios. Clientes, membresías, control de acceso y finanzas en un solo panel.</p>
+          </div>
+          <nav className="land-footer-cols" aria-label="Enlaces del pie">
+            <div className="land-footer-col">
+              <h4>Producto</h4>
+              <a href="#modulos">Módulos</a>
+              <a href="#panel">Panel</a>
+              <a href="#aislamiento">Aislamiento</a>
+              <a href="#planes">Planes</a>
+            </div>
+            <div className="land-footer-col">
+              <h4>Cuenta</h4>
+              <Link to="/login">Iniciar sesión</Link>
+              <Link to="/registro">Registrar gimnasio</Link>
+            </div>
+            <div className="land-footer-col">
+              <h4>Ayuda</h4>
+              <a href="#faq">Preguntas</a>
+              <a href="#contacto">Contacto</a>
+              <a href={`mailto:${CORREO}`}>{CORREO}</a>
+            </div>
+          </nav>
+        </div>
+        <div className="land-footer-bottom">
+          <span>© {new Date().getFullYear()} Gymbrot — Software de gestión para gimnasios</span>
+          <span>Valledupar, Colombia · REV 2.6</span>
+        </div>
       </footer>
     </div>
   );

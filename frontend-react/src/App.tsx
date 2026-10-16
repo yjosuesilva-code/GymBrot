@@ -5,7 +5,6 @@ import { Dashboard } from "./pages/Dashboard";
 import { Clientes } from "./pages/Clientes";
 import { ClienteDetalle } from "./pages/ClienteDetalle";
 import { Finanzas } from "./pages/Finanzas";          // [P1]
-import { Acceso } from "./pages/Acceso";              // [P1]
 import { GymbrotAI } from "./pages/GymbrotAI";        // [P1]
 import { Login } from "./pages/Login";
 import { Instructores } from "./pages/Instructores";          // [P3]
@@ -37,7 +36,9 @@ const RUTAS_PORTAL: { path: string; element: ReactNode }[] = [
   { path: "instructores/:id", element: <InstructorDetalle /> }, // [P3]
   { path: "citas", element: <Citas /> },                        // [P2]
   { path: "progreso", element: <Progreso /> },                  // [P2]
-  { path: "acceso", element: <Acceso /> },                      // [P1]
+  // [P1] El control de acceso vive dentro de Clientes; /acceso queda como
+  // alias para no romper enlaces o marcadores viejos.
+  { path: "acceso", element: <Navigate to="../clientes" relative="path" replace /> },
   { path: "ejercicios", element: <Ejercicios /> },              // [P4]
   { path: "gymbrot-ai", element: <GymbrotAI /> },               // [P1]
 ];

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../data/api";
+import { useTenant } from "../tenant/TenantContext"; // [multitenant-slug]
 import { utils } from "../lib/utils";
 import type { Instructor } from "../types";
 
 export function InstructorDetalle() {
+  const { ruta } = useTenant(); // [multitenant-slug]
   // Lee el ":id" de la URL /instructores/:id (es el numero_identificacion)
   const { id } = useParams();
 
@@ -31,7 +33,7 @@ export function InstructorDetalle() {
   if (!instructor) {
     return (
       <div className="card-g">
-        <Link to="/instructores" className="btn-dark" style={{ textDecoration: "none" }}>← Volver</Link>
+        <Link to={ruta("/instructores")} className="btn-dark" style={{ textDecoration: "none" }}>← Volver</Link>
         <p className="empty-state">Instructor no encontrado</p>
       </div>
     );
@@ -51,7 +53,7 @@ export function InstructorDetalle() {
   return (
     <>
       <div className="card-g">
-        <Link to="/instructores" className="btn-dark" style={{ textDecoration: "none" }}>← Volver</Link>
+        <Link to={ruta("/instructores")} className="btn-dark" style={{ textDecoration: "none" }}>← Volver</Link>
         <div className="person" style={{ marginTop: 16 }}>
           <div className="person-avatar">{utils.iniciales(instructor.nombre, instructor.apellidos)}</div>
           <div>

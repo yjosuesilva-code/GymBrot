@@ -13,6 +13,7 @@ import {
 } from "chart.js";
 import type { ChartData, ChartOptions } from "chart.js";
 import { api } from "../data/api";
+import { useTenant } from "../tenant/TenantContext"; // [multitenant-slug]
 import type { NuevoPago } from "../data/api";
 import { utils } from "../lib/utils";
 import { membresiaVigente } from "../lib/membresias";
@@ -80,6 +81,7 @@ function Kpis({
   pendientes: number;
   meta: number;
 }) {
+  const { ruta } = useTenant(); // [multitenant-slug]
   const avance = porcentaje(meta, ingresosMes);
 
   return (
@@ -108,7 +110,7 @@ function Kpis({
           <span className="kpi-label">Membresías vigentes</span>
           <span className="kpi-value">{utils.num(membresiasVigentes)}</span>
           <span className="kpi-sub">
-            <Link to="/clientes" style={{ color: "inherit" }}>Ver clientes</Link>
+            <Link to={ruta("/clientes")} style={{ color: "inherit" }}>Ver clientes</Link>
           </span>
         </div>
       </div>

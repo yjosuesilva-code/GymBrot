@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import * as auth from "../lib/auth";
 import { api } from "../data/api";
 
@@ -19,10 +19,6 @@ export function Login() {
     const t = setInterval(() => setLectorConectado(api.lector.estaConectado()), 2000);
     return () => clearInterval(t);
   }, []);
-
-  if (auth.current()) {
-    return <Navigate to="/dashboard" replace />;
-  }
 
   function alternarLector() {
     const siguiente = !lectorConectado;

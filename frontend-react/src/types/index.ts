@@ -152,16 +152,60 @@ export interface Ingreso {
     estado_verificacion: 'APROBADO' | 'RECHAZADO';
 }
 
+// ===== [P3] Ejercicios (antes P4) =====
+/* Catálogo MIXTO (DECISIONES.md): los ejercicios base tienen gimnasio_id null y los ven todos los
+   gimnasios (solo lectura); los propios llevan el gimnasio_id de quien los creó. */
+
+export type GrupoMuscular =
+  | 'Pecho'
+  | 'Espalda'
+  | 'Hombros'
+  | 'Bíceps'
+  | 'Tríceps'
+  | 'Piernas'
+  | 'Glúteos'
+  | 'Abdomen'
+  | 'Cardio'
+  | 'Cuerpo completo';
+
+export type NivelEjercicio = 'Principiante' | 'Intermedio' | 'Avanzado';
+
+export type EquipoEjercicio =
+  | 'Máquina'
+  | 'Mancuerna'
+  | 'Barra'
+  | 'Polea'
+  | 'Kettlebell'
+  | 'Banda elástica'
+  | 'Peso corporal';
+
+// Cómo se mide: por repeticiones (ej. 12 sentadillas) o por tiempo (ej. 30 s de plancha)
+export type TipoMedicion = 'REPETICIONES' | 'TIEMPO';
+
+export type EstadoEjercicio = 'ACTIVO' | 'INACTIVO';
+
 export interface Ejercicio {
-    idEjercicio: number;
-    nombre: string;
-    descripcion: string;
-    grupoMuscular: string;
-    nivel: string;
-    series: number;
-    repeticiones: number;
-    recursoUrl: string;
+  id_ejercicio: number;                        // llave, global (como un SERIAL)
+  gimnasio_id: Gimnasio['gimnasio_id'] | null; // null = catálogo base (de todos, solo lectura)
+  nombre: string;
+  descripcion: string;
+  grupo_muscular: GrupoMuscular;
+  nivel: NivelEjercicio;
+  equipo: EquipoEjercicio;
+  tipo_medicion: TipoMedicion;
+  // Valores SUGERIDOS (opcionales): la rutina de cada cliente define los reales
+  series_sugeridas: number | null;
+  repeticiones_min_sugeridas: number | null;   // rango, si tipo_medicion es REPETICIONES (ej. 10–12)
+  repeticiones_max_sugeridas: number | null;
+  segundos_sugeridos: number | null;           // si tipo_medicion es TIEMPO
+  recurso_url: string;                         // video o imagen de referencia ('' si no hay)
+  estado: EstadoEjercicio;
 }
+
+// Lo que manda la vista al crear: id, gimnasio y estado los pone api.ejercicios.create
+export type EjercicioNuevo = Omit<Ejercicio, 'id_ejercicio' | 'gimnasio_id' | 'estado'>;
+
+// ===== [/P3] Ejercicios =====
 
 export interface Progreso {
   gimnasio_id: Gimnasio['gimnasio_id'];
@@ -233,7 +277,8 @@ export type Especialidad =
 export type EstadoInstructor = 'ACTIVO' | 'INACTIVO';
 
 export interface Instructor {
-  numero_identificacion: string;   // llave
+  gimnasio_id: Gimnasio['gimnasio_id']; // tenant: lo pone api.ts, la vista no lo conoce
+  numero_identificacion: string;   // llave dentro de cada gimnasio (D3)
   tipo_identificacion: TipoIdentificacion;
   nombre: string;
   apellidos: string;
@@ -245,8 +290,8 @@ export interface Instructor {
   estado: EstadoInstructor;
 }
 
-// Lo que se envía al crear: estado y fecha_contratacion los pone api.instructores.create
-export type InstructorNuevo = Omit<Instructor, 'estado' | 'fecha_contratacion'>;
+// Lo que se envía al crear: gimnasio_id, estado y fecha_contratacion los pone api.instructores.create
+export type InstructorNuevo = Omit<Instructor, 'gimnasio_id' | 'estado' | 'fecha_contratacion'>;
 // ===== [/P3] Instructores =====
 
 // ===== [P3] Rutinas =====
@@ -268,7 +313,8 @@ export type ObjetivoRutina =
   | 'Rehabilitación';
 
 export interface Rutina {
-  id_rutina: number;               // llave, autoincremental
+  gimnasio_id: Gimnasio['gimnasio_id']; // tenant: lo pone api.ts, la vista no lo conoce
+  id_rutina: number;               // llave, autoincremental global (como un SERIAL)
   id_instructor: string;           // Instructor.numero_identificacion
   id_cliente: string;              // Cliente.numero_identificacion
   nombre: string;
@@ -281,15 +327,16 @@ export interface Rutina {
 
 // Un ejercicio dentro de una rutina (tabla intermedia Rutina <-> Ejercicio del diagrama ER)
 export interface RutinaEjercicio {
+  gimnasio_id: Gimnasio['gimnasio_id']; // el mismo de su rutina
   id_rutina: number;               // Rutina.id_rutina
-  id_ejercicio: number;            // Ejercicio.idEjercicio (P4)
+  id_ejercicio: number;            // Ejercicio.id_ejercicio (base o propio del mismo gimnasio)
   orden: number;                   // posición dentro del día: 1, 2, 3...
   dia_semana: DiaSemana;
   notas_instructor: string;
 }
 
-// Lo que se envía al crear: id_rutina y fecha_creacion los pone api.rutinas.create
-export type RutinaNueva = Omit<Rutina, 'id_rutina' | 'fecha_creacion'>;
+// Lo que se envía al crear: gimnasio_id, id_rutina y fecha_creacion los pone api.rutinas.create
+export type RutinaNueva = Omit<Rutina, 'gimnasio_id' | 'id_rutina' | 'fecha_creacion'>;
 // ===== [/P3] Rutinas =====
 
 // ===== [P2] Citas =====

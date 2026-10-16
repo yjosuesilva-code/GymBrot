@@ -53,6 +53,16 @@ Si en el futuro se necesita identidad compartida entre gimnasios, se reabre aqu�
 
 ---
 
+## D4 — Tenant por URL: `/g/:slug` *(propuesta, por aprobar en equipo)*
+
+**Propuesto** en `docs/MULTITENANT-SLUG.md`. Cada gimnasio tiene un `slug` único
+(`iron-house`) y su portal vive en `/g/:slug/...`. El gimnasio activo de la capa de
+datos sale de la URL (TenantProvider) y solo se usa si la sesión tiene acceso a él
+(lo mismo que hará RLS). `gimnasio_id` sigue siendo la llave de las FKs; el slug es
+solo para la URL. El login pasa a ser por gimnasio (`/g/:slug/login`).
+
+---
+
 ## Decisiones pendientes (por cerrar en equipo)
 
 - [ ] Cómo identifica el login a qué gimnasio pertenece alguien: por usuario /
@@ -61,6 +71,8 @@ Si en el futuro se necesita identidad compartida entre gimnasios, se reabre aqu�
       busca al usuario en toda la plataforma y la sesión hereda su
       `gimnasio_id`. Consecuencia: el nombre y el correo de quien inicia sesión
       deben ser **únicos en toda la plataforma**. Falta confirmarlo en equipo.
+      **D4 propone cerrarlo por slug** (`/g/:slug/login`): el usuario se busca solo
+      dentro del gimnasio de la URL.
 - [ ] Qué catálogos son globales (compartidos) y cuáles por gimnasio:
       especialidades, ejercicios base.
 - [ ] Roles definitivos (superadmin, administrador, instructor, cliente) —

@@ -1,4 +1,4 @@
-import type { Sesion, Usuario } from "../types";
+import type { AccesoGimnasio, GimnasioPublico, Sesion, Usuario } from "../types";
 import { api } from "../data/api";
 
 const CLAVE = "gymbrot_session";
@@ -26,9 +26,18 @@ function fallo(motivo: MotivoFallo, mensaje: string): ResultadoLogin {
 /* Una sesion guardada antes del multitenant no trae gimnasio_id: no pasa
    esta validacion, leer() la descarta y el usuario vuelve a entrar por el
    login, que ya le asigna su gimnasio. */
+function esAcceso(datos: unknown): datos is AccesoGimnasio {
+  if (datos === null || typeof datos !== "object") return false;
+  const a = datos as Record<string, unknown>;
+  return typeof a.gimnasio_id === "string" && typeof a.slug === "string" && typeof a.rol === "string";
+}
+
 function esSesion(datos: unknown): datos is Sesion {
   if (datos === null || typeof datos !== "object") return false;
   const s = datos as Record<string, unknown>;
+  // [multitenant-slug] accesos es opcional: una sesion de antes del slug no lo
+  // trae y sigue siendo valida. Si viene, debe tener la forma correcta.
+  if (s.accesos !== undefined && !(Array.isArray(s.accesos) && s.accesos.every(esAcceso))) return false;
   return (
     typeof s.gimnasio_id === "string" &&
     typeof s.numero_identificacion === "string" &&
@@ -64,9 +73,12 @@ function leer(): Sesion | null {
 
 /* El campo que el usuario escribio se guarda aparte de la sesion: la UI lo
    muestra en el Topbar aunque el nombre real del usuario sea otro. */
-function sesionDe(u: Usuario, escrito: string): Sesion {
+function sesionDe(u: Usuario, escrito: string, slug: string): Sesion {
   return {
     gimnasio_id: u.gimnasio_id,
+    // [multitenant-slug] Hoy un usuario = un gimnasio. Con Supabase esta lista
+    // sale de gym_members y puede traer varios.
+    accesos: [{ gimnasio_id: u.gimnasio_id, slug, rol: u.rol }],
     numero_identificacion: u.numero_identificacion,
     usuario: escrito,
     nombre: u.nombre,
@@ -77,7 +89,17 @@ function sesionDe(u: Usuario, escrito: string): Sesion {
   };
 }
 
-export async function login(identificador: string, contrasena: string): Promise<ResultadoLogin> {
+/* [multitenant-slug] Con gimnasio (login de /g/:slug/login) el usuario se
+   busca solo dentro de ese gimnasio. Sin gimnasio (el /login viejo y el
+   auto-login de /registro) se busca en toda la plataforma como antes; ese
+   camino se retira en la Fase 4 de docs/MULTITENANT-SLUG.md. */
+export type OpcionesLogin = { gimnasio?: GimnasioPublico };
+
+export async function login(
+  identificador: string,
+  contrasena: string,
+  opciones: OpcionesLogin = {},
+): Promise<ResultadoLogin> {
   const escrito = identificador.trim();
   const clave = contrasena.trim();
 
@@ -88,7 +110,14 @@ export async function login(identificador: string, contrasena: string): Promise<
   if (!escrito) return fallo("CAMPOS_VACIOS", "Ingresa tu usuario.");
   if (!clave) return fallo("CAMPOS_VACIOS", "Ingresa tu contraseña.");
 
-  const usuario = await api.usuarios.buscarPorNombreOCorreo(escrito);
+  const { gimnasio } = opciones;
+  if (gimnasio && gimnasio.estado !== "ACTIVO") {
+    return fallo("SIN_ACCESO", `${gimnasio.nombre} no está activo en GymBrot.`);
+  }
+
+  const usuario = gimnasio
+    ? await api.usuarios.buscarEnGimnasio(gimnasio.gimnasio_id, escrito)
+    : await api.usuarios.buscarPorNombreOCorreo(escrito);
 
   // Usuario inexistente y clave erronea se reportan por separado porque el
   // formulario lo pide, pero OJO: eso revela que correos estan registrados.
@@ -109,13 +138,46 @@ export async function login(identificador: string, contrasena: string): Promise<
     );
   }
 
-  const sesion = sesionDe(usuario, escrito);
+  // El slug entra en la sesion para que redirigir las rutas viejas no tenga
+  // que buscarlo. Sin gimnasio en las opciones se resuelve por gimnasio_id.
+  const slug = gimnasio?.slug ?? (await slugDeGimnasio(usuario.gimnasio_id));
+  if (!slug) return fallo("SIN_ACCESO", "Tu gimnasio no está registrado en GymBrot.");
+
+  const sesion = sesionDe(usuario, escrito, slug);
   localStorage.setItem(CLAVE, JSON.stringify(sesion));
   return { ok: true, sesion };
 }
 
+async function slugDeGimnasio(gimnasioId: string): Promise<string | null> {
+  const g = (await api.gimnasios.list()).find((x) => x.gimnasio_id === gimnasioId);
+  return g?.slug ?? null;
+}
+
 export function current(): Sesion | null {
   return leer();
+}
+
+/* [multitenant-slug] Gimnasios a los que puede entrar la sesion. Una sesion
+   de antes del slug no trae accesos: se arma con su gimnasio_id y slug vacio
+   (portalDeInicio() lo completa). */
+export function accesosDe(sesion: Sesion): AccesoGimnasio[] {
+  return sesion.accesos ?? [{ gimnasio_id: sesion.gimnasio_id, slug: "", rol: sesion.rol }];
+}
+
+/* La pregunta que hace el guard de cada ruta privada. En el mock basta con
+   la sesion; con Supabase la respuesta real la da RLS y esto solo evita
+   pintar una pantalla que va a llegar vacia. */
+export function tieneAcceso(sesion: Sesion | null, gimnasioId: string): boolean {
+  if (!sesion) return false;
+  return accesosDe(sesion).some((a) => a.gimnasio_id === gimnasioId);
+}
+
+/* A donde mandar a alguien que entra por una ruta sin slug (/dashboard,
+   /clientes/123...): el portal del gimnasio con el que inicio sesion. */
+export async function portalDeInicio(sesion: Sesion): Promise<string | null> {
+  const primero = accesosDe(sesion).find((a) => a.gimnasio_id === sesion.gimnasio_id) ?? accesosDe(sesion)[0];
+  if (!primero) return null;
+  return primero.slug || (await slugDeGimnasio(primero.gimnasio_id));
 }
 
 export function logout(): void {

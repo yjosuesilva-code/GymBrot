@@ -1,7 +1,11 @@
 import { NavLink } from "react-router-dom";
 import { paginas } from "./paginas";
+import { useTenant } from "../../tenant/TenantContext";
 
 export function Sidebar() {
+  // [multitenant-slug] paginas.ts no conoce el slug: se le pone aqui.
+  const { ruta } = useTenant();
+
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -12,7 +16,7 @@ export function Sidebar() {
         {paginas.map((p) => (
           <NavLink
             key={p.to}
-            to={p.to}
+            to={ruta(p.to)}
             title={p.label}
             className={({ isActive }) => "nav-item" + (isActive ? " active" : "")}
           >

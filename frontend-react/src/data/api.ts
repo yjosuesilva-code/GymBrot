@@ -3,6 +3,7 @@ import { membresiaVigente } from "../lib/membresias";
 import { notificarCambioDeDatos } from "../lib/datos";
 import { slugUnico, slugify, validarSlug, normalizarSlugDeUrl } from "../lib/slug"; // [multitenant-slug]
 import { gimnasioFijado } from "../tenant/tenantActivo"; // [multitenant-slug]
+import { migrarDisponibilidadTexto, diaDisponible, horaDisponible, choque } from "../lib/horarios"; // [P4-horarios]
 import type {
   Gimnasio, // [multitenant]
   GimnasioPublico, // [multitenant-slug]
@@ -354,9 +355,9 @@ const APELLIDOS_SOCIO = [
    sobre la mensualidad por 6 y 12 meses, para que el numero "menos por el
    paquete" se entienda solo en el detalle. */
 const PLANES_V12: PlanMembresia[] = [
-  { id_plan:1, nombre:'Básico',   descripcion:'Acceso a sala de maquinas y area cardio',  precio_mensual:50000,  precio_semestral:285000,  precio_anual:540000,   estado:'ACTIVO' },
-  { id_plan:2, nombre:'Estándar', descripcion:'Básico mas clases grupales',               precio_mensual:80000,  precio_semestral:456000,  precio_anual:864000,   estado:'ACTIVO' },
-  { id_plan:3, nombre:'Premium',  descripcion:'Todo lo anterior mas sauna y entrenador',  precio_mensual:110000, precio_semestral:627000, precio_anual:1188000, estado:'ACTIVO' },
+  { id_plan:1, nombre:'Básico',   descripcion:'Acceso a sala de maquinas y area cardio',  precio_mensual:50000,  precio_semestral:285000,  precio_anual:540000,   estado:'ACTIVO', beneficios:['Acceso a sala de máquinas', 'Área de cardio', 'Registro de asistencia'] },
+  { id_plan:2, nombre:'Estándar', descripcion:'Básico mas clases grupales',               precio_mensual:80000,  precio_semestral:456000,  precio_anual:864000,   estado:'ACTIVO', beneficios:['Todo lo del Básico', 'Clases grupales', 'Reserva de cupos'] },
+  { id_plan:3, nombre:'Premium',  descripcion:'Todo lo anterior mas sauna y entrenador',  precio_mensual:110000, precio_semestral:627000, precio_anual:1188000, estado:'ACTIVO', beneficios:['Todo lo del Estándar', 'Sauna', 'Entrenador personal 2h/mes'] },
 ];
 
 const CLIENTES_EXTRA: Cliente[] = [];
@@ -506,7 +507,7 @@ for (let i = 0; i < 17; i++) {
     telefono: "31" + String(20000000 + azar(0, 99999999)).padStart(8, "0"),
     correo: "instructor" + id + "@gymbrot.com",
     especialidad: ESPECIALIDADES[i % ESPECIALIDADES.length],
-    disponibilidad: DISPONIBILIDADES[i % DISPONIBILIDADES.length],
+    horario: migrarDisponibilidadTexto(DISPONIBILIDADES[i % DISPONIBILIDADES.length]),
     fecha_contratacion: "20" + (20 + (i % 6)) + "-" + String(1 + (i % 12)).padStart(2, "0") + "-" + String(1 + (i % 26)).padStart(2, "0"),
     estado: i % 7 === 0 ? 'INACTIVO' : 'ACTIVO',
   });
@@ -799,11 +800,11 @@ const SEED: Seed = {
   // Centro tiene los 3 de siempre (las rutinas y citas de Centro los usan). Titan tiene 2 propios;
   // Natalia trabaja en los dos: misma cédula, dos registros (D3), para que una fuga se note.
   instructores: [
-    { gimnasio_id:'gym-centro', numero_identificacion:'2000000001', tipo_identificacion:'CC', nombre:'Camilo',  apellidos:'Herrera Díaz', telefono:'3101234567', correo:'camilo.herrera@gymbrot.com', especialidad:'Entrenador personal', disponibilidad:'Lun-Vie 6:00-14:00',  fecha_contratacion:'2025-02-03', estado:'ACTIVO' },
-    { gimnasio_id:'gym-centro', numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Natalia', apellidos:'Vargas Rojas', telefono:'3112345678', correo:'natalia.vargas@gymbrot.com', especialidad:'Yoga/Pilates',        disponibilidad:'Lun-Mié-Vie 16:00-21:00', fecha_contratacion:'2025-08-18', estado:'ACTIVO' },
-    { gimnasio_id:'gym-centro', numero_identificacion:'2000000003', tipo_identificacion:'CE', nombre:'Mateo',   apellidos:'Silva Castro', telefono:'3123456789', correo:'mateo.silva@gymbrot.com',    especialidad:'Nutrición',           disponibilidad:'Mar-Jue 8:00-12:00',  fecha_contratacion:'2026-01-12', estado:'INACTIVO' },
-    { gimnasio_id:'gym-titan',  numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Natalia', apellidos:'Vargas Rojas', telefono:'3112345678', correo:'natalia.vargas@titanfitness.com', especialidad:'Yoga/Pilates', disponibilidad:'Sáb 8:00-12:00', fecha_contratacion:'2026-09-01', estado:'ACTIVO' },
-    { gimnasio_id:'gym-titan',  numero_identificacion:'2000000101', tipo_identificacion:'CC', nombre:'Jorge',   apellidos:'Mendoza Ochoa', telefono:'3134567890', correo:'jorge.mendoza@titanfitness.com', especialidad:'Musculación', disponibilidad:'Lun-Sáb 5:00-11:00', fecha_contratacion:'2026-08-20', estado:'ACTIVO' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'2000000001', tipo_identificacion:'CC', nombre:'Camilo',  apellidos:'Herrera Díaz', telefono:'3101234567', correo:'camilo.herrera@gymbrot.com', especialidad:'Entrenador personal', horario:migrarDisponibilidadTexto('Lun-Vie 6:00-14:00'),  fecha_contratacion:'2025-02-03', estado:'ACTIVO' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Natalia', apellidos:'Vargas Rojas', telefono:'3112345678', correo:'natalia.vargas@gymbrot.com', especialidad:'Yoga/Pilates',        horario:migrarDisponibilidadTexto('Lun-Mié-Vie 16:00-21:00'), fecha_contratacion:'2025-08-18', estado:'ACTIVO' },
+    { gimnasio_id:'gym-centro', numero_identificacion:'2000000003', tipo_identificacion:'CE', nombre:'Mateo',   apellidos:'Silva Castro', telefono:'3123456789', correo:'mateo.silva@gymbrot.com',    especialidad:'Nutrición',           horario:migrarDisponibilidadTexto('Mar-Jue 8:00-12:00'),  fecha_contratacion:'2026-01-12', estado:'INACTIVO' },
+    { gimnasio_id:'gym-titan',  numero_identificacion:'2000000002', tipo_identificacion:'CC', nombre:'Natalia', apellidos:'Vargas Rojas', telefono:'3112345678', correo:'natalia.vargas@titanfitness.com', especialidad:'Yoga/Pilates', horario:migrarDisponibilidadTexto('Sáb 8:00-12:00'), fecha_contratacion:'2026-09-01', estado:'ACTIVO' },
+    { gimnasio_id:'gym-titan',  numero_identificacion:'2000000101', tipo_identificacion:'CC', nombre:'Jorge',   apellidos:'Mendoza Ochoa', telefono:'3134567890', correo:'jorge.mendoza@titanfitness.com', especialidad:'Musculación', horario:migrarDisponibilidadTexto('Lun-Sáb 5:00-11:00'), fecha_contratacion:'2026-08-20', estado:'ACTIVO' },
     // --- seed masivo de P1: 17 instructores mas en gym-centro ---
     ...INSTRUCTORES_EXTRA,
   ],
@@ -831,21 +832,21 @@ const SEED: Seed = {
 
   // ===== [P2] Progreso =====
   progreso: [
-    { gimnasio_id:'gym-centro', id_progreso:1, id_cliente:'1000000001', fecha:'2026-07-10', peso:62,   altura:1.65, notas:'Medición inicial' },
-    { gimnasio_id:'gym-centro', id_progreso:2, id_cliente:'1000000001', fecha:'2026-08-10', peso:60.5, altura:1.65, notas:'Bajó 1.5 kg' },
-    { gimnasio_id:'gym-centro', id_progreso:3, id_cliente:'1000000002', fecha:'2026-08-01', peso:82,   altura:1.78, notas:'Control inicial' },
-    { gimnasio_id:'gym-centro', id_progreso:4, id_cliente:'1000000005', fecha:'2026-09-01', peso:75,   altura:1.72, notas:'' },
+    { gimnasio_id:'gym-centro', id_progreso:1, id_cliente:'1000000001', fecha:'2026-07-10', peso:62,   altura:1.65, porcentaje_grasa: 24, masa_muscular: 26.5, notas:'Medición inicial' },
+    { gimnasio_id:'gym-centro', id_progreso:2, id_cliente:'1000000001', fecha:'2026-08-10', peso:60.5, altura:1.65, porcentaje_grasa: 22.5, masa_muscular: 27.2, notas:'Bajó 1.5 kg' },
+    { gimnasio_id:'gym-centro', id_progreso:3, id_cliente:'1000000002', fecha:'2026-08-01', peso:82,   altura:1.78, porcentaje_grasa: 25, masa_muscular: 30.5, notas:'Control inicial' },
+    { gimnasio_id:'gym-centro', id_progreso:4, id_cliente:'1000000005', fecha:'2026-09-01', peso:75,   altura:1.72, porcentaje_grasa: 19, masa_muscular: 32.8, notas:'' },
     // gym-titan: misma cedula que la Ana de gym-centro. Si su medicion aparece
     // en el progreso de la Ana de Centro, el filtro por gimnasio fallo.
-    { gimnasio_id:'gym-titan',  id_progreso:5, id_cliente:'1000000001', fecha:'2026-09-20', peso:63,   altura:1.65, notas:'Medición inicial en Titan' }
+    { gimnasio_id:'gym-titan',  id_progreso:5, id_cliente:'1000000001', fecha:'2026-09-20', peso:63,   altura:1.65, porcentaje_grasa: 23, masa_muscular: 27.0, notas:'Medición inicial en Titan' }
   ],
   // ===== [/P2] Progreso =====
 
   // ===== [P2] Citas =====
   citas: [
-    { gimnasio_id:'gym-centro', id_cita:1, id_cliente:'1000000001', id_instructor:'2000000001', fecha:'2026-10-06', hora:'07:00', estado:'CONFIRMADA', notas:'Rutina de fuerza' },
-    { gimnasio_id:'gym-centro', id_cita:2, id_cliente:'1000000002', id_instructor:'2000000002', fecha:'2026-10-07', hora:'17:00', estado:'PENDIENTE',  notas:'Primera clase de yoga' },
-    { gimnasio_id:'gym-centro', id_cita:3, id_cliente:'1000000005', id_instructor:'2000000003', fecha:'2026-10-08', hora:'09:00', estado:'CANCELADA',  notas:'Reagendar' }
+    { gimnasio_id:'gym-centro', id_cita:1, id_cliente:'1000000001', id_instructor:'2000000001', fecha:'2026-10-06', hora:'07:00', estado:'CONFIRMADA', tipo_cita:'EVALUACION',  notas:'Rutina de fuerza' },
+    { gimnasio_id:'gym-centro', id_cita:2, id_cliente:'1000000002', id_instructor:'2000000002', fecha:'2026-10-07', hora:'17:00', estado:'PENDIENTE',  tipo_cita:'SEGUIMIENTO', notas:'Primera clase de yoga' },
+    { gimnasio_id:'gym-centro', id_cita:3, id_cliente:'1000000005', id_instructor:'2000000003', fecha:'2026-10-08', hora:'09:00', estado:'CANCELADA',  tipo_cita:'CONSULTA',    notas:'Reagendar' }
   ],
   // ===== [/P2] Citas =====
 };
@@ -931,6 +932,54 @@ function completarSlugs(): void {
 }
 
 completarSlugs();
+
+/* Migracion de la disponibilidad de instructores de texto libre ('Lun-Vie
+   6:00-14:00') a intervalos por dia (HorarioInstructor). Idempotente: solo
+   toca las filas que todavia traen `disponibilidad` como string y no tienen
+   `horario`. No se sube SEED_VERSION (borraria gimnasios registrados); el
+   bump de v15 sembraria horarios nuevos, pero esta migracion cubre a quien
+   quedo con datos v14. */
+function migrarDisponibilidad(): void {
+  const clave = "gymbrot_instructores";
+  const raw = localStorage.getItem(clave);
+  if (!raw) return;
+  let instructores: Array<Record<string, unknown>>;
+  try {
+    instructores = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  if (instructores.every((i) => typeof i.horario === "object" && i.horario !== null)) return;
+  const migrados = instructores.map((i) => {
+    if (i.horario !== null && typeof i.horario === "object") return i;
+    const texto = typeof i.disponibilidad === "string" ? i.disponibilidad : "";
+    const fila: Record<string, unknown> = { ...i, horario: migrarDisponibilidadTexto(texto) };
+    delete fila.disponibilidad;
+    return fila;
+  });
+  localStorage.setItem(clave, JSON.stringify(migrados));
+}
+
+migrarDisponibilidad();
+
+/* Migracion de citas: las filas v14 no traen `tipo_cita` (el campo nace en
+   P4). Idempotente y con default CONSULTA, que es el tipo mas generico. */
+function migrarTipoCita(): void {
+  const clave = "gymbrot_citas";
+  const raw = localStorage.getItem(clave);
+  if (!raw) return;
+  let citas: Array<Record<string, unknown>>;
+  try {
+    citas = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  if (citas.every((c) => typeof c.tipo_cita === "string")) return;
+  const migradas = citas.map((c) => (typeof c.tipo_cita === "string" ? c : { ...c, tipo_cita: "CONSULTA" }));
+  localStorage.setItem(clave, JSON.stringify(migradas));
+}
+
+migrarTipoCita();
 
 // --- Multitenant ---------------------------------------------------------
 // Misma clave que CLAVE en lib/auth.ts. Se lee directo de localStorage y no
@@ -2346,6 +2395,15 @@ export const api = {
       await api._delay();
       return db.readTenant<Progreso>("progreso").filter((p) => p.id_cliente === id);
     },
+    async remove(id: number): Promise<ApiResp<void>> {
+      await api._delay();
+      const arr = db.readTenant<Progreso>("progreso");
+      const idx = arr.findIndex((p) => p.id_progreso === id);
+      if (idx === -1) return { ok: false, mensaje: "Medición no encontrada" };
+      arr.splice(idx, 1);
+      db.writeTenant("progreso", arr);
+      return { ok: true, mensaje: "Medición eliminada" };
+    },
     async create(data: ProgresoNuevo): Promise<ApiResp<Progreso>> {
       await api._delay();
       const arr = db.readTenant<Progreso>("progreso");
@@ -2360,6 +2418,32 @@ export const api = {
 
   // ===== [P2] Citas =====
   citas: {
+    /* Validaciones compartidas por create y update: el instructor debe existir
+       y estar disponible (dia e intervalo) en la fecha/hora pedidas, y no debe
+       tener otra cita (distinta de `excluirId`) en el mismo instante. Se
+       replica la logica de lib/horarios.ts para que ninguna via del mock
+       deje guardar una cita que choque o caiga fuera del horario. */
+    _validar(
+      data: Pick<CitaNueva, "id_cliente" | "id_instructor" | "fecha" | "hora">,
+      excluirId?: number
+    ): string | null {
+      if (!data.id_cliente || !data.id_instructor || !data.fecha || !data.hora)
+        return "Cliente, instructor, fecha y hora son obligatorios";
+      const instructor = db
+        .readTenant<Instructor>("instructores")
+        .find((i) => i.numero_identificacion === data.id_instructor);
+      if (!instructor) return "El instructor no existe";
+      if (!db.readTenant<Cliente>("clientes").some((c) => c.numero_identificacion === data.id_cliente))
+        return "El cliente no existe";
+      if (!diaDisponible(instructor.horario, data.fecha))
+        return `${instructor.nombre} ${instructor.apellidos} no atiende ese día de la semana`;
+      if (!horaDisponible(instructor.horario, data.fecha, data.hora))
+        return `${instructor.nombre} ${instructor.apellidos} no está disponible a las ${data.hora} ese día`;
+      if (choque(db.readTenant<Cita>("citas"), data.id_instructor, data.fecha, data.hora, excluirId))
+        return `${instructor.nombre} ${instructor.apellidos} ya tiene una cita a esa fecha y hora`;
+      return null;
+    },
+
     async list(): Promise<Cita[]> {
       await api._delay();
       return db.readTenant<Cita>("citas");
@@ -2370,6 +2454,8 @@ export const api = {
     },
     async create(data: CitaNueva): Promise<ApiResp<Cita>> {
       await api._delay();
+      const error = api.citas._validar(data);
+      if (error) return { ok: false, mensaje: error };
       const arr = db.readTenant<Cita>("citas");
       const nuevoId = db.siguienteId<Cita>("citas", (c) => c.id_cita);
       const nueva: Cita = { gimnasio_id: gimnasioParaEscribir(), id_cita: nuevoId, estado: "PENDIENTE", ...data };
@@ -2382,6 +2468,9 @@ export const api = {
       const arr = db.readTenant<Cita>("citas");
       const cita = arr.find((c) => c.id_cita === id);
       if (!cita) return { ok: false, mensaje: "Cita no encontrada" };
+      const final = { ...cita, ...data };
+      const error = api.citas._validar(final, id);
+      if (error) return { ok: false, mensaje: error };
       Object.assign(cita, data, { id_cita: id });
       db.writeTenant("citas", arr);
       return { ok: true, mensaje: "Cita actualizada", data: cita };

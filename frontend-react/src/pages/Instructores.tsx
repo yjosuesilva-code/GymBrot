@@ -4,8 +4,9 @@ import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { useTenant } from "../tenant/TenantContext"; // [multitenant-slug]
 import { utils } from "../lib/utils";
+import { disponibilidadTexto, DIAS_ORDEN } from "../lib/horarios";
 import { Paginador } from "../components/Paginador";
-import type { Instructor, Especialidad, EstadoInstructor, TipoIdentificacion } from "../types";
+import type { Instructor, Especialidad, EstadoInstructor, TipoIdentificacion, DiaSemana, HorarioInstructor, IntervaloHorario } from "../types";
 
 // El formulario tiene todos los campos del instructor menos el estado (se cambia con activar/desactivar)
 // y el gimnasio (lo pone api.ts: la vista no lo conoce)
@@ -23,6 +24,16 @@ const ESPECIALIDADES: Especialidad[] = [
   "Funcional",
 ];
 
+const NOMBRE_DIA: Record<DiaSemana, string> = {
+  LUNES: "Lunes",
+  MARTES: "Martes",
+  MIERCOLES: "Miércoles",
+  JUEVES: "Jueves",
+  VIERNES: "Viernes",
+  SABADO: "Sábado",
+  DOMINGO: "Domingo",
+};
+
 const VACIO: FormInstructor = {
   tipo_identificacion: "CC",
   numero_identificacion: "",
@@ -31,7 +42,7 @@ const VACIO: FormInstructor = {
   telefono: "",
   correo: "",
   especialidad: "Entrenador personal",
-  disponibilidad: "",
+  horario: {},
   fecha_contratacion: "",
 };
 
@@ -39,8 +50,15 @@ const VACIO: FormInstructor = {
 function validar(f: FormInstructor, editando: boolean): string {
   const soloLetras = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]{2,}$/;
 
-  if (!f.numero_identificacion || !f.nombre || !f.apellidos || !f.telefono || !f.correo || !f.disponibilidad)
-    return "Todos los campos son obligatorios";
+  const tieneHorario = DIAS_ORDEN.some((d) => (f.horario[d]?.length ?? 0) > 0);
+  if (!f.numero_identificacion || !f.nombre || !f.apellidos || !f.telefono || !f.correo || !tieneHorario)
+    return "Todos los campos son obligatorios (incluye al menos un día de disponibilidad)";
+  for (const d of DIAS_ORDEN) {
+    for (const iv of f.horario[d] ?? []) {
+      if (!iv.desde || !iv.hasta) return `Completa los intervalos de ${NOMBRE_DIA[d]}`;
+      if (iv.desde >= iv.hasta) return `En ${NOMBRE_DIA[d]} la hora "desde" debe ser anterior a la "hasta"`;
+    }
+  }
   if ((f.tipo_identificacion === "CC" || f.tipo_identificacion === "TI") && !/^\d{6,10}$/.test(f.numero_identificacion))
     return "Para CC o TI la identificación debe tener de 6 a 10 dígitos";
   if (!/^[A-Za-z0-9]{5,12}$/.test(f.numero_identificacion))
@@ -153,11 +171,45 @@ export function Instructores() {
       telefono: i.telefono,
       correo: i.correo,
       especialidad: i.especialidad,
-      disponibilidad: i.disponibilidad,
+      horario: JSON.parse(JSON.stringify(i.horario ?? {})),
       fecha_contratacion: i.fecha_contratacion,
     });
     setError("");
     setShow(true);
+  }
+
+  // --- Editor de horario por intervalos -----------------------------------
+  function toggleDia(dia: DiaSemana, activo: boolean) {
+    setForm((f) => {
+      const horario: HorarioInstructor = { ...f.horario };
+      if (activo) horario[dia] = [{ desde: "06:00", hasta: "14:00" }];
+      else delete horario[dia];
+      return { ...f, horario };
+    });
+  }
+
+  function agregarIntervalo(dia: DiaSemana) {
+    setForm((f) => ({
+      ...f,
+      horario: { ...f.horario, [dia]: [...(f.horario[dia] ?? []), { desde: "08:00", hasta: "12:00" }] },
+    }));
+  }
+
+  function quitarIntervalo(dia: DiaSemana, idx: number) {
+    setForm((f) => {
+      const ints = (f.horario[dia] ?? []).filter((_, i) => i !== idx);
+      const horario: HorarioInstructor = { ...f.horario };
+      if (ints.length === 0) delete horario[dia];
+      else horario[dia] = ints;
+      return { ...f, horario };
+    });
+  }
+
+  function setIntervalo(dia: DiaSemana, idx: number, campo: keyof IntervaloHorario, valor: string) {
+    setForm((f) => {
+      const ints = (f.horario[dia] ?? []).map((iv, i) => (i === idx ? { ...iv, [campo]: valor } : iv));
+      return { ...f, horario: { ...f.horario, [dia]: ints } };
+    });
   }
 
   async function guardar() {
@@ -169,7 +221,6 @@ export function Instructores() {
       apellidos: form.apellidos.trim(),
       telefono: form.telefono.trim(),
       correo: form.correo.trim().toLowerCase(),
-      disponibilidad: form.disponibilidad.trim(),
     };
 
     const msg = validar(limpio, editandoId !== null);
@@ -186,7 +237,7 @@ export function Instructores() {
       telefono: limpio.telefono,
       correo: limpio.correo,
       especialidad: limpio.especialidad,
-      disponibilidad: limpio.disponibilidad,
+      horario: limpio.horario,
     };
 
     setGuardando(true);
@@ -248,7 +299,7 @@ export function Instructores() {
 
       <div className="toolbar" style={{ marginBottom: 20 }}>
         <div className="search-box">
-          <span className="search-ico">🔍</span>
+          <span className="search-ico"><i className="bi bi-search" aria-hidden /></span>
           <input
             type="text"
             className="form-control-dark"
@@ -312,17 +363,17 @@ export function Instructores() {
                   <td data-label="Identificación">{i.tipo_identificacion} {i.numero_identificacion}</td>
                   <td data-label="Teléfono">{i.telefono}</td>
                   <td data-label="Especialidad">{i.especialidad}</td>
-                  <td data-label="Disponibilidad">{i.disponibilidad}</td>
+                  <td data-label="Disponibilidad">{disponibilidadTexto(i.horario) || "—"}</td>
                   <td data-label="Contratación">{utils.fecha(i.fecha_contratacion)}</td>
                   <td data-label="Estado"><span className={"badge-g " + utils.badgeClass(i.estado)}>{i.estado}</span></td>
                   <td data-label="Acciones">
                     <div className="cell-actions">
-                      <button className="btn-icon" title="Ver perfil" onClick={() => navigate(ruta("/instructores/" + i.numero_identificacion))}>👁</button>
-                      <button className="btn-icon" title="Editar" onClick={() => abrirEdicion(i)}>✏️</button>
+                      <button className="btn-icon" title="Ver perfil" onClick={() => navigate(ruta("/instructores/" + i.numero_identificacion))}><i className="bi bi-eye" aria-hidden /></button>
+                      <button className="btn-icon" title="Editar" onClick={() => abrirEdicion(i)}><i className="bi bi-pencil" aria-hidden /></button>
                       <button className="btn-icon" title={i.estado === "ACTIVO" ? "Desactivar" : "Activar"} onClick={() => cambiarEstado(i)}>
-                        {i.estado === "ACTIVO" ? "🚫" : "✅"}
+                        <i className={"bi " + (i.estado === "ACTIVO" ? "bi-slash-circle" : "bi-check-circle")} aria-hidden />
                       </button>
-                      <button className="btn-icon" title="Eliminar" onClick={() => pedirEliminar(i)}>🗑️</button>
+                      <button className="btn-icon" title="Eliminar" onClick={() => pedirEliminar(i)}><i className="bi bi-trash" aria-hidden /></button>
                     </div>
                   </td>
                 </tr>
@@ -380,9 +431,56 @@ export function Instructores() {
                 {ESPECIALIDADES.map((esp) => <option key={esp} value={esp}>{esp}</option>)}
               </select>
             </div>
-            <div className="col-md-6">
+            <div className="col-12">
               <label className="form-label-g">Disponibilidad</label>
-              <input className="form-control-dark" placeholder="Ej. Lun-Vie 6:00-14:00" value={form.disponibilidad} onChange={(e) => setCampo("disponibilidad", e.target.value)} />
+              <div className="disp-editor">
+                {DIAS_ORDEN.map((dia) => {
+                  const intervalos = form.horario[dia] ?? [];
+                  const activo = intervalos.length > 0;
+                  return (
+                    <div className={"disp-dia" + (activo ? " activo" : "")} key={dia}>
+                      <label className="disp-toggle">
+                        <input type="checkbox" checked={activo} onChange={(e) => toggleDia(dia, e.target.checked)} />
+                        <span>{NOMBRE_DIA[dia]}</span>
+                      </label>
+                      {activo ? (
+                        <div className="disp-intervalos">
+                          {intervalos.map((iv, idx) => (
+                            <div className="disp-intervalo" key={idx}>
+                              <input
+                                type="time"
+                                className="form-control-dark"
+                                value={iv.desde}
+                                onChange={(e) => setIntervalo(dia, idx, "desde", e.target.value)}
+                              />
+                              <span className="disp-guion">–</span>
+                              <input
+                                type="time"
+                                className="form-control-dark"
+                                value={iv.hasta}
+                                onChange={(e) => setIntervalo(dia, idx, "hasta", e.target.value)}
+                              />
+                              <button
+                                type="button"
+                                className="btn-icon"
+                                title="Quitar intervalo"
+                                onClick={() => quitarIntervalo(dia, idx)}
+                              >
+                                <i className="bi bi-trash" aria-hidden />
+                              </button>
+                            </div>
+                          ))}
+                          <button type="button" className="btn-dark disp-agregar" onClick={() => agregarIntervalo(dia)}>
+                            + Agregar intervalo
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="disp-vacio">No disponible</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
             <div className="col-md-6">
               <label className="form-label-g">Fecha de contratación</label>

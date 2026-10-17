@@ -96,6 +96,7 @@ export interface PlanMembresia {
     precio_semestral: number;
     precio_anual: number;
     estado: 'ACTIVO' | 'INACTIVO';
+    beneficios?: string[];
 }
 
 export interface Membresia {
@@ -214,6 +215,8 @@ export interface Progreso {
   fecha: string;      // 'YYYY-MM-DD'
   peso: number;       // kg
   altura: number;     // metros
+  porcentaje_grasa?: number;
+  masa_muscular?: number;
   notas: string;
 }
 
@@ -276,6 +279,17 @@ export type Especialidad =
 
 export type EstadoInstructor = 'ACTIVO' | 'INACTIVO';
 
+/* Disponibilidad por intervalos: cada día de la semana tiene (opcionalmente)
+   una lista de rangos 'HH:MM' inclusive. Sustituye al texto libre anterior. */
+export interface IntervaloHorario {
+  desde: string; // 'HH:MM'
+  hasta: string; // 'HH:MM'
+}
+
+export type HorarioInstructor = {
+  [key in DiaSemana]?: IntervaloHorario[];
+};
+
 export interface Instructor {
   gimnasio_id: Gimnasio['gimnasio_id']; // tenant: lo pone api.ts, la vista no lo conoce
   numero_identificacion: string;   // llave dentro de cada gimnasio (D3)
@@ -285,7 +299,7 @@ export interface Instructor {
   telefono: string;
   correo: string;
   especialidad: Especialidad;
-  disponibilidad: string;          // texto libre, ej. 'Lun-Vie 6:00-14:00'
+  horario: HorarioInstructor;      // intervalos por día; el texto legible se deriva con disponibilidadTexto
   fecha_contratacion: string;      // 'YYYY-MM-DD'
   estado: EstadoInstructor;
 }
@@ -340,6 +354,8 @@ export type RutinaNueva = Omit<Rutina, 'gimnasio_id' | 'id_rutina' | 'fecha_crea
 // ===== [/P3] Rutinas =====
 
 // ===== [P2] Citas =====
+export type TipoCita = 'EVALUACION' | 'SEGUIMIENTO' | 'NUTRICION' | 'CONSULTA';
+
 export interface Cita {
   gimnasio_id: Gimnasio['gimnasio_id'];
   id_cita: number;
@@ -347,7 +363,8 @@ export interface Cita {
   id_instructor: string;
   fecha: string;   // 'YYYY-MM-DD'
   hora: string;    // 'HH:MM'
-  estado: 'PENDIENTE' | 'CONFIRMADA' | 'CANCELADA';
+  estado: 'PENDIENTE' | 'CONFIRMADA' | 'COMPLETADA' | 'CANCELADA';
+  tipo_cita: TipoCita;
   notas: string;
 }
 // Lo que se envía al crear: gimnasio_id, el id y el estado los pone api.citas.create

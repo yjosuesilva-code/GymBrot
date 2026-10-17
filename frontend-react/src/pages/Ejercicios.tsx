@@ -412,7 +412,7 @@ export function Ejercicios() {
                           aria-label={`Ver ${e.nombre}`}
                           onClick={() => setVerEjercicio(e)}
                         >
-                          👁
+                          <i className="bi bi-eye" aria-hidden />
                         </button>
                         <button
                           className="btn-icon"
@@ -420,7 +420,7 @@ export function Ejercicios() {
                           aria-label={`Personalizar ${e.nombre}`}
                           onClick={() => personalizar(e)}
                         >
-                          📋
+                          <i className="bi bi-copy" aria-hidden />
                         </button>
                       </div>
                     ) : (
@@ -431,7 +431,7 @@ export function Ejercicios() {
                           aria-label={`Editar ${e.nombre}`}
                           onClick={() => abrirEdicion(e)}
                         >
-                          ✏️
+                          <i className="bi bi-pencil" aria-hidden />
                         </button>
                         <button
                           className="btn-icon"
@@ -439,7 +439,10 @@ export function Ejercicios() {
                           aria-label={`${e.estado === "ACTIVO" ? "Desactivar" : "Activar"} ${e.nombre}`}
                           onClick={() => cambiarEstado(e)}
                         >
-                          {e.estado === "ACTIVO" ? "🚫" : "✅"}
+                          <i
+                            className={"bi " + (e.estado === "ACTIVO" ? "bi-slash-circle" : "bi-check-circle")}
+                            aria-hidden
+                          />
                         </button>
                         <button
                           className="btn-icon"
@@ -447,7 +450,7 @@ export function Ejercicios() {
                           aria-label={`Eliminar ${e.nombre}`}
                           onClick={() => { setPorEliminar(e); setErrorEliminar(""); }}
                         >
-                          {"\u{1F5D1}️"}
+                          <i className="bi bi-trash" aria-hidden />
                         </button>
                       </div>
                     )}

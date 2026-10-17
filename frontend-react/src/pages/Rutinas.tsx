@@ -378,13 +378,13 @@ export function Rutinas() {
 
         {/* Ver solo se muestra: su lógica llega con el modal "Ver" */}
         <div className="cell-actions rutina-acciones">
-          <button className="btn-icon" title="Ver detalle">👁</button>
-          <button className="btn-icon" title="Editar" onClick={() => abrirEdicion(r)}>✏️</button>
+          <button className="btn-icon" title="Ver detalle"><i className="bi bi-eye" aria-hidden /></button>
+          <button className="btn-icon" title="Editar" onClick={() => abrirEdicion(r)}><i className="bi bi-pencil" aria-hidden /></button>
           {/* Finalizar solo tiene sentido si la rutina sigue vigente */}
           {esVigente(r) && (
-            <button className="btn-icon" title="Finalizar" onClick={() => pedirFinalizar(r)}>🏁</button>
+            <button className="btn-icon" title="Finalizar" onClick={() => pedirFinalizar(r)}><i className="bi bi-flag" aria-hidden /></button>
           )}
-          <button className="btn-icon" title="Eliminar" onClick={() => pedirEliminar(r)}>🗑️</button>
+          <button className="btn-icon" title="Eliminar" onClick={() => pedirEliminar(r)}><i className="bi bi-trash" aria-hidden /></button>
         </div>
       </div>
     );
@@ -470,7 +470,7 @@ export function Rutinas() {
 
         <div className="toolbar">
           <div className="search-box">
-            <span className="search-ico">🔍</span>
+            <span className="search-ico"><i className="bi bi-search" aria-hidden /></span>
             <input
               type="text"
               className="form-control-dark"

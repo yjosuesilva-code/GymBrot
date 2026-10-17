@@ -1,10 +1,19 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { paginas } from "./paginas";
 import { useTenant } from "../../tenant/TenantContext";
+import { logout } from "../../lib/auth";
 
 export function Sidebar() {
   // [multitenant-slug] paginas.ts no conoce el slug: se le pone aqui.
   const { ruta } = useTenant();
+  const navigate = useNavigate();
+
+  // Cerrar sesión vive al fondo del rail: limpia la sesión y vuelve al login
+  // del gimnasio activo.
+  function salir() {
+    logout();
+    navigate(ruta("/login"), { replace: true });
+  }
 
   return (
     <aside className="sidebar">
@@ -25,6 +34,12 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
+      <div className="sidebar-foot">
+        <button type="button" className="nav-item sidebar-logout" title="Cerrar sesión" onClick={salir}>
+          <i className="bi bi-box-arrow-right" aria-hidden />
+          <span>Cerrar sesión</span>
+        </button>
+      </div>
     </aside>
   );
 }

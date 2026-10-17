@@ -261,7 +261,7 @@ export function Clientes() {
 
       <div className="toolbar" style={{ marginBottom: 20 }}>
         <div className="search-box">
-          <span className="search-ico">🔍</span>
+          <span className="search-ico"><i className="bi bi-search" aria-hidden /></span>
           <input
             type="text"
             className="form-control-dark"
@@ -375,14 +375,14 @@ export function Clientes() {
                             navigate(ruta("/clientes/" + c.numero_identificacion))
                           }
                         >
-                          👁
+                          <i className="bi bi-eye" aria-hidden />
                         </button>
                         <button
                           className="btn-icon"
                           title="Editar"
                           onClick={() => abrirEdicion(c)}
                         >
-                          ✏️
+                          <i className="bi bi-pencil" aria-hidden />
                         </button>
                         <button
                           className="btn-icon"
@@ -391,7 +391,10 @@ export function Clientes() {
                           }
                           onClick={() => cambiarEstado(c)}
                         >
-                          {c.estado === "ACTIVO" ? "🚫" : "✅"}
+                          <i
+                            className={"bi " + (c.estado === "ACTIVO" ? "bi-slash-circle" : "bi-check-circle")}
+                            aria-hidden
+                          />
                         </button>
                       </div>
                     </td>

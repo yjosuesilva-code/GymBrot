@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigationType } from "react-router-dom";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
 import * as auth from "../lib/auth";
@@ -102,9 +102,19 @@ const FAQ = [
 
 const CORREO = "hola@gymbrot.app";
 
-/* /planes y /contacto renderizan esta misma landing con `seccion`: asi el
-   menu no salta a otra pagina con otro diseno, solo baja a la seccion. */
-type SeccionLanding = "planes" | "contacto";
+/* Cada seccion de la landing tiene su propia ruta (/modulos, /planes...): la
+   misma landing se renderiza con `seccion` y baja hasta ella. Asi el menu no
+   usa anclas con # ni salta a otra pagina, y cualquier seccion se puede
+   compartir con un enlace limpio. Clave = ruta, valor = id de la seccion. */
+const ID_SECCION = {
+  modulos: "modulos",
+  panel: "panel",
+  aislamiento: "aislamiento",
+  planes: "planes",
+  preguntas: "faq",
+  contacto: "contacto",
+} as const;
+export type SeccionLanding = keyof typeof ID_SECCION;
 
 export function Landing({ seccion }: { seccion?: SeccionLanding }) {
   const conSesion = auth.current() !== null;
@@ -118,12 +128,31 @@ export function Landing({ seccion }: { seccion?: SeccionLanding }) {
     api.gimnasios.planesSoftware().then((p) => setPlanes(p));
   }, []);
 
-  // Al entrar por /planes o /contacto (o al cambiar entre ellas desde el menu)
-  // baja a esa seccion; en / vuelve arriba.
+  // Baja a la seccion de la ruta; en / vuelve arriba. Depende tambien de
+  // location.key para que volver a pulsar el mismo enlace (ya estando en esa
+  // ruta, pero mas abajo o mas arriba) vuelva a llevar a la seccion, y de
+  // planes.length porque la tabla de planes llega despues del API y empuja
+  // hacia abajo todo lo que sigue: sin repetir el scroll, entrar directo a
+  // /preguntas quedaba corto.
+  // Con Atras/Adelante (POP) el salto es inmediato. Ademas, mientras se esta
+  // en la landing, la posicion la decide la ruta y no el navegador: con la
+  // restauracion automatica, al volver con Atras el navegador ponia el scroll
+  // donde estaba antes y la seccion quedaba fuera de lugar.
   useEffect(() => {
-    if (seccion) document.getElementById(seccion)?.scrollIntoView({ behavior: "smooth" });
-    else window.scrollTo({ top: 0 });
-  }, [seccion]);
+    const anterior = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    return () => {
+      window.history.scrollRestoration = anterior;
+    };
+  }, []);
+
+  const { key } = useLocation();
+  const tipoNavegacion = useNavigationType();
+  useEffect(() => {
+    const behavior: ScrollBehavior = tipoNavegacion === "POP" ? "instant" : "smooth";
+    if (seccion) document.getElementById(ID_SECCION[seccion])?.scrollIntoView({ behavior });
+    else window.scrollTo({ top: 0, behavior });
+  }, [seccion, key, planes.length, tipoNavegacion]);
 
   /* El plan que encaja con la cantidad de socios elegida. Si supera todos los
      topes, cae en el Premium (max_clientes === null). */
@@ -206,11 +235,11 @@ export function Landing({ seccion }: { seccion?: SeccionLanding }) {
           <span className="land-rev">REV 2.6</span>
         </div>
         <nav className="land-nav">
-          <a href="#modulos">[ Módulos ]</a>
-          <a href="#panel">[ Panel ]</a>
+          <Link to="/modulos">[ Módulos ]</Link>
+          <Link to="/panel">[ Panel ]</Link>
           <Link to="/planes">[ Planes ]</Link>
           <Link to="/contacto">[ Contacto ]</Link>
-          <a href="#faq">[ Preguntas ]</a>
+          <Link to="/preguntas">[ Preguntas ]</Link>
           {conSesion ? (
             <Link className="land-btn land-btn--neon" to="/dashboard">Ir al panel</Link>
           ) : (
@@ -228,7 +257,7 @@ export function Landing({ seccion }: { seccion?: SeccionLanding }) {
             panel. Cada gimnasio opera con sus datos aislados de los demás.
           </p>
           <div className="land-cta">
-            <a className="land-btn land-btn--neon land-btn--xl" href="#planes">Ver planes</a>
+            <Link className="land-btn land-btn--neon land-btn--xl" to="/planes">Ver planes</Link>
             <Link className="land-btn land-btn--line land-btn--xl" to="/registro">Registrar mi gimnasio</Link>
           </div>
           <ul className="land-stats">
@@ -620,10 +649,10 @@ export function Landing({ seccion }: { seccion?: SeccionLanding }) {
           <nav className="land-footer-cols" aria-label="Enlaces del pie">
             <div className="land-footer-col">
               <h4>Producto</h4>
-              <a href="#modulos">Módulos</a>
-              <a href="#panel">Panel</a>
-              <a href="#aislamiento">Aislamiento</a>
-              <a href="#planes">Planes</a>
+              <Link to="/modulos">Módulos</Link>
+              <Link to="/panel">Panel</Link>
+              <Link to="/aislamiento">Aislamiento</Link>
+              <Link to="/planes">Planes</Link>
             </div>
             <div className="land-footer-col">
               <h4>Cuenta</h4>
@@ -632,8 +661,8 @@ export function Landing({ seccion }: { seccion?: SeccionLanding }) {
             </div>
             <div className="land-footer-col">
               <h4>Ayuda</h4>
-              <a href="#faq">Preguntas</a>
-              <a href="#contacto">Contacto</a>
+              <Link to="/preguntas">Preguntas</Link>
+              <Link to="/contacto">Contacto</Link>
               <a href={`mailto:${CORREO}`}>{CORREO}</a>
             </div>
           </nav>

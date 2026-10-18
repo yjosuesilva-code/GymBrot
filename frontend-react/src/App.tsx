@@ -15,6 +15,7 @@ import { Membresias } from "./pages/Membresias";              // [P4]
 import { Progreso } from "./pages/Progreso";                  // [P2]
 import { Citas } from "./pages/Citas";                        // [P2]
 import { Landing } from "./pages/Landing";                    // [P2] plataforma
+import type { SeccionLanding } from "./pages/Landing";
 import { Registro } from "./pages/Registro";                  // [P2] plataforma
 import { BuscarGimnasio } from "./pages/BuscarGimnasio";      // [multitenant-slug]
 import { TenantProvider } from "./tenant/TenantProvider";     // [multitenant-slug]
@@ -41,13 +42,17 @@ const RUTAS_PORTAL: { path: string; element: ReactNode }[] = [
   { path: "gymbrot-ai", element: <GymbrotAI /> },               // [P1]
 ];
 
+const SECCIONES_LANDING: SeccionLanding[] = ["modulos", "panel", "aislamiento", "planes", "preguntas", "contacto"];
+
 function App() {
   return (
     <Routes>
       {/* Sitio publico: sin sesion, sin tenant, sin Layout */}
       <Route path="/" element={<Landing />} />
-      <Route path="/planes" element={<Landing seccion="planes" />} />
-      <Route path="/contacto" element={<Landing seccion="contacto" />} />
+      {/* Secciones de la landing: misma pagina, bajando a la seccion */}
+      {SECCIONES_LANDING.map((s) => (
+        <Route key={s} path={"/" + s} element={<Landing seccion={s} />} />
+      ))}
       <Route path="/registro" element={<Registro />} />
       {/* /login ya no autentica: pregunta por el gimnasio y manda a /g/:slug/login */}
       <Route path="/login" element={<BuscarGimnasio />} />

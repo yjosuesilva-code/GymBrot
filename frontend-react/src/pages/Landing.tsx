@@ -102,7 +102,11 @@ const FAQ = [
 
 const CORREO = "hola@gymbrot.app";
 
-export function Landing() {
+/* /planes y /contacto renderizan esta misma landing con `seccion`: asi el
+   menu no salta a otra pagina con otro diseno, solo baja a la seccion. */
+type SeccionLanding = "planes" | "contacto";
+
+export function Landing({ seccion }: { seccion?: SeccionLanding }) {
   const conSesion = auth.current() !== null;
   const [planes, setPlanes] = useState<PlanSoftware[]>([]);
   const [socios, setSocios] = useState(200);
@@ -113,6 +117,13 @@ export function Landing() {
   useEffect(() => {
     api.gimnasios.planesSoftware().then((p) => setPlanes(p));
   }, []);
+
+  // Al entrar por /planes o /contacto (o al cambiar entre ellas desde el menu)
+  // baja a esa seccion; en / vuelve arriba.
+  useEffect(() => {
+    if (seccion) document.getElementById(seccion)?.scrollIntoView({ behavior: "smooth" });
+    else window.scrollTo({ top: 0 });
+  }, [seccion]);
 
   /* El plan que encaja con la cantidad de socios elegida. Si supera todos los
      topes, cae en el Premium (max_clientes === null). */
@@ -133,6 +144,9 @@ export function Landing() {
       nodos.forEach((n) => n.classList.add("is-in"));
       return;
     }
+    // threshold 0 y no 0.12: el [data-reveal] arranca con clip-path
+    // inset(0 100% 0 0) y Chrome calcula la interseccion ya recortada, asi que
+    // el ratio queda en 0 y con 0.12 nunca llegaba a mostrarse.
     const obs = new IntersectionObserver(
       (entradas) => {
         entradas.forEach((e) => {
@@ -142,7 +156,7 @@ export function Landing() {
           }
         });
       },
-      { rootMargin: "0px 0px -8% 0px", threshold: 0.12 }
+      { rootMargin: "0px 0px -8% 0px", threshold: 0 }
     );
     nodos.forEach((n) => obs.observe(n));
     return () => obs.disconnect();

@@ -16,8 +16,6 @@ import { Progreso } from "./pages/Progreso";                  // [P2]
 import { Citas } from "./pages/Citas";                        // [P2]
 import { Landing } from "./pages/Landing";                    // [P2] plataforma
 import { Registro } from "./pages/Registro";                  // [P2] plataforma
-import { Planes } from "./pages/Planes";                      // [multitenant-slug]
-import { Contacto } from "./pages/Contacto";                  // [multitenant-slug]
 import { BuscarGimnasio } from "./pages/BuscarGimnasio";      // [multitenant-slug]
 import { TenantProvider } from "./tenant/TenantProvider";     // [multitenant-slug]
 import { RedirigirAlPortal } from "./tenant/RedirigirAlPortal"; // [multitenant-slug]
@@ -48,8 +46,8 @@ function App() {
     <Routes>
       {/* Sitio publico: sin sesion, sin tenant, sin Layout */}
       <Route path="/" element={<Landing />} />
-      <Route path="/planes" element={<Planes />} />
-      <Route path="/contacto" element={<Contacto />} />
+      <Route path="/planes" element={<Landing seccion="planes" />} />
+      <Route path="/contacto" element={<Landing seccion="contacto" />} />
       <Route path="/registro" element={<Registro />} />
       {/* /login ya no autentica: pregunta por el gimnasio y manda a /g/:slug/login */}
       <Route path="/login" element={<BuscarGimnasio />} />

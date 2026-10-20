@@ -1307,17 +1307,15 @@ body[data-modulo="ejercicios"] button:disabled { opacity: .6; cursor: wait; }
 
 
 
-.acceso-lista{margin-top:10px;border:1px solid rgba(212,255,0,.28);border-radius:10px;background:radial-gradient(120% 120% at 0% 0%,rgba(212,255,0,.12) 0%,transparent 55%),linear-gradient(180deg,rgba(12,14,8,.98) 0%,rgba(8,10,6,.98) 100%);overflow:hidden;box-shadow:0 0 0 1px rgba(212,255,0,.14) inset,0 26px 54px rgba(2,6,0,.7);max-height:300px;overflow-y:auto;position:relative}
-.acceso-lista::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(212,255,0,.04) 2px 4px);pointer-events:none;mix-blend-mode:screen;opacity:.25}
-.acceso-grid{position:relative;display:flex;flex-direction:column;gap:6px;padding:8px;z-index:1}
-.acceso-card{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 14px;border-radius:8px;border:1px solid transparent;background:linear-gradient(90deg,rgba(212,255,0,.14) 0%,transparent 65%),rgba(12,14,8,.92);color:#f8fafc;text-align:left;cursor:pointer;transition:all .16s ease;position:relative;overflow:hidden}
-.acceso-card::after{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--neon) 0%,rgba(212,255,0,.5) 100%)}
-.acceso-card:hover{border-color:rgba(212,255,0,.7);box-shadow:0 0 0 1px rgba(212,255,0,.25) inset,0 10px 26px rgba(212,255,0,.18);transform:translateX(3px)}
-.acceso-card:focus-visible{outline:1px solid var(--neon);outline-offset:2px}
-.acceso-card-main{display:flex;align-items:center;gap:10px;min-width:0}
-.acceso-card-nombre{font-weight:700;text-transform:uppercase;letter-spacing:.18em;font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.acceso-card-tag{display:inline-flex;align-items:center;padding:2px 6px;border-radius:2px;border:1px solid rgba(212,255,0,.7);font-size:.68rem;letter-spacing:.26em;text-transform:uppercase;color:var(--neon);background:rgba(212,255,0,.12)}
-.acceso-card-doc{display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}
-.acceso-card-doc-label{font-size:.7rem;letter-spacing:.28em;text-transform:uppercase;color:var(--muted)}
-.acceso-card-doc-num{padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.6);color:#e2e8f0}
-.acceso-vacio{padding:12px 16px;color:rgba(226,232,240,.6);position:relative;z-index:1}
+
+.acceso-lista{margin-top:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-side);overflow:hidden;max-height:280px;overflow-y:auto}
+.acceso-lista-items{list-style:none;margin:0;padding:4px 0;display:flex;flex-direction:column}
+.acceso-item-row+.acceso-item-row{border-top:1px solid var(--border)}
+.acceso-item-btn{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 14px;background:transparent;border:none;color:#e2e8f0;text-align:left;cursor:pointer;transition:background .14s ease}
+.acceso-item-btn:hover{background:rgba(226,226,230,.02)}
+.acceso-item-btn:focus-visible{outline:1px solid rgba(148,163,184,.45);outline-offset:-1px}
+.acceso-item-main{display:flex;align-items:center;gap:10px;min-width:0}
+.acceso-item-nombre{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill-socio{display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;border:1px solid rgba(148,163,184,.4);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(226,232,240,.9);background:rgba(226,226,230,.02)}
+.acceso-item-doc{font-variant-numeric:tabular-nums;color:rgba(226,232,240,.7);white-space:nowrap}
+.acceso-vacio{padding:10px 14px;color:rgba(226,232,240,.6)}

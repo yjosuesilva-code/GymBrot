@@ -195,34 +195,32 @@ export function RegistroEntrada({ modo, clientes, onClose, onRegistrado }: Regis
                       }
 
                       return (
-                    <div className="acceso-grid">
+                    <ul className="acceso-lista-items">
                       {filtrados.map((c) => (
-                        <button
-                          key={c.numero_identificacion}
-                          type="button"
-                          className="acceso-card"
-                          onClick={() => {
-                            setDedo(c.numero_identificacion);
-                            setBusqueda(c.nombre + " " + c.apellidos);
-                            setMostrarLista(false);
-                            setError("");
-                          }}
-                        >
-                          <div className="acceso-card-main">
-                            <span className="acceso-card-nombre">
-                              {c.nombre} {c.apellidos}
-                            </span>
-                            <span className="acceso-card-tag">SOCIO</span>
-                          </div>
-                          <div className="acceso-card-doc">
-                            <span className="acceso-card-doc-label">ID</span>
-                            <span className="acceso-card-doc-num">
+                        <li key={c.numero_identificacion} className="acceso-item-row">
+                          <button
+                            type="button"
+                            className="acceso-item-btn"
+                            onClick={() => {
+                              setDedo(c.numero_identificacion);
+                              setBusqueda(c.nombre + " " + c.apellidos);
+                              setMostrarLista(false);
+                              setError("");
+                            }}
+                          >
+                            <div className="acceso-item-main">
+                              <span className="acceso-item-nombre">
+                                {c.nombre} {c.apellidos}
+                              </span>
+                              <span className="pill pill-socio">SOCIO</span>
+                            </div>
+                            <span className="acceso-item-doc">
                               {c.numero_identificacion}
                             </span>
-                          </div>
-                        </button>
+                          </button>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                       );
                     })()}
                   </div>

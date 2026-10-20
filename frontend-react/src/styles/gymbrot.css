@@ -1,5 +1,5 @@
-/* 
-   GYMBROT · gymbrot.css — Hoja de estilos UNICA del proyecto
+﻿/* 
+   GYMBROT Â· gymbrot.css â€” Hoja de estilos UNICA del proyecto
    REGLAS DE EQUIPO (para no chocar al juntar):
    1. Reutiliza las clases que ya existen (card-g, btn-neon,
       table-g, badge-g, form-control-dark...). NO inventes una
@@ -7,15 +7,15 @@
    2. Si DEBES agregar un estilo propio de tu pagina, ponlo SOLO
       en tu seccion de abajo ([P1], [P2], [P3], [P4]).
    3. NO edites la seccion BASE (tokens/layout/componentes) sin
-      avisar al equipo — es compartida por todos.
+      avisar al equipo â€” es compartida por todos.
    4. Haz "git merge developer" antes de empezar y antes de subir.
    ============================================================ */
 
 /* ############################################################
-   #  SECCION BASE (COMPARTIDA) — reutilizable por todas las paginas
+   #  SECCION BASE (COMPARTIDA) â€” reutilizable por todas las paginas
    ############################################################ */
 
-/* ===== GYMBROT · Tokens base (Guía de Diseño) ===== */
+/* ===== GYMBROT Â· Tokens base (GuÃ­a de DiseÃ±o) ===== */
 :root {
   /* Fondos y bordes */
   --bg: #111316;          /* Fondo principal */
@@ -23,7 +23,7 @@
   --bg-card: #1a1d21;     /* Tarjetas */
   --border: #1f2125;      /* Borde de tarjeta */
   --bg-input: #282a2d;    /* Inputs y botones oscuros */
-  --border-btn: #333538;  /* Borde de botón oscuro */
+  --border-btn: #333538;  /* Borde de botÃ³n oscuro */
 
   /* Acentos */
   --neon: #D4FF00;        /* Acento principal (verde) */
@@ -36,8 +36,8 @@
   --text-table: #d5d9de;   /* Texto de las tablas */
   
   /* Fuentes */
-  --f-title: 'Lexend', sans-serif;         /* Títulos, KPIs, botones */
-  --f-label: 'Space Grotesk', sans-serif;  /* Etiquetas pequeñas, badges */
+  --f-title: 'Lexend', sans-serif;         /* TÃ­tulos, KPIs, botones */
+  --f-label: 'Space Grotesk', sans-serif;  /* Etiquetas pequeÃ±as, badges */
   --f-body:  'Inter', sans-serif;          /* Cuerpo, tablas */
 
   /* Medidas del layout */
@@ -67,10 +67,10 @@ body {
   min-height: 100vh;    /* 100vh = todo el alto visible de la pantalla */
 }
 
-/* ----- Sidebar (menú izquierdo) -----
+/* ----- Sidebar (menÃº izquierdo) -----
    Dos estados: rail de 72px con solo iconos y, al pasar el mouse o al
    entrar el foco, 180px con los textos. El contenido se recorta mientras
-   está angosto para que las etiquetas no se derramen sobre el área
+   estÃ¡ angosto para que las etiquetas no se derramen sobre el Ã¡rea
    principal. */
 .sidebar {
   width: var(--sidebar-w);
@@ -78,7 +78,7 @@ body {
   background: var(--bg-side);
   padding: 16px 10px;
   display: flex;
-  flex-direction: column;        /* logo arriba, menú abajo */
+  flex-direction: column;        /* logo arriba, menÃº abajo */
   border-right: 1px solid var(--border);
   height: 100vh;
   position: sticky;              /* se queda fijo aunque hagas scroll */
@@ -86,7 +86,7 @@ body {
   overflow-x: hidden;            /* recorta las etiquetas con el rail angosto */
   /* Con 11 opciones el menu pide ~707px y no entra en el viewport real de un
      portatil de 768px (~650px descontada la barra del navegador), asi que el
-     rail necesita scroll vertical para llegar a las últimas opciones. */
+     rail necesita scroll vertical para llegar a las Ãºltimas opciones. */
   overflow-y: auto;
   transition: width .2s ease, min-width .2s ease, padding .2s ease;
 }
@@ -99,8 +99,8 @@ body {
 
 /* Dos logos superpuestos en la misma celda: el monograma GB se ve
    colapsado y el wordmark GYMBROT al expandirse. El margen inferior separa el
-   logo de la primera opción del menú (Dashboard); se amplió porque al quitar
-   Notificaciones el rail dejó espacio de sobra. */
+   logo de la primera opciÃ³n del menÃº (Dashboard); se ampliÃ³ porque al quitar
+   Notificaciones el rail dejÃ³ espacio de sobra. */
 .sidebar-logo {
   padding: 4px 0 30px;
   display: grid;
@@ -123,11 +123,11 @@ body {
 .nav-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;             /* separación entre opciones del menú */
+  gap: 6px;             /* separaciÃ³n entre opciones del menÃº */
 }
 .nav-item {
   display: flex;
-  align-items: center;   /* ícono y texto centrados verticalmente */
+  align-items: center;   /* Ã­cono y texto centrados verticalmente */
   justify-content: center;
   gap: 0;
   padding: 9px 8px;
@@ -140,7 +140,7 @@ body {
   cursor: pointer;
 }
 .nav-item i { font-size: 16px; }
-/* Colapsado la etiqueta se colapsa a 0 de ancho pero sigue en el árbol de
+/* Colapsado la etiqueta se colapsa a 0 de ancho pero sigue en el Ã¡rbol de
    accesibilidad: el lector de pantalla sigue leyendo el nombre del enlace. */
 .nav-item span {
   max-width: 0;
@@ -160,17 +160,17 @@ body {
 .sidebar:hover .nav-item span,
 .sidebar:focus-within .nav-item span { max-width: 180px; opacity: 1; }
 .nav-item:hover { color: #fff; }        /* al pasar el mouse */
-.nav-item.active {                      /* la página en la que estás */
+.nav-item.active {                      /* la pÃ¡gina en la que estÃ¡s */
   background: var(--neon);
   color: #000;
   font-weight: 700;
 }
-/* El outline por defecto se recortaría contra el overflow:hidden del rail. */
+/* El outline por defecto se recortarÃ­a contra el overflow:hidden del rail. */
 .nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* El <hr class="sidebar-sep"> se quito: con las opciones del menu el rail ya
    pide todo el alto y el separador empujaba el cierre fuera del viewport. */
 
-/* Cerrar sesión: al fondo del rail, separado del menú por una línea. El
+/* Cerrar sesiÃ³n: al fondo del rail, separado del menÃº por una lÃ­nea. El
    margin-top:auto lo empuja hasta abajo aunque haya pocas opciones. */
 .sidebar-foot {
   margin-top: auto;
@@ -187,7 +187,7 @@ body {
 }
 .sidebar-logout:hover { color: #fff; }
 
-/* ----- Área principal (derecha) ----- */
+/* ----- Ãrea principal (derecha) ----- */
 .main-area {
   flex: 1;               /* ocupa TODO el espacio que sobra al lado del sidebar */
   display: flex;
@@ -201,7 +201,7 @@ body {
   padding: 0 32px;
   display: flex;
   align-items: center;
-  justify-content: space-between;   /* título a la izq, usuario a la der */
+  justify-content: space-between;   /* tÃ­tulo a la izq, usuario a la der */
   border-bottom: 1px solid var(--border);
   background: var(--bg-side);
 }
@@ -217,7 +217,7 @@ body {
   padding: 32px;
   display: flex;
   flex-direction: column;
-  gap: 32px;             /* separación entre secciones/tarjetas */
+  gap: 32px;             /* separaciÃ³n entre secciones/tarjetas */
 }
 
 /* ----- Extras del topbar ----- */
@@ -245,7 +245,7 @@ body {
 .btn-icon:hover { color: #fff; border-color: #fff; }
 .cell-actions { display: flex; gap: 6px; }
 
-/* ===== Formularios y barra de búsqueda ===== */
+/* ===== Formularios y barra de bÃºsqueda ===== */
 .form-control-dark { background: var(--bg-input); border: 1px solid var(--border-btn); border-radius: var(--radius-sm); padding: 11px 14px; font-family: var(--f-body); font-size: 14px; color: #fff; width: 100%; outline: none; }
 .form-control-dark::placeholder { color: var(--muted); }
 .form-control-dark:focus { outline: 2px solid var(--neon); border-color: transparent; }
@@ -271,11 +271,11 @@ body {
 
 /* ===== Badges de estado =====
    Pill compacta, texto neutro (#e2e2e6) sobre fondo casi plano. El estado
-   se comunica SOLO con un acento tenue (desaturado) en borde e icono —
-   variacion de intensidad, no de hue — para mantener la lectura sobria:
-   lime = activo/exito · cyan = confirmado · amber = pendiente ·
-   rojo = negativo · gris = inactivo/vencido. .badge-g--plain omite el icono. */
-.badge-g { display: inline-flex; align-items: center; gap: 4px; font-family: var(--f-label); font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: rgba(226,226,230,.05); color: #e2e2e6; border: 1px solid rgba(226,226,230,.16); text-transform: uppercase; letter-spacing: .07em; line-height: 1.4; white-space: nowrap; transition: background-color .16s ease, border-color .16s ease, color .16s ease, filter .16s ease; }
+   se comunica SOLO con un acento tenue (desaturado) en borde e icono â€”
+   variacion de intensidad, no de hue â€” para mantener la lectura sobria:
+   lime = activo/exito Â· cyan = confirmado Â· amber = pendiente Â·
+   rojo = negativo Â· gris = inactivo/vencido. .badge-g--plain omite el icono. */
+.badge-g { display: inline-flex; align-items: center; gap: 4px; font-family: var(--f-label); font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: rgba(226,226,230,.02); color: #e2e2e6; border: 1px solid rgba(226,226,230,.16); text-transform: uppercase; letter-spacing: .07em; line-height: 1.4; white-space: nowrap; transition: background-color .16s ease, border-color .16s ease, color .16s ease, filter .16s ease; }
 .badge-activo, .badge-completada, .badge-exitoso { border-color: rgba(198,226,0,.32); }
 .badge-confirmada, .badge-categoria { border-color: rgba(170,210,220,.32); }
 .badge-pendiente { border-color: rgba(214,169,74,.32); }
@@ -312,7 +312,7 @@ body {
 @media (hover: hover) { .badge-g:hover { background-color: rgba(226,226,230,.10); filter: brightness(1.06); } }
 @media (prefers-reduced-motion: reduce) { .badge-g { transition: none; } }
 
-/* ===== Cargando / vacío ===== */
+/* ===== Cargando / vacÃ­o ===== */
 .loader { text-align: center; padding: 30px; color: var(--muted); }
 .spinner-g { width: 18px; height: 18px; border: 2px solid var(--border-btn); border-top-color: var(--neon); border-radius: 50%; display: inline-block; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 8px; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -332,10 +332,10 @@ body {
 
 
 /* ############################################################
-   #  SECCIONES POR INTEGRANTE — cada quien SOLO en la suya
+   #  SECCIONES POR INTEGRANTE â€” cada quien SOLO en la suya
    ############################################################ */
 
-/* ===== [P1] Estilos propios · dashboard, acceso, finanzas ===== */
+/* ===== [P1] Estilos propios Â· dashboard, acceso, finanzas ===== */
 
 /* ---- Scrollbars ----
    Con el seed masivo (v12) las listas y tablas crecen (100 socios, 40
@@ -354,7 +354,7 @@ body {
 
 /* ---- Paginador ----
    Con las listas largas del seed v12 se recorta a 10 filas por pagina y esta
-   barra va debajo de la tabla. Colapsa con "…" cuando hay muchas paginas y en
+   barra va debajo de la tabla. Colapsa con "â€¦" cuando hay muchas paginas y en
    movil solo deja la info + flechas, para no ocupar dos renglones. */
 .paginador { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 4px 0; }
 .paginador-info { font-family: var(--f-label); font-size: 11px; color: var(--muted); }
@@ -394,7 +394,7 @@ body {
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; animation: pulse 1.6s infinite; }
 @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(189,244,255,.5)} 70%{box-shadow:0 0 0 6px rgba(189,244,255,0)} 100%{box-shadow:0 0 0 0 rgba(189,244,255,0)} }
 
-/* ---- Demografía en vivo ---- */
+/* ---- DemografÃ­a en vivo ---- */
 .demo-list { display: flex; flex-direction: column; gap: 18px; }
 .demo-row { display: flex; align-items: center; gap: 14px; }
 .demo-badge { width: 56px; height: 56px; border-radius: 50%; border: 3px solid; display: flex; align-items: center; justify-content: center; font-family: var(--f-label); font-size: 13px; font-weight: 700; flex-shrink: 0; }
@@ -413,7 +413,7 @@ body {
 .pico-col.moderado { background: #3a5a60; }
 .pico-axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 10px; font-family: var(--f-label); margin-top: 8px; }
 
-/* ---- Acciones rápidas ---- */
+/* ---- Acciones rÃ¡pidas ---- */
 .quick-action { display: flex; align-items: center; gap: 16px; text-decoration: none; transition: border-color .15s; }
 .quick-action:hover { border-color: var(--border-btn); }
 .qa-badge { width: 44px; height: 44px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-family: var(--f-title); font-weight: 800; font-size: 18px; flex-shrink: 0; }
@@ -481,7 +481,7 @@ body {
 .scan-line { position: absolute; left: 8px; right: 8px; height: 3px; background: var(--neon); border-radius: 2px; opacity: .9; animation: scan-barrido 2.6s ease-in-out infinite; }
 @keyframes scan-barrido { 0%, 100% { top: 8px; } 50% { top: 178px; } }
 
-/* Huella simulada: crestas concéntricas, las largas al centro y las cortas
+/* Huella simulada: crestas concÃ©ntricas, las largas al centro y las cortas
    arriba y abajo, como las 15 Region del FXML. */
 .scan-huella { display: flex; flex-direction: column; align-items: center; gap: 5px; }
 .scan-huella span { display: block; height: 2px; background: var(--neon); border-radius: 20px; }
@@ -507,7 +507,7 @@ body {
 
 /* ---- Gymbrot AI (chat) ----
    Reproduce la vista #22 del legacy: hilo a pantalla completa dentro de la
-   tarjeta, burbuja del usuario en neón alineada a la derecha, burbuja del bot
+   tarjeta, burbuja del usuario en neÃ³n alineada a la derecha, burbuja del bot
    con el avatar "G" a la izquierda e indicador de escritura. El alto de la
    tarjeta se calcula desde el viewport porque .app-shell solo fija un
    min-height y no estira a los hijos. */
@@ -541,7 +541,7 @@ body {
    La vista de Clientes absorbe el Control de acceso: arriba los tres KPI del
    desktop (activos, dentro del gym y tasa de ingreso), en la barra los botones
    de validar entrada/salida, y abajo el monitor de terminal de escaneo con el
-   log del día. */
+   log del dÃ­a. */
 
 .gst-grid {
   display: grid;
@@ -587,8 +587,8 @@ body {
 }
 @keyframes gst-pulso { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
 
-/* Botones de validación al estilo del desktop: borde y texto de color sobre
-   fondo translúcido, rojo para la salida y cian para la entrada. */
+/* Botones de validaciÃ³n al estilo del desktop: borde y texto de color sobre
+   fondo translÃºcido, rojo para la salida y cian para la entrada. */
 .toolbar-acciones {
   display: flex;
   gap: 12px;
@@ -619,7 +619,7 @@ body {
 .btn-acceso-salida:hover { background: rgba(255,180,171,.16); }
 
 /* Badges nuevos de la tabla combinada (variantes ya cubiertas arriba:
-   .badge-categoria = acento cyan · .badge-sin-ingreso = acento rojo) */
+   .badge-categoria = acento cyan Â· .badge-sin-ingreso = acento rojo) */
 
 /* Monitor de Terminal de Escaneo (SECCION 4 del desktop) */
 .monitor {
@@ -698,7 +698,7 @@ body {
 }
 
 
-/* ===== [P2] Estilos propios · clientes, cliente-detalle, progreso, citas ===== */
+/* ===== [P2] Estilos propios Â· clientes, cliente-detalle, progreso, citas ===== */
 /* Las paginas de clientes reutilizan los componentes de la base. Lo de abajo
    es de la plataforma (pagina del software y registro de gimnasios), que no
    tiene sidebar ni topbar y por eso necesita su propio esqueleto. */
@@ -1072,13 +1072,13 @@ body {
 }
 
 
-/* ===== [P3] Estilos propios · instructores, instructor-detalle, rutinas ===== */
-/* Botón para acciones destructivas (ej. "Sí, eliminar"). Mismas medidas que .btn-neon;
+/* ===== [P3] Estilos propios Â· instructores, instructor-detalle, rutinas ===== */
+/* BotÃ³n para acciones destructivas (ej. "SÃ­, eliminar"). Mismas medidas que .btn-neon;
    el rojo es el mismo de .alert-error */
 .btn-danger-g { background: #ff6b6b; color: #000; border: none; padding: 8px 16px; border-radius: var(--radius-sm); font-family: var(--f-title); font-weight: 700; font-size: 13px; cursor: pointer; }
 .btn-danger-g:hover { filter: brightness(1.08); }
 
-/* Rutinas: cuadrícula de tarjetas. min(300px, 100%) evita desbordar en celulares angostos */
+/* Rutinas: cuadrÃ­cula de tarjetas. min(300px, 100%) evita desbordar en celulares angostos */
 .rutinas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 20px; }
 .rutina-card { display: flex; flex-direction: column; gap: 16px; padding: 20px; }
 .rutina-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -1087,16 +1087,16 @@ body {
 .rutina-dias { display: flex; gap: 6px; }
 .dia-pill { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--f-label); font-size: 11px; font-weight: 700; background: var(--bg-input); color: var(--muted); border: 1px solid var(--border-btn); }
 .dia-pill.activo { background: var(--neon); color: #000; border-color: var(--neon); }
-.dia-pill-btn { padding: 0; cursor: pointer; }  /* versión botón (en el modal): se activa con clic */
+.dia-pill-btn { padding: 0; cursor: pointer; }  /* versiÃ³n botÃ³n (en el modal): se activa con clic */
 .dia-pill-btn:hover { border-color: var(--neon); }
 .rutina-fechas { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); }
 .rutina-acciones { margin-top: auto; justify-content: flex-end; padding-top: 14px; border-top: 1px solid var(--border); }
 .rutina-grupo-head { margin-bottom: 16px; }
-/* Alerta con un botón al lado del mensaje (ej. "Crear la siguiente rutina") */
+/* Alerta con un botÃ³n al lado del mensaje (ej. "Crear la siguiente rutina") */
 .alert-g.alerta-accion.show { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
 
-/* ===== [P4] Estilos propios · ejercicios, membresias ===== */
+/* ===== [P4] Estilos propios Â· ejercicios, membresias ===== */
 
 /* Barra compacta de busqueda y filtros de Membresias. */
 .membresias-filtros { align-items: flex-end; gap: 10px; }
@@ -1110,9 +1110,9 @@ body {
   .membresias-filtros .membresias-busqueda { flex-basis: 100%; }
 }
 
-/* Pegar UNA vez al final de css/gymbrot.css, en la sección [P4].
+/* Pegar UNA vez al final de css/gymbrot.css, en la secciÃ³n [P4].
    Reutiliza tokens y clases de la base. Solo afecta a ejercicios.html.
-   Coordinar esta adición al CSS compartido antes de integrarla. */
+   Coordinar esta adiciÃ³n al CSS compartido antes de integrarla. */
 body[data-modulo="ejercicios"] .nav-item::before { display: none; }
 body[data-modulo="ejercicios"] .sidebar { overflow-y: auto; }
 body[data-modulo="ejercicios"] .table-g td:first-child { min-width: 180px; max-width: 320px; }
@@ -1143,10 +1143,10 @@ body[data-modulo="ejercicios"] button:disabled { opacity: .6; cursor: wait; }
   body[data-modulo="ejercicios"] #btnNuevoEjercicio { width: 100%; }
 }
 
-/* En pantallas angostas las tablas de Instructores y Membresías se apilan como
-   tarjetas: se oculta el <thead> y cada <td> pasa a renglón propio, con la
-   etiqueta original como tema (via el atributo data-label puesto en la página).
-   Así el estado y la modalidad se leen de arriba a abajo en vez de escapar por
+/* En pantallas angostas las tablas de Instructores y MembresÃ­as se apilan como
+   tarjetas: se oculta el <thead> y cada <td> pasa a renglÃ³n propio, con la
+   etiqueta original como tema (via el atributo data-label puesto en la pÃ¡gina).
+   AsÃ­ el estado y la modalidad se leen de arriba a abajo en vez de escapar por
    el scroll horizontal. */
 @media (max-width: 640px) {
   .tabla-stack thead { display: none; }
@@ -1183,7 +1183,7 @@ body[data-modulo="ejercicios"] button:disabled { opacity: .6; cursor: wait; }
 .reg-slug-estado.error { color: #ff8a8a; }
 .reg-slug-estado button { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; font-size: 12px; }
 
-/* Membresías - catálogo */
+/* MembresÃ­as - catÃ¡logo */
 .memb-cards .memb-card{position:relative;padding:1.25rem;border:1px solid rgba(255,255,255,.08);border-radius:10px;display:flex;flex-direction:column;gap:.75rem}
 .memb-premium .memb-card{border-color:rgba(198,255,0,.5);box-shadow:0 0 20px rgba(198,255,0,.12)}
 .memb-destacada{transform:translateY(-2px)}
@@ -1201,7 +1201,7 @@ body[data-modulo="ejercicios"] button:disabled { opacity: .6; cursor: wait; }
 .prog-valor{font-size:1.8rem;font-weight:700}
 
 /* ############################################################
-   #  SECCION [P4] — disponibilidad por intervalos + agenda de citas
+   #  SECCION [P4] â€” disponibilidad por intervalos + agenda de citas
    ############################################################ */
 
 /* Editor de disponibilidad del instructor (modal de Instructores) */

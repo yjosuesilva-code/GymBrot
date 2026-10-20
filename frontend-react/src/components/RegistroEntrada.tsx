@@ -155,87 +155,22 @@ export function RegistroEntrada({ modo, clientes, onClose, onRegistrado }: Regis
 
             <div className="acceso-manual">
               <div>
-                <label className="form-label-g" htmlFor="registro-busqueda">
-                  Buscar socio
+                <label className="form-label-g" htmlFor="registro-dedo">
+                  Simular dedo de…
                 </label>
-                <input
-                  id="registro-busqueda"
+                <select
+                  id="registro-dedo"
                   className="form-control-dark"
-                  value={busqueda}
-                  placeholder="Nombre, apellidos o identificaci��n..."
-                  onChange={(e) => {
-                    setBusqueda(e.target.value);
-                    setMostrarLista(true);
-                    setError("");
-                  }}
-                  onFocus={() => setMostrarLista(true)}
-                />
-                {mostrarLista && !dedo && (
-                  <div className="acceso-lista">
-                    {clientes
-                      .filter((c) => {
-                        const q = normalizar(busqueda);
-                        if (!q) return true;
-                        return (
-                          normalizar(c.nombre + " " + c.apellidos).includes(q) ||
-                          normalizar(c.numero_identificacion).includes(q)
-                        );
-                      })
-                      .slice(0, 8)
-                      .map((c) => (
-                        <button
-                          type="button"
-                          className="acceso-item"
-                          key={c.numero_identificacion}
-                          onClick={() => {
-                            setDedo(c.numero_identificacion);
-                            setBusqueda(c.nombre + " " + c.apellidos);
-                            setMostrarLista(false);
-                            setError("");
-                          }}
-                        >
-                          <div className="acceso-item-info">
-                            <span className="acceso-item-nombre">
-                              {c.nombre} {c.apellidos}
-                            </span>
-                            <span className="acceso-item-meta">
-                              {c.numero_identificacion}
-                            </span>
-                          </div>
-                        </button>
-                      ))}
-                    {clientes.filter((c) => {
-                      const q = normalizar(busqueda);
-                      if (!q) return true;
-                      return (
-                        normalizar(c.nombre + " " + c.apellidos).includes(q) ||
-                        normalizar(c.numero_identificacion).includes(q)
-                      );
-                    }).length === 0 && (
-                      <div className="acceso-vacio">Sin resultados</div>
-                    )}
-                  </div>
-                )}
-                {dedo && (
-                  <div className="acceso-seleccionado">
-                    <span>
-                      {clientes.find((c) => c.numero_identificacion === dedo)?.nombre}{" "}
-                      {clientes.find((c) => c.numero_identificacion === dedo)?.apellidos} ��{" "}
-                      {dedo}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn-icon"
-                      onClick={() => {
-                        setDedo("");
-                        setBusqueda("");
-                        setMostrarLista(false);
-                      }}
-                    >
-                      <i className="bi bi-x" aria-hidden />
-                    </button>
-                  </div>
-                )}
+                  value={dedo}
+                  onChange={(e) => setDedo(e.target.value)}
+                >
+                  <option value="">Selecciona un socio</option>
+                  {clientes.map((c) => (
+                    <option key={c.numero_identificacion} value={c.numero_identificacion}>
+                      {c.nombre} {c.apellidos} · {c.numero_identificacion}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <button className="btn-neon" type="button" disabled={bloqueado} onClick={() => enviar()}>

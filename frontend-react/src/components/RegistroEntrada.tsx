@@ -214,7 +214,7 @@ export function RegistroEntrada({ modo, clientes, onClose, onRegistrado }: Regis
                               </span>
                               <span className="pill pill-socio">SOCIO</span>
                             </div>
-                            <span className="acceso-item-doc">
+                            <span className="acceso-item-doc pill pill-doc">
                               {c.numero_identificacion}
                             </span>
                           </button>

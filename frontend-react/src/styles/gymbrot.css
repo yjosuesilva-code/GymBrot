@@ -1319,3 +1319,5 @@ body[data-modulo="ejercicios"] button:disabled { opacity: .6; cursor: wait; }
 .pill-socio{display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;border:1px solid rgba(148,163,184,.4);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(226,232,240,.9);background:rgba(226,226,230,.02)}
 .acceso-item-doc{font-variant-numeric:tabular-nums;color:rgba(226,232,240,.7);white-space:nowrap}
 .acceso-vacio{padding:10px 14px;color:rgba(226,232,240,.6)}
+
+.pill-doc{display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;border:1px solid rgba(124,92,224,.38);font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:rgba(198,187,255,.9);background:rgba(124,92,224,.08)}

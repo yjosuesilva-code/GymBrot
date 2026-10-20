@@ -195,46 +195,34 @@ export function RegistroEntrada({ modo, clientes, onClose, onRegistrado }: Regis
                       }
 
                       return (
-                        <table className="acceso-tabla">
-                          <thead>
-                            <tr>
-                              <th>Nombre y apellidos</th>
-                              <th className="acceso-th-doc">Documento</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filtrados.map((c) => (
-                              <tr
-                                key={c.numero_identificacion}
-                                className="acceso-fila"
-                                onClick={() => {
-                                  setDedo(c.numero_identificacion);
-                                  setBusqueda(c.nombre + " " + c.apellidos);
-                                  setMostrarLista(false);
-                                  setError("");
-                                }}
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    setDedo(c.numero_identificacion);
-                                    setBusqueda(c.nombre + " " + c.apellidos);
-                                    setMostrarLista(false);
-                                    setError("");
-                                  }
-                                }}
-                              >
-                                <td className="acceso-td-nombre">
-                                  {c.nombre} {c.apellidos}
-                                </td>
-                                <td className="acceso-td-doc">
-                                  {c.numero_identificacion}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                    <div className="acceso-grid">
+                      {filtrados.map((c) => (
+                        <button
+                          key={c.numero_identificacion}
+                          type="button"
+                          className="acceso-card"
+                          onClick={() => {
+                            setDedo(c.numero_identificacion);
+                            setBusqueda(c.nombre + " " + c.apellidos);
+                            setMostrarLista(false);
+                            setError("");
+                          }}
+                        >
+                          <div className="acceso-card-main">
+                            <span className="acceso-card-nombre">
+                              {c.nombre} {c.apellidos}
+                            </span>
+                            <span className="acceso-card-tag">SOCIO</span>
+                          </div>
+                          <div className="acceso-card-doc">
+                            <span className="acceso-card-doc-label">ID</span>
+                            <span className="acceso-card-doc-num">
+                              {c.numero_identificacion}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                       );
                     })()}
                   </div>

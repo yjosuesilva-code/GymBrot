@@ -1305,3 +1305,26 @@ body[data-modulo="ejercicios"] button:disabled { opacity: .6; cursor: wait; }
 }
 
 
+
+.acceso-lista{
+  margin-top:8px;
+  border:1px solid rgba(148,163,184,.25);
+  border-radius:10px;
+  background:linear-gradient(180deg,rgba(15,17,26,.98) 0%,rgba(10,12,20,.98) 100%);
+  overflow:hidden;
+  box-shadow:0 22px 48px rgba(2,6,23,.6);
+  max-height:280px;
+  overflow-y:auto;
+}
+.acceso-tabla{width:100%;border-collapse:collapse;font-size:.92rem;}
+.acceso-tabla thead tr{background:linear-gradient(90deg,rgba(59,130,246,.16) 0%,rgba(15,17,26,.9) 100%);}
+.acceso-tabla th{text-align:left;padding:8px 14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:.78rem;color:rgba(226,232,240,.8);border-bottom:1px solid rgba(148,163,184,.28);}
+.acceso-th-doc{text-align:right;white-space:nowrap;}
+.acceso-tabla td{padding:9px 14px;border-top:1px solid rgba(148,163,184,.14);color:#e2e8f0;}
+.acceso-tabla tbody tr:first-child td{border-top:none;}
+.acceso-fila{cursor:pointer;transition:background .16s ease;}
+.acceso-fila:hover{background:linear-gradient(90deg,rgba(59,130,246,.18) 0%,transparent 70%);}
+.acceso-fila:focus-visible{outline:1px solid rgba(96,165,250,.9);outline-offset:-2px;background:linear-gradient(90deg,rgba(59,130,246,.22) 0%,transparent 70%);}
+.acceso-td-nombre{font-weight:600;letter-spacing:.01em;}
+.acceso-td-doc{text-align:right;font-variant-numeric:tabular-nums;color:rgba(226,232,240,.78);white-space:nowrap;}
+.acceso-vacio{padding:10px 14px;color:rgba(226,232,240,.6)}

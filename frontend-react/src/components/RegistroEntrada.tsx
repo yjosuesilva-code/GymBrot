@@ -180,48 +180,63 @@ export function RegistroEntrada({ modo, clientes, onClose, onRegistrado }: Regis
                 />
                 {mostrarLista && !dedo && (
                   <div className="acceso-lista">
-                    {clientes
-                      .filter((c) => {
+                    {(() => {
+                      const filtrados = clientes.filter((c) => {
                         const q = normalizar(busqueda);
                         if (!q) return true;
                         return (
                           normalizar(c.nombre + " " + c.apellidos).includes(q) ||
                           normalizar(c.numero_identificacion).includes(q)
                         );
-                      })
-                      .slice(0, 8)
-                      .map((c) => (
-                        <button
-                          type="button"
-                          className="acceso-item"
-                          key={c.numero_identificacion}
-                          onClick={() => {
-                            setDedo(c.numero_identificacion);
-                            setBusqueda(c.nombre + " " + c.apellidos);
-                            setMostrarLista(false);
-                            setError("");
-                          }}
-                        >
-                          <div className="acceso-item-info">
-                            <span className="acceso-item-nombre">
-                              {c.nombre} {c.apellidos}
-                            </span>
-                            <span className="acceso-item-meta">
-                              {c.numero_identificacion}
-                            </span>
-                          </div>
-                        </button>
-                      ))}
-                    {clientes.filter((c) => {
-                      const q = normalizar(busqueda);
-                      if (!q) return true;
+                      }).slice(0, 8);
+
+                      if (filtrados.length === 0) {
+                        return <div className="acceso-vacio">Sin resultados</div>;
+                      }
+
                       return (
-                        normalizar(c.nombre + " " + c.apellidos).includes(q) ||
-                        normalizar(c.numero_identificacion).includes(q)
+                        <table className="acceso-tabla">
+                          <thead>
+                            <tr>
+                              <th>Nombre y apellidos</th>
+                              <th className="acceso-th-doc">Documento</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filtrados.map((c) => (
+                              <tr
+                                key={c.numero_identificacion}
+                                className="acceso-fila"
+                                onClick={() => {
+                                  setDedo(c.numero_identificacion);
+                                  setBusqueda(c.nombre + " " + c.apellidos);
+                                  setMostrarLista(false);
+                                  setError("");
+                                }}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    setDedo(c.numero_identificacion);
+                                    setBusqueda(c.nombre + " " + c.apellidos);
+                                    setMostrarLista(false);
+                                    setError("");
+                                  }
+                                }}
+                              >
+                                <td className="acceso-td-nombre">
+                                  {c.nombre} {c.apellidos}
+                                </td>
+                                <td className="acceso-td-doc">
+                                  {c.numero_identificacion}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       );
-                    }).length === 0 && (
-                      <div className="acceso-vacio">Sin resultados</div>
-                    )}
+                    })()}
                   </div>
                 )}
                 {dedo && (

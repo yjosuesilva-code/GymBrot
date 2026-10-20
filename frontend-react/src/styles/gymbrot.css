@@ -277,7 +277,7 @@ body {
    rojo = negativo Â· gris = inactivo/vencido. .badge-g--plain omite el icono. */
 .badge-g { display: inline-flex; align-items: center; gap: 4px; font-family: var(--f-label); font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: rgba(226,226,230,.02); color: #e2e2e6; border: 1px solid rgba(226,226,230,.16); text-transform: uppercase; letter-spacing: .07em; line-height: 1.4; white-space: nowrap; transition: background-color .16s ease, border-color .16s ease, color .16s ease, filter .16s ease; }
 .badge-activo, .badge-completada, .badge-exitoso { border-color: rgba(198,226,0,.32); }
-.badge-confirmada, .badge-categoria { border-color: rgba(190,190,190,.32); }
+.badge-confirmada, .badge-categoria { color: var(--nav-text); border-color: rgba(156,163,175,.26); }
 .badge-pendiente { border-color: rgba(214,169,74,.32); }
 .badge-cancelada, .badge-rechazado, .badge-fallido, .badge-suspendido, .badge-bloqueado, .badge-sin-ingreso { border-color: rgba(226,130,122,.32); }
 .badge-inactivo, .badge-vencida { color: var(--nav-text); border-color: rgba(156,163,175,.26); }
@@ -290,7 +290,7 @@ body {
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M13.4 4.6 6.5 11.5 2.8 7.8' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M13.4 4.6 6.5 11.5 2.8 7.8' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
 }
-.badge-confirmada::before { background-color: rgba(200,200,200,.8); }
+.badge-confirmada::before { background-color: rgba(156,163,175,.7); }
 .badge-pendiente::before, .badge-vencida::before {
   content: ""; width: 9px; height: 9px; flex-shrink: 0; background-color: rgba(214,169,74,.8);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.3' fill='none' stroke='black' stroke-width='1.7'/%3E%3Cpath d='M8 4.5V8l2.6 1.6' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;

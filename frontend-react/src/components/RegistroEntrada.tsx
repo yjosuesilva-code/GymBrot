@@ -212,9 +212,8 @@ export function RegistroEntrada({ modo, clientes, onClose, onRegistrado }: Regis
                               <span className="acceso-item-nombre">
                                 {c.nombre} {c.apellidos}
                               </span>
-                              <span className="pill pill-socio">SOCIO</span>
                             </div>
-                            <span className="acceso-item-doc pill pill-doc">
+                            <span className="acceso-item-doc">
                               {c.numero_identificacion}
                             </span>
                           </button>

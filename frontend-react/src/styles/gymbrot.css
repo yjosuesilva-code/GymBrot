@@ -280,7 +280,7 @@ body {
 .badge-confirmada, .badge-categoria { color: #C4B5FD; background: rgba(124, 92, 224, 0.12); border-color: #7C5CE0; }
 .badge-pendiente { border-color: rgba(214,169,74,.32); }
 .badge-cancelada, .badge-rechazado, .badge-fallido, .badge-suspendido, .badge-bloqueado, .badge-sin-ingreso { border-color: rgba(226,130,122,.32); }
-.badge-inactivo, .badge-vencida { color: var(--nav-text); border-color: rgba(156,163,175,.26); }
+.badge-inactivo, .badge-vencida { color: #C4B5FD; background: rgba(124, 92, 224, 0.12); border-color: #7C5CE0; }
 .badge-g::before { content: none; }
 
 /* Iconos por estado (check, reloj, x, alerta): SVG de 9px enmascarado,

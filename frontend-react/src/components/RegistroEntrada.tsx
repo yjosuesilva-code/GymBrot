@@ -3,6 +3,9 @@ import type { FormEvent } from "react";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import type { Cliente, Ingreso } from "../types";
+
+const normalizar = (texto: string) =>
+  texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 import { CRESTAS, ETIQUETA_METODO } from "./registro-entrada.const";
 import type { ModoRegistro } from "./registro-entrada.const";
 
@@ -22,6 +25,8 @@ export function RegistroEntrada({ modo, clientes, onClose, onRegistrado }: Regis
   const [metodo, setMetodo] = useState<Metodo>("HUELLA");
   const [ident, setIdent] = useState("");
   const [dedo, setDedo] = useState("");
+  const [busqueda, setBusqueda] = useState("");
+  const [mostrarLista, setMostrarLista] = useState(false);
   const [clave, setClave] = useState("");
   const [procesando, setProcesando] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
@@ -71,6 +76,8 @@ export function RegistroEntrada({ modo, clientes, onClose, onRegistrado }: Regis
         setIdent("");
         setDedo("");
         setClave("");
+        setBusqueda("");
+        setMostrarLista(false);
         onRegistrado();
       }
     } finally {
@@ -155,22 +162,88 @@ export function RegistroEntrada({ modo, clientes, onClose, onRegistrado }: Regis
 
             <div className="acceso-manual">
               <div>
-                <label className="form-label-g" htmlFor="registro-dedo">
-                  Simular dedo de…
+                <label className="form-label-g" htmlFor="registro-busqueda">
+                  Buscar socio
                 </label>
-                <select
-                  id="registro-dedo"
+                <input
+                  id="registro-busqueda"
                   className="form-control-dark"
-                  value={dedo}
-                  onChange={(e) => setDedo(e.target.value)}
-                >
-                  <option value="">Selecciona un socio</option>
-                  {clientes.map((c) => (
-                    <option key={c.numero_identificacion} value={c.numero_identificacion}>
-                      {c.nombre} {c.apellidos} · {c.numero_identificacion}
-                    </option>
-                  ))}
-                </select>
+                  value={busqueda}
+                  placeholder="Nombre, apellidos o identificación..."
+                  onChange={(e) => {
+                    setBusqueda(e.target.value);
+                    setMostrarLista(true);
+                    setError("");
+                  }}
+                  onFocus={() => setMostrarLista(true)}
+                  autoComplete="off"
+                />
+                {mostrarLista && !dedo && (
+                  <div className="acceso-lista">
+                    {clientes
+                      .filter((c) => {
+                        const q = normalizar(busqueda);
+                        if (!q) return true;
+                        return (
+                          normalizar(c.nombre + " " + c.apellidos).includes(q) ||
+                          normalizar(c.numero_identificacion).includes(q)
+                        );
+                      })
+                      .slice(0, 8)
+                      .map((c) => (
+                        <button
+                          type="button"
+                          className="acceso-item"
+                          key={c.numero_identificacion}
+                          onClick={() => {
+                            setDedo(c.numero_identificacion);
+                            setBusqueda(c.nombre + " " + c.apellidos);
+                            setMostrarLista(false);
+                            setError("");
+                          }}
+                        >
+                          <div className="acceso-item-info">
+                            <span className="acceso-item-nombre">
+                              {c.nombre} {c.apellidos}
+                            </span>
+                            <span className="acceso-item-meta">
+                              {c.numero_identificacion}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    {clientes.filter((c) => {
+                      const q = normalizar(busqueda);
+                      if (!q) return true;
+                      return (
+                        normalizar(c.nombre + " " + c.apellidos).includes(q) ||
+                        normalizar(c.numero_identificacion).includes(q)
+                      );
+                    }).length === 0 && (
+                      <div className="acceso-vacio">Sin resultados</div>
+                    )}
+                  </div>
+                )}
+                {dedo && (
+                  <div className="acceso-seleccionado">
+                    <span>
+                      {clientes.find((c) => c.numero_identificacion === dedo)?.nombre}{" "}
+                      {clientes.find((c) => c.numero_identificacion === dedo)?.apellidos} —{" "}
+                      {dedo}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-icon"
+                      onClick={() => {
+                        setDedo("");
+                        setBusqueda("");
+                        setMostrarLista(false);
+                      }}
+                    >
+                      <i className="bi bi-x" aria-hidden />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <button className="btn-neon" type="button" disabled={bloqueado} onClick={() => enviar()}>

@@ -269,13 +269,46 @@ body {
 .person-name { color: #fff; font-weight: 500; }
 .person-sub { color: var(--muted); font-size: 11px; }
 
-/* ===== Badges de estado ===== */
-.badge-g { display: inline-flex; align-items: center; font-family: var(--f-label); font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; border: 1px solid transparent; text-transform: uppercase; letter-spacing: .3px; }
-.badge-activo   { background: rgba(212,255,0,.10);  color: var(--neon);     border-color: rgba(212,255,0,.35); }
-.badge-inactivo { background: rgba(107,114,128,.12); color: var(--nav-text); border-color: var(--border-btn); }
-.badge-vencida, .badge-rechazado, .badge-cancelada  { background: rgba(255,107,107,.10); color: #ff8a8a; border-color: rgba(255,107,107,.35); }
-.badge-suspendido, .badge-pendiente                 { background: rgba(255,193,7,.10);  color: #ffcf5c; border-color: rgba(255,193,7,.30); }
-.badge-confirmada, .badge-exitoso, .badge-completada{ background: rgba(189,244,255,.10); color: var(--accent); border-color: rgba(189,244,255,.30); }
+/* ===== Badges de estado =====
+   Pill compacta con borde de 1px en alpha por tono semantico —
+   lime = activo/exito · cyan = confirmado · amber = pendiente ·
+   rojo = negativo · gris = inactivo/vencido. Icono SVG opcional por
+   estado (mask teñida con currentColor); .badge-g--plain lo omite. */
+.badge-g { display: inline-flex; align-items: center; gap: 5px; font-family: var(--f-label); font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 999px; border: 1px solid transparent; text-transform: uppercase; letter-spacing: .08em; line-height: 1.4; white-space: nowrap; transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .18s ease, filter .18s ease, box-shadow .18s ease; }
+.badge-activo, .badge-completada, .badge-exitoso { background: rgba(212,255,0,.12); color: var(--neon); border-color: rgba(212,255,0,.40); }
+.badge-confirmada { background: rgba(189,244,255,.12); color: var(--accent); border-color: rgba(189,244,255,.40); }
+.badge-pendiente { background: rgba(251,191,36,.12); color: #fbbf24; border-color: rgba(251,191,36,.38); }
+.badge-cancelada, .badge-rechazado, .badge-fallido, .badge-suspendido, .badge-bloqueado { background: rgba(255,180,171,.12); color: #ffb4ab; border-color: rgba(255,180,171,.40); }
+.badge-inactivo, .badge-vencida { background: rgba(156,163,175,.12); color: var(--nav-text); border-color: rgba(156,163,175,.35); }
+.badge-g::before { content: none; }
+
+/* Iconos por estado (check, reloj, x, alerta): SVG de 10px enmascarado,
+   la mascara toma el color del texto. Cada grupo pinta su propia forma. */
+.badge-activo::before, .badge-completada::before, .badge-exitoso::before, .badge-confirmada::before {
+  content: ""; width: 10px; height: 10px; flex-shrink: 0; background-color: currentColor; opacity: .85;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M13.4 4.6 6.5 11.5 2.8 7.8' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M13.4 4.6 6.5 11.5 2.8 7.8' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+.badge-pendiente::before, .badge-vencida::before {
+  content: ""; width: 10px; height: 10px; flex-shrink: 0; background-color: currentColor; opacity: .85;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.3' fill='none' stroke='black' stroke-width='1.7'/%3E%3Cpath d='M8 4.5V8l2.6 1.6' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.3' fill='none' stroke='black' stroke-width='1.7'/%3E%3Cpath d='M8 4.5V8l2.6 1.6' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+.badge-cancelada::before, .badge-rechazado::before, .badge-fallido::before, .badge-sin-ingreso::before {
+  content: ""; width: 10px; height: 10px; flex-shrink: 0; background-color: currentColor; opacity: .85;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.7 4.7l6.6 6.6M11.3 4.7l-6.6 6.6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.7 4.7l6.6 6.6M11.3 4.7l-6.6 6.6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+.badge-suspendido::before, .badge-bloqueado::before {
+  content: ""; width: 10px; height: 10px; flex-shrink: 0; background-color: currentColor; opacity: .85;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 2.3 15 13.7H1z' fill='none' stroke='black' stroke-width='1.7' stroke-linejoin='round'/%3E%3Cpath d='M8 6.4v3.2' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round'/%3E%3Ccircle cx='8' cy='11.8' r='1' fill='black'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 2.3 15 13.7H1z' fill='none' stroke='black' stroke-width='1.7' stroke-linejoin='round'/%3E%3Cpath d='M8 6.4v3.2' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round'/%3E%3Ccircle cx='8' cy='11.8' r='1' fill='black'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+.badge-g--plain::before { content: none; }
+
+/* Hover: realce ligero (sin transform si el usuario pide menos movimiento) */
+@media (hover: hover) { .badge-g:hover { transform: translateY(-1px); filter: brightness(1.14); box-shadow: 0 0 8px -3px currentColor; } }
+@media (prefers-reduced-motion: reduce) { .badge-g { transition: none; } .badge-g:hover { transform: none; } }
 
 /* ===== Cargando / vacío ===== */
 .loader { text-align: center; padding: 30px; color: var(--muted); }
@@ -585,14 +618,14 @@ body {
 
 /* Badges nuevos de la tabla combinada */
 .badge-categoria {
-  background: rgba(189,244,255,.10);
+  background: rgba(189,244,255,.12);
   color: #bdf4ff;
-  border-color: rgba(189,244,255,.30);
+  border-color: rgba(189,244,255,.40);
 }
 .badge-sin-ingreso {
-  background: rgba(255,180,171,.10);
+  background: rgba(255,180,171,.12);
   color: #ffb4ab;
-  border-color: rgba(255,180,171,.30);
+  border-color: rgba(255,180,171,.40);
 }
 
 /* Monitor de Terminal de Escaneo (SECCION 4 del desktop) */
@@ -1048,7 +1081,7 @@ body {
 
 /* ===== [P3] Estilos propios · instructores, instructor-detalle, rutinas ===== */
 /* Botón para acciones destructivas (ej. "Sí, eliminar"). Mismas medidas que .btn-neon;
-   el rojo es el mismo de .alert-error y .badge-vencida */
+   el rojo es el mismo de .alert-error */
 .btn-danger-g { background: #ff6b6b; color: #000; border: none; padding: 8px 16px; border-radius: var(--radius-sm); font-family: var(--f-title); font-weight: 700; font-size: 13px; cursor: pointer; }
 .btn-danger-g:hover { filter: brightness(1.08); }
 

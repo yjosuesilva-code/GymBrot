@@ -11,8 +11,8 @@ export function Topbar({ titulo, nombre }: TopbarProps) {
     <header className="topbar">
       <div className="topbar-title">{titulo}</div>
       <div className="topbar-right">
-        <span className="badge-g badge-confirmada" title="Gimnasio activo">
-          <i className="bi bi-building me-1" aria-hidden />
+        <span className="badge-g badge-confirmada badge-g--plain" title="Gimnasio activo">
+          <i className="bi bi-building" aria-hidden />
           {gimnasio.nombre}
         </span>
         <span className="topbar-user">{nombre}</span>

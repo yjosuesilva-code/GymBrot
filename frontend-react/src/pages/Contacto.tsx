@@ -8,7 +8,7 @@ export function Contacto() {
     <div className="land">
       <HeaderPublico />
       <section className="land-hero">
-        <span className="badge-g badge-activo">Contacto</span>
+        <span className="badge-g badge-activo badge-g--plain">Contacto</span>
         <h1>Hablemos de tu gimnasio</h1>
         <p>¿Dudas sobre los planes o sobre cómo migrar tus datos? Escríbenos y te ayudamos a empezar.</p>
         <div className="land-cta">

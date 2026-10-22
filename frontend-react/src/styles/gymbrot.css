@@ -1346,3 +1346,17 @@ body[data-modulo="ejercicios"] button:disabled { opacity: .6; cursor: wait; }
 @media (max-width: 575.98px) {
   .plat-filtros > select.form-control-dark { width: 100%; }
 }
+
+/* ===== [P3] .inst-* · Ejercicios: vista previa del recurso (KAN-88) ===== */
+.inst-ej-fila { display: flex; gap: 12px; align-items: flex-start; }
+.inst-ej-mini { width: 48px; height: 48px; flex-shrink: 0; border-radius: var(--radius-sm); object-fit: cover; background: var(--bg-input); border: 1px solid var(--border-btn); }
+.inst-ej-grande { display: block; width: 100%; max-height: 240px; object-fit: contain; margin-top: 10px; border-radius: var(--radius); background: var(--bg-input); border: 1px solid var(--border-btn); }
+.inst-ej-respaldo { display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.inst-ej-mini.inst-ej-respaldo { font-size: 20px; }
+.inst-ej-grande.inst-ej-respaldo { flex-direction: column; gap: 6px; min-height: 120px; font-size: 34px; }
+.inst-ej-respaldo small { font-size: 12px; }
+
+/* ===== [P3] .inst-* · Instructores: panel de cuenta creada (KAN-86) ===== */
+.inst-cuenta { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; padding: 14px 16px; border: 1px solid rgba(212,255,0,.35); border-radius: var(--radius-sm); background: rgba(212,255,0,.06); color: var(--text); font-size: 13px; }
+.inst-cuenta code { color: var(--neon); font-size: 13px; }
+.inst-cuenta-acciones { display: flex; gap: 8px; align-items: center; }

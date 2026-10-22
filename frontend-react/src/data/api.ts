@@ -612,7 +612,14 @@ function ejTiempo(
 
 const USUARIOS_INSTRUCTORES: Usuario[] = [];
 (function poblarUsuariosInstructores(){
-  const crear = (gimnasio_id, num, nombre, apellidos, correo, estado) => ({
+  const crear = (
+    gimnasio_id: string,
+    num: string,
+    nombre: string,
+    apellidos: string,
+    correo: string,
+    estado: Usuario["estado"],
+  ): Usuario => ({
     gimnasio_id,
     numero_identificacion: num,
     nombre,
@@ -671,7 +678,9 @@ const SEED: Seed = {
   usuarios: [
     { gimnasio_id:'gym-centro', numero_identificacion:'1001000001', nombre:'admin', apellidos:'Administrador', correo:'admin@gymbrot.com', contrasena:'admin',      estado:'ACTIVO',     tipo_usuario:'ADMINISTRADOR', rol:'ADMINISTRADOR' },
     { gimnasio_id:'gym-titan',  numero_identificacion:'1001000002', nombre:'titan', apellidos:'Administrador', correo:'admin@titanfitness.com', contrasena:'titan', estado:'ACTIVO', tipo_usuario:'ADMINISTRADOR', rol:'ADMINISTRADOR' },
-    { numero_identificacion:'9000000001', nombre:'superadmin', apellidos:'Plataforma', correo:'dueno@gymbrot.com', contrasena:'gymbrot2026', estado:'ACTIVO', tipo_usuario:'SUPERADMIN', rol:'SUPERADMIN' },
+    // gimnasio_id '' = plataforma: Usuario lo exige y ningun gimnasio real
+    // tiene id vacio. sesionDe() lo deja fuera de la sesion.
+    { gimnasio_id:'', numero_identificacion:'9000000001', nombre:'superadmin', apellidos:'Plataforma', correo:'dueno@gymbrot.com', contrasena:'gymbrot2026', estado:'ACTIVO', tipo_usuario:'SUPERADMIN', rol:'SUPERADMIN' },
     ...USUARIOS_INSTRUCTORES,
     { gimnasio_id:'gym-titan', numero_identificacion:'1000000001', nombre:'Ana María', apellidos:'Ruiz', correo:'ana.ruiz@mail.com', contrasena: contrasenaInicial('Ana María','1000000001'), estado:'ACTIVO', tipo_usuario:'CLIENTE', rol:'CLIENTE', debe_cambiar_contrasena: true },
     { gimnasio_id:'gym-titan', numero_identificacion:'1000000101', nombre:'Sebastián', apellidos:'Castro', correo:'sebas.castro@mail.com', contrasena: contrasenaInicial('Sebastián','1000000101'), estado:'ACTIVO', tipo_usuario:'CLIENTE', rol:'CLIENTE', debe_cambiar_contrasena: true },

@@ -173,7 +173,7 @@ export function RegistroEntrada({ modo, clientes, onClose, onRegistrado }: Regis
                   onChange={(e) => {
                     setBusqueda(e.target.value);
                     setMostrarLista(true);
-                    setError("");
+                    setAviso(null);
                   }}
                   onFocus={() => setMostrarLista(true)}
                   autoComplete="off"
@@ -205,7 +205,7 @@ export function RegistroEntrada({ modo, clientes, onClose, onRegistrado }: Regis
                               setDedo(c.numero_identificacion);
                               setBusqueda(c.nombre + " " + c.apellidos);
                               setMostrarLista(false);
-                              setError("");
+                              setAviso(null);
                             }}
                           >
                             <div className="acceso-item-main">

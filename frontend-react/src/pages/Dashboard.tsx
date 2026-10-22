@@ -217,11 +217,12 @@ function GraficaAsistencia({ ingresos }: { ingresos: Ingreso[] }) {
       },
       y: {
         beginAtZero: true,
-          grid: {
-            color: "rgba(31, 33, 37, 0.6)",
-            borderDash: [4, 4],
-            drawTicks: true,
-          },
+        grid: {
+          color: "rgba(31, 33, 37, 0.6)",
+          drawTicks: true,
+        },
+        // Chart.js 4: el punteado del eje va en border.dash, no en grid.
+        border: { dash: [4, 4] },
         ticks: {
           color: "#6b7280",
           precision: 0,

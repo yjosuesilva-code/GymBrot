@@ -318,6 +318,19 @@ export interface Instructor {
 
 // Lo que se envía al crear: gimnasio_id, estado y fecha_contratacion los pone api.instructores.create
 export type InstructorNuevo = Omit<Instructor, 'gimnasio_id' | 'estado' | 'fecha_contratacion'>;
+
+/* KAN-86: al crear un instructor se crea tambien su Usuario INSTRUCTOR. La contraseña
+   temporal solo viaja en esta respuesta, para que el admin se la entregue; al primer
+   ingreso se pide cambiarla (debe_cambiar_contrasena). */
+export interface CuentaInicial {
+  usuario: string;              // con lo que inicia sesion (el correo)
+  contrasena_temporal: string;
+}
+export interface InstructorCreado {
+  instructor: Instructor;
+  cuenta: CuentaInicial | null; // null si no se pudo crear la cuenta (ver aviso)
+  aviso?: string;
+}
 // ===== [/P3] Instructores =====
 
 // ===== [P3] Rutinas =====

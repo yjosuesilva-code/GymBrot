@@ -38,8 +38,10 @@ function esSesion(datos: unknown): datos is Sesion {
   // [multitenant-slug] accesos es opcional: una sesion de antes del slug no lo
   // trae y sigue siendo valida. Si viene, debe tener la forma correcta.
   if (s.accesos !== undefined && !(Array.isArray(s.accesos) && s.accesos.every(esAcceso))) return false;
+  // gimnasio_id es opcional: la sesion del SUPERADMIN no pertenece a ningun
+  // gimnasio (es el dueno del software). Si viene, debe ser string.
+  if (s.gimnasio_id !== undefined && typeof s.gimnasio_id !== "string") return false;
   return (
-    typeof s.gimnasio_id === "string" &&
     typeof s.numero_identificacion === "string" &&
     typeof s.usuario === "string" &&
     typeof s.nombre === "string" &&
@@ -74,11 +76,14 @@ function leer(): Sesion | null {
 /* El campo que el usuario escribio se guarda aparte de la sesion: la UI lo
    muestra en el Topbar aunque el nombre real del usuario sea otro. */
 function sesionDe(u: Usuario, escrito: string, slug: string): Sesion {
+  // El SUPERADMIN es dueno del software: no pertenece a ningun gimnasio, asi
+  // que su sesion va sin gimnasio_id ni accesos.
+  const esPlataforma = u.tipo_usuario === "SUPERADMIN";
   return {
-    gimnasio_id: u.gimnasio_id,
+    gimnasio_id: esPlataforma ? undefined : u.gimnasio_id,
     // [multitenant-slug] Hoy un usuario = un gimnasio. Con Supabase esta lista
     // sale de gym_members y puede traer varios.
-    accesos: [{ gimnasio_id: u.gimnasio_id, slug, rol: u.rol }],
+    accesos: esPlataforma ? [] : [{ gimnasio_id: u.gimnasio_id, slug, rol: u.rol }],
     numero_identificacion: u.numero_identificacion,
     usuario: escrito,
     nombre: u.nombre,
@@ -86,6 +91,7 @@ function sesionDe(u: Usuario, escrito: string, slug: string): Sesion {
     correo: u.correo,
     rol: u.rol,
     tipo_usuario: u.tipo_usuario,
+    debe_cambiar_contrasena: u.debe_cambiar_contrasena ?? false,
   };
 }
 
@@ -130,18 +136,21 @@ export async function login(
   // AuthService.java:73-74
   if (usuario.estado !== "ACTIVO") return fallo("ESTADO", `El usuario está ${usuario.estado}.`);
 
-  // loginController.java:156-158
-  if (usuario.tipo_usuario !== "ADMINISTRADOR") {
-    return fallo(
-      "SIN_ACCESO",
-      "Acceso denegado: solo los administradores pueden iniciar sesión.",
-    );
+  // Roles reales: cualquier tipo de usuario ACTIVO entra a su propio panel.
+  // El SUPERADMIN no pertenece a un gimnasio, asi que no exige slug.
+  const esPlataforma = usuario.tipo_usuario === "SUPERADMIN";
+  if (gimnasio && esPlataforma) {
+    return fallo("SIN_ACCESO", "El superadministrador entra por su propio portal.");
   }
 
   // El slug entra en la sesion para que redirigir las rutas viejas no tenga
   // que buscarlo. Sin gimnasio en las opciones se resuelve por gimnasio_id.
-  const slug = gimnasio?.slug ?? (await slugDeGimnasio(usuario.gimnasio_id));
-  if (!slug) return fallo("SIN_ACCESO", "Tu gimnasio no está registrado en GymBrot.");
+  const slug = esPlataforma
+    ? ""
+    : gimnasio?.slug ?? (await slugDeGimnasio(usuario.gimnasio_id));
+  if (!esPlataforma && !slug) {
+    return fallo("SIN_ACCESO", "Tu gimnasio no está registrado en GymBrot.");
+  }
 
   const sesion = sesionDe(usuario, escrito, slug);
   localStorage.setItem(CLAVE, JSON.stringify(sesion));
@@ -159,9 +168,11 @@ export function current(): Sesion | null {
 
 /* [multitenant-slug] Gimnasios a los que puede entrar la sesion. Una sesion
    de antes del slug no trae accesos: se arma con su gimnasio_id y slug vacio
-   (portalDeInicio() lo completa). */
+   (portalDeInicio() lo completa). El SUPERADMIN no tiene gimnasio: lista vacia. */
 export function accesosDe(sesion: Sesion): AccesoGimnasio[] {
-  return sesion.accesos ?? [{ gimnasio_id: sesion.gimnasio_id, slug: "", rol: sesion.rol }];
+  if (sesion.accesos) return sesion.accesos;
+  if (!sesion.gimnasio_id) return [];
+  return [{ gimnasio_id: sesion.gimnasio_id, slug: "", rol: sesion.rol }];
 }
 
 /* La pregunta que hace el guard de cada ruta privada. En el mock basta con
@@ -173,11 +184,44 @@ export function tieneAcceso(sesion: Sesion | null, gimnasioId: string): boolean 
 }
 
 /* A donde mandar a alguien que entra por una ruta sin slug (/dashboard,
-   /clientes/123...): el portal del gimnasio con el que inicio sesion. */
+   /clientes/123...): el portal del gimnasio con el que inicio sesion. El
+   SUPERADMIN va al panel de la plataforma. */
 export async function portalDeInicio(sesion: Sesion): Promise<string | null> {
+  if (sesion.tipo_usuario === "SUPERADMIN") return "plataforma/dashboard";
   const primero = accesosDe(sesion).find((a) => a.gimnasio_id === sesion.gimnasio_id) ?? accesosDe(sesion)[0];
   if (!primero) return null;
   return primero.slug || (await slugDeGimnasio(primero.gimnasio_id));
+}
+
+/* Ruta relativa a la que cada rol debe caer al entrar o al pedir una ruta que
+   no le corresponde (sin prefijo de slug; lo aplica el llamador). */
+export function rutaInicioRol(sesion: Sesion): string {
+  switch (sesion.tipo_usuario) {
+    case "SUPERADMIN":
+      return "/plataforma/dashboard";
+    case "INSTRUCTOR":
+      return "/instructor-dashboard";
+    case "CLIENTE":
+      return "/mi-dashboard";
+    default:
+      return "/dashboard";
+  }
+}
+
+/* Cambia la contrasena del usuario en sesion y baja el flag de cambio
+   obligatorio. Refresca la copia guardada para que el guard deje pasar. */
+export async function cambiarContrasena(nueva: string): Promise<ResultadoLogin> {
+  const sesion = leer();
+  if (!sesion) return fallo("SIN_ACCESO", "No hay sesión activa.");
+  const limpia = nueva.trim();
+  if (limpia.length < 6) return fallo("CAMPOS_VACIOS", "La contraseña debe tener al menos 6 caracteres.");
+
+  const res = await api.usuarios.cambiarContrasena(sesion.numero_identificacion, limpia);
+  if (!res.ok) return fallo("SIN_ACCESO", res.mensaje);
+
+  const actualizada: Sesion = { ...sesion, debe_cambiar_contrasena: false };
+  localStorage.setItem(CLAVE, JSON.stringify(actualizada));
+  return { ok: true, sesion: actualizada };
 }
 
 export function logout(): void {

@@ -13,6 +13,11 @@ export function Layout() {
   const { slug, gimnasio, ruta } = useTenant();
   const sesion = current();
 
+  // El SUPERADMIN es dueno del software: no vive en /g/:slug
+  if (sesion?.tipo_usuario === "SUPERADMIN") {
+    return <Navigate to="/plataforma/dashboard" replace />;
+  }
+
   if (!sesion || !tieneAcceso(sesion, gimnasio.gimnasio_id)) {
     // `desde` permite volver a la pantalla pedida despues del login.
     return (
@@ -22,6 +27,11 @@ export function Layout() {
         state={{ desde: location.pathname + location.search, otroGimnasio: sesion !== null }}
       />
     );
+  }
+
+  // Cambio obligatorio antes de seguir.
+  if (sesion.debe_cambiar_contrasena && !location.pathname.includes("/cambiar-contrasena")) {
+    return <Navigate to={ruta("/cambiar-contrasena")} replace />;
   }
 
   // paginas.ts guarda rutas sin slug ("/clientes"); se compara sin el prefijo.

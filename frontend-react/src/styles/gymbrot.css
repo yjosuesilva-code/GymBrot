@@ -1321,3 +1321,28 @@ body[data-modulo="ejercicios"] button:disabled { opacity: .6; cursor: wait; }
 .acceso-vacio{padding:10px 14px;color:rgba(226,232,240,.6)}
 
 .pill-doc{display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;border:1px solid rgba(124,92,224,.38);font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:rgba(198,187,255,.9);background:rgba(124,92,224,.08)}
+
+/* ===== [plataforma] Panel del SUPERADMIN (T2). Prefijo .plat-* ===== */
+.plat-gym { display: flex; flex-direction: column; gap: 2px; }
+.plat-gym b { color: #fff; font-weight: 600; }
+.plat-gym span { font-size: 12px; color: var(--muted); }
+.plat-slug { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted); background: transparent; padding: 0; }
+.plat-suscripcion { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.plat-fecha { font-size: 13px; white-space: nowrap; }
+.plat-conteo { margin-top: 12px; }
+.plat-filtros > select.form-control-dark { width: auto; min-width: 170px; }
+.plat-planes { display: flex; flex-direction: column; gap: 18px; }
+.plat-plan-fila { display: flex; flex-direction: column; gap: 4px; }
+.plat-plan-cab { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+.plat-plan-cab b { font-family: var(--f-title); font-size: 18px; color: #fff; }
+.plat-plan-card { display: flex; flex-direction: column; gap: 10px; padding: 22px; }
+.plat-plan-card--destacado { border-color: rgba(212, 255, 0, 0.35); }
+.plat-plan-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.plat-plan-mes { font-family: var(--f-body); font-size: 13px; font-weight: 400; color: var(--muted); }
+.plat-plan-incluye { list-style: none; padding: 0; margin: 6px 0 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.plat-plan-incluye i { color: var(--neon); margin-right: 8px; }
+.plat-plan-uso { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border-btn); font-size: 12px; color: var(--muted); }
+.plat-plan-uso b { color: #fff; }
+@media (max-width: 575.98px) {
+  .plat-filtros > select.form-control-dark { width: 100%; }
+}

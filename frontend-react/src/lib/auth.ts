@@ -148,7 +148,8 @@ export async function login(
   const slug = esPlataforma
     ? ""
     : gimnasio?.slug ?? (await slugDeGimnasio(usuario.gimnasio_id));
-  if (!esPlataforma && !slug) {
+  // null solo sale de slugDeGimnasio; el superadmin trae "" a proposito.
+  if (slug === null) {
     return fallo("SIN_ACCESO", "Tu gimnasio no está registrado en GymBrot.");
   }
 

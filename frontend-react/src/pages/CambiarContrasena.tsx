@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { cambiarContrasena, current, logout, rutaInicioRol } from "../lib/auth";
-import { useTenant } from "../tenant/TenantContext";
+import { useTenantOpcional } from "../tenant/TenantContext";
 
 export function CambiarContrasena() {
   const sesion = current();
-  const { ruta } = useTenant();
+  // Opcional: esta pantalla tambien vive en /plataforma, fuera de /g/:slug.
+  const tenant = useTenantOpcional();
   const nav = useNavigate();
   const [nueva, setNueva] = useState("");
   const [confirmar, setConfirmar] = useState("");
@@ -35,12 +36,9 @@ export function CambiarContrasena() {
       return;
     }
     setOk(true);
-    // SUPERADMIN no vive en /g/:slug: usar rutaInicioRol
-    if (sesion.tipo_usuario === "SUPERADMIN") {
-      window.location.href = rutaInicioRol(res.sesion);
-      return;
-    }
-    nav(ruta(rutaInicioRol(res.sesion)), { replace: true });
+    // SUPERADMIN no vive en /g/:slug: su ruta de inicio ya es absoluta.
+    const inicio = rutaInicioRol(res.sesion);
+    nav(tenant && res.sesion.tipo_usuario !== "SUPERADMIN" ? tenant.ruta(inicio) : inicio, { replace: true });
   }
 
   return (

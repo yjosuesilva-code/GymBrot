@@ -90,9 +90,11 @@ export const utils = {
       CANCELADA: "badge-cancelada",
       SUSPENDIDO: "badge-suspendido",
       PENDIENTE: "badge-pendiente",
-      BLOQUEADO: "badge-vencida",
+      PENDIENTE_PAGO: "badge-pendiente",
+      BLOQUEADO: "badge-bloqueado",
       CONFIRMADA: "badge-confirmada",
       EXITOSO: "badge-exitoso",
+      FALLIDO: "badge-fallido",
       COMPLETADA: "badge-completada",
     };
     return map[(estado || "").toUpperCase()] || "badge-inactivo";

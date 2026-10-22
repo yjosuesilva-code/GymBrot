@@ -1583,6 +1583,20 @@ export const api = {
       db.writeTenant("usuarios", usuarios);
       return { ok: true, mensaje: "Estado actualizado", data: u };
     },
+
+    /* Fase roles: cambio de contrasena desde el portal con flag de primer ingreso. */
+    async cambiarContrasena(id: string, contrasena: string): Promise<ApiResp<Usuario>> {
+      await api._delay();
+      const limpia = contrasena.trim();
+      if (limpia.length < 6) return { ok: false, mensaje: "La contraseña debe tener al menos 6 caracteres" };
+      const usuarios = db.read<Usuario>("usuarios");
+      const u = usuarios.find((x) => x.numero_identificacion === id);
+      if (!u) return { ok: false, mensaje: "Usuario no encontrado" };
+      u.contrasena = limpia;
+      u.debe_cambiar_contrasena = false;
+      db.write("usuarios", usuarios);
+      return { ok: true, mensaje: "Contraseña actualizada", data: u };
+    },
   },
 
   /* Estado del lector de huella. Va en su propia clave y no en el SEED porque

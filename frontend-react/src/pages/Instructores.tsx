@@ -96,6 +96,11 @@ export function Instructores() {
 
   const [alerta, setAlerta] = useState<Alerta | null>(null);
 
+  // KAN-86: cuenta recién creada (se muestra una sola vez para entregársela al instructor)
+  const [cuentaCreada, setCuentaCreada] = useState<{ nombre: string; usuario: string; contrasena: string } | null>(null);
+  const [aviso, setAviso] = useState("");
+  const [copiado, setCopiado] = useState(false);
+
   // Estado del modal: show lo abre/cierra; editandoId es null al crear y la cédula al editar
   const [show, setShow] = useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -242,17 +247,32 @@ export function Instructores() {
 
     setGuardando(true);
     // Al editar no se envía la cédula (es la llave); al crear, estado y fecha los pone la api
-    const res = editandoId
-      ? await api.instructores.update(editandoId, { ...datos, fecha_contratacion: limpio.fecha_contratacion })
-      : await api.instructores.create({ ...datos, numero_identificacion: limpio.numero_identificacion });
-    setGuardando(false);
-
-    if (!res.ok) {
-      setError(res.mensaje);
-      return;
+    if (editandoId) {
+      const res = await api.instructores.update(editandoId, { ...datos, fecha_contratacion: limpio.fecha_contratacion });
+      setGuardando(false);
+      if (!res.ok) {
+        setError(res.mensaje);
+        return;
+      }
+      setShow(false);
+      setAlerta({ tipo: "ok", mensaje: res.mensaje });
+    } else {
+      const res = await api.instructores.create({ ...datos, numero_identificacion: limpio.numero_identificacion });
+      setGuardando(false);
+      if (!res.ok || !res.data) {
+        setError(res.mensaje);
+        return;
+      }
+      setShow(false);
+      setAlerta({ tipo: "ok", mensaje: res.mensaje });
+      // La API devuelve la cuenta creada (o un aviso si no se pudo crear)
+      const { instructor, cuenta } = res.data;
+      setCopiado(false);
+      setAviso(res.data.aviso ?? "");
+      setCuentaCreada(
+        cuenta ? { nombre: instructor.nombre + " " + instructor.apellidos, usuario: cuenta.usuario, contrasena: cuenta.contrasena_temporal } : null
+      );
     }
-    setShow(false);
-    setAlerta({ tipo: "ok", mensaje: res.mensaje });
     setInstructores(await api.instructores.list());
   }
 
@@ -296,6 +316,38 @@ export function Instructores() {
       </div>
 
       {alerta && <div className={"alert-g show alert-" + alerta.tipo}>{alerta.mensaje}</div>}
+
+      {/* KAN-86: datos de acceso del instructor recién creado, para copiarlos y entregárselos */}
+      {cuentaCreada && (
+        <div className="inst-cuenta" role="status">
+          <div>
+            <strong><i className="bi bi-person-check me-1" aria-hidden /> Cuenta creada para {cuentaCreada.nombre}</strong>
+            <div>Usuario: <code>{cuentaCreada.usuario}</code> · Contraseña temporal: <code>{cuentaCreada.contrasena}</code></div>
+            <div className="card-sub">Se le pedirá cambiarla al primer ingreso.</div>
+          </div>
+          <div className="inst-cuenta-acciones">
+            <button
+              className="btn-dark"
+              onClick={() => {
+                const texto = "Usuario: " + cuentaCreada.usuario + " · Contraseña temporal: " + cuentaCreada.contrasena;
+                void navigator.clipboard.writeText(texto).then(() => setCopiado(true));
+              }}
+            >
+              <i className={"bi " + (copiado ? "bi-check2" : "bi-clipboard") + " me-1"} aria-hidden />
+              {copiado ? "Copiado" : "Copiar"}
+            </button>
+            <button className="btn-icon" title="Cerrar" onClick={() => setCuentaCreada(null)}>
+              <i className="bi bi-x-lg" aria-hidden />
+            </button>
+          </div>
+        </div>
+      )}
+      {aviso && (
+        <div className="alert-g show alert-error">
+          {aviso}{" "}
+          <button className="btn-icon ms-2" title="Cerrar" onClick={() => setAviso("")}><i className="bi bi-x-lg" aria-hidden /></button>
+        </div>
+      )}
 
       <div className="toolbar" style={{ marginBottom: 20 }}>
         <div className="search-box">

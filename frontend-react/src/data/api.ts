@@ -3,7 +3,7 @@ import { membresiaVigente } from "../lib/membresias";
 import { notificarCambioDeDatos } from "../lib/datos";
 import { slugUnico, slugify, validarSlug, normalizarSlugDeUrl } from "../lib/slug"; // [multitenant-slug]
 import { gimnasioFijado } from "../tenant/tenantActivo"; // [multitenant-slug]
-import { migrarDisponibilidadTexto, diaDisponible, horaDisponible, choque } from "../lib/horarios"; // [P4-horarios]
+import { migrarDisponibilidadTexto, diaDisponible, horaDisponible, choque, validarHorario } from "../lib/horarios"; // [P3] horario de instructores y citas
 import type {
   Gimnasio, // [multitenant]
   GimnasioPublico, // [multitenant-slug]
@@ -28,6 +28,8 @@ import type {
   CitaNueva, // [P2]
   Instructor, // [P3]
   InstructorNuevo, // [P3]
+  InstructorCreado, // [P3]
+  CuentaInicial, // [P3]
   EstadoInstructor, // [P3]
   Especialidad, // [P3]
   Rutina, // [P3]
@@ -1263,6 +1265,84 @@ function agruparPorMes<T>(
 
   return salida;
 }
+// ===== [P3] Instructores: cuenta de usuario (KAN-86) =====
+/* Cada instructor tiene un Usuario INSTRUCTOR con su misma cedula en el gimnasio.
+   Mismo patron que api.clientes: el estado (y aqui tambien nombre y correo) del
+   usuario siempre sigue al del instructor. Todo con readTenant/writeTenant. */
+
+// Crea (o reactiva) la cuenta al dar de alta al instructor. Devuelve la contraseña temporal.
+function crearCuentaInstructor(ins: Instructor): { cuenta: CuentaInicial | null; aviso?: string } {
+  const usuarios = db.readTenant<Usuario>("usuarios");
+  const mismo = usuarios.find((u) => u.numero_identificacion === ins.numero_identificacion);
+  // También si es cliente del gimnasio aunque aún no tenga cuenta: su código de acceso
+  // (api.usuarios.asignar) se guardaría luego sobre esta misma fila.
+  const esCliente = db.readTenant<Cliente>("clientes").some((c) => c.numero_identificacion === ins.numero_identificacion);
+  if (!mismo && esCliente)
+    return {
+      cuenta: null,
+      aviso:
+        "Esta cédula es de un cliente del gimnasio; no se creó la cuenta de instructor (hoy cada persona tiene " +
+        "un solo tipo de usuario).",
+    };
+  if (mismo && mismo.tipo_usuario !== "INSTRUCTOR")
+    return {
+      cuenta: null,
+      aviso:
+        "Esta cédula ya tiene una cuenta de " + mismo.tipo_usuario + " en el gimnasio; no se creó la cuenta de " +
+        "instructor (hoy cada persona tiene un solo tipo de usuario).",
+    };
+  // El login busca por nombre o correo: el correo no puede ser de otra persona del gimnasio
+  const correo = ins.correo.trim().toLowerCase();
+  const ocupado = usuarios.find(
+    (u) => u.numero_identificacion !== ins.numero_identificacion && u.correo.trim().toLowerCase() === correo
+  );
+  if (ocupado)
+    return { cuenta: null, aviso: "El correo ya lo usa otra cuenta del gimnasio; no se creó la cuenta de instructor." };
+
+  const contrasena = contrasenaInicial(ins.nombre, ins.numero_identificacion);
+  const datos = {
+    nombre: ins.nombre,
+    apellidos: ins.apellidos,
+    correo: ins.correo,
+    contrasena,
+    estado: ins.estado,
+    debe_cambiar_contrasena: true,
+  };
+  if (mismo) Object.assign(mismo, datos);
+  else
+    usuarios.push({
+      ...datos,
+      gimnasio_id: ins.gimnasio_id,
+      numero_identificacion: ins.numero_identificacion,
+      tipo_usuario: "INSTRUCTOR",
+      rol: "INSTRUCTOR",
+    });
+  db.writeTenant("usuarios", usuarios);
+  return { cuenta: { usuario: ins.correo, contrasena_temporal: contrasena } };
+}
+
+// Copia al usuario los datos que cambiaron en el instructor (solo si es su cuenta de INSTRUCTOR)
+function sincronizarCuentaInstructor(ins: Instructor): void {
+  const usuarios = db.readTenant<Usuario>("usuarios");
+  const u = usuarios.find((x) => x.numero_identificacion === ins.numero_identificacion && x.tipo_usuario === "INSTRUCTOR");
+  if (!u) return; // instructor sin cuenta (p. ej. creado antes de KAN-86): nada que copiar
+  u.nombre = ins.nombre;
+  u.apellidos = ins.apellidos;
+  u.correo = ins.correo;
+  u.estado = ins.estado; // INACTIVO = ya no puede iniciar sesion (auth.login exige ACTIVO)
+  db.writeTenant("usuarios", usuarios);
+}
+
+// Al eliminar al instructor (solo posible sin rutinas ni citas) se borra su cuenta
+function borrarCuentaInstructor(id: string): void {
+  const usuarios = db.readTenant<Usuario>("usuarios");
+  db.writeTenant(
+    "usuarios",
+    usuarios.filter((u) => !(u.numero_identificacion === id && u.tipo_usuario === "INSTRUCTOR"))
+  );
+}
+// ===== [/P3] Instructores: cuenta de usuario =====
+
 // ===== [P3] Rutinas: auxiliares =====
 const DIAS: DiaSemana[] = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"];
 
@@ -2262,11 +2342,15 @@ export const api = {
 
     // La cédula es única dentro de cada gimnasio (D3): la misma persona puede
     // trabajar en otro gimnasio sin que eso cuente como duplicado.
-    async create(data: InstructorNuevo): Promise<ApiResp<Instructor>> {
+    // KAN-86: además crea su Usuario INSTRUCTOR y devuelve la contraseña temporal
+    async create(data: InstructorNuevo): Promise<ApiResp<InstructorCreado>> {
       await api._delay();
       const arr = db.readTenant<Instructor>("instructores");
       if (arr.some((i) => i.numero_identificacion === data.numero_identificacion))
         return { ok: false, mensaje: "Ya existe un instructor con esa identificación en este gimnasio" };
+      // KAN-61: la API es la que manda; la vista valida antes solo para avisar rápido
+      const errorHorario = validarHorario(data.horario);
+      if (errorHorario) return { ok: false, mensaje: errorHorario };
       const nuevo: Instructor = {
         ...data,
         gimnasio_id: gimnasioParaEscribir(),
@@ -2275,7 +2359,8 @@ export const api = {
       };
       arr.push(nuevo);
       db.writeTenant("instructores", arr);
-      return { ok: true, mensaje: "Instructor registrado", data: nuevo };
+      const { cuenta, aviso } = crearCuentaInstructor(nuevo);
+      return { ok: true, mensaje: "Instructor registrado", data: { instructor: nuevo, cuenta, aviso } };
     },
 
     // La identificación es la llave: no se deja cambiar al editar (ni el gimnasio)
@@ -2287,8 +2372,13 @@ export const api = {
       const arr = db.readTenant<Instructor>("instructores");
       const ins = arr.find((i) => i.numero_identificacion === id);
       if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
+      if (data.horario) {
+        const errorHorario = validarHorario(data.horario);
+        if (errorHorario) return { ok: false, mensaje: errorHorario };
+      }
       Object.assign(ins, data, { numero_identificacion: id });
       db.writeTenant("instructores", arr);
+      sincronizarCuentaInstructor(ins);
       return { ok: true, mensaje: "Instructor actualizado", data: ins };
     },
 
@@ -2305,7 +2395,18 @@ export const api = {
           ok: false,
           mensaje: "No se puede eliminar: tiene " + rutinas + " rutina(s) asignada(s). Desactívalo en su lugar.",
         };
+      // RESTRICT también por citas (KAN-60): una cita es historial del instructor y del cliente.
+      // Solo se lee la colección de P2; las CANCELADAS no cuentan (no son un hecho que conservar).
+      const citas = db
+        .readTenant<Cita>("citas")
+        .filter((c) => c.id_instructor === id && c.estado !== "CANCELADA").length;
+      if (citas > 0)
+        return {
+          ok: false,
+          mensaje: "No se puede eliminar: tiene " + citas + " cita(s) registrada(s). Desactívalo en su lugar.",
+        };
       db.writeTenant("instructores", arr.filter((i) => i.numero_identificacion !== id));
+      borrarCuentaInstructor(id);
       return { ok: true, mensaje: "Instructor eliminado", data: ins };
     },
 
@@ -2316,6 +2417,7 @@ export const api = {
       if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
       ins.estado = estado;
       db.writeTenant("instructores", arr);
+      sincronizarCuentaInstructor(ins);
       return { ok: true, mensaje: "Estado actualizado", data: ins };
     },
   },

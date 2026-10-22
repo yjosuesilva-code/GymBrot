@@ -10,7 +10,7 @@ import { Login } from "./pages/Login";
 import { Instructores } from "./pages/Instructores";          // [P3]
 import { InstructorDetalle } from "./pages/InstructorDetalle"; // [P3]
 import { Rutinas } from "./pages/Rutinas";                    // [P3]
-import { Ejercicios } from "./pages/Ejercicios";              // [P4]
+import { Ejercicios } from "./pages/Ejercicios";              // [P3]
 import { Membresias } from "./pages/Membresias";              // [P4]
 import { Progreso } from "./pages/Progreso";                  // [P2]
 import { Citas } from "./pages/Citas";                        // [P2]
@@ -55,7 +55,7 @@ const RUTAS_PORTAL: { path: string; element: ReactNode }[] = [
   // [P1] El control de acceso vive dentro de Clientes; /acceso queda como
   // alias para no romper enlaces o marcadores viejos.
   { path: "acceso", element: <Navigate to="../clientes" relative="path" replace /> },
-  { path: "ejercicios", element: <Ejercicios /> },              // [P4]
+  { path: "ejercicios", element: <Ejercicios /> },              // [P3]
   { path: "gymbrot-ai", element: <GymbrotAI /> },               // [P1]
   // TODO(T3): estas rutas se filtran por rol en el sidebar/guard; las vistas son placeholders
   { path: "instructor-dashboard", element: <DashboardInstructor /> },

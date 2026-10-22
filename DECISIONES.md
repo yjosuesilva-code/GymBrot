@@ -63,6 +63,41 @@ solo para la URL. El login pasa a ser por gimnasio (`/g/:slug/login`).
 
 ---
 
+## D5 — Catálogo de ejercicios mixto: base global + propios por gimnasio
+
+**Decidido.** La tabla `ejercicios` es compartida y tiene dos tipos de filas:
+
+- **Ejercicios base:** `gimnasio_id = NULL`. Los ven todos los gimnasios y son de
+  **solo lectura** para ellos. Los mantendrá el superadministrador de plataforma
+  (mientras tanto vienen en el seed).
+- **Ejercicios propios:** llevan el `gimnasio_id` del gimnasio que los creó. Solo ese
+  gimnasio los ve, los edita, los desactiva o los elimina.
+
+Reglas (implementadas en `api.ejercicios`):
+- `list()` devuelve **base + propios del gimnasio activo**.
+- Un gimnasio no puede editar, desactivar ni borrar un ejercicio base: puede
+  **personalizarlo**, que crea una copia propia ("<nombre> (personalizado)") con id nuevo.
+- El nombre de un ejercicio propio no puede repetirse dentro del gimnasio ni coincidir
+  con uno base (sin importar mayúsculas, tildes ni espacios).
+- Eliminar un ejercicio propio aplica **RESTRICT** si lo usa alguna rutina del gimnasio
+  (se sugiere desactivarlo). *Difiere del esquema de `main`, que proponía CASCADE en
+  `RUTINA_EJERCICIOS.id_ejercicio`: borrar el ejercicio cambiaría rutinas ya asignadas.*
+- `id_ejercicio` es global (como un `SERIAL`), así una rutina puede referenciar un base
+  o un propio sin ambigüedad.
+
+En producción (RLS): lectura con `gimnasio_id IS NULL OR gimnasio_id = <gimnasio de la
+sesión>`; escritura solo con `gimnasio_id = <gimnasio de la sesión>` (las filas base
+las escribe únicamente el superadmin).
+
+*Nota técnica del mock:* `db.readTenant` filtra por igualdad y no devuelve las filas
+base, así que `api.ejercicios` las combina a mano (`leerCatalogo()`); las escrituras de
+propios usan `writeTenant`, que conserva intactas las filas base.
+
+**Rechazado:** catálogo solo global (los gimnasios no podrían agregar los suyos) y solo
+por gimnasio (cada gimnasio arrancaría vacío y se duplicaría el mismo ejercicio en todos).
+
+---
+
 ## Decisiones pendientes (por cerrar en equipo)
 
 - [ ] Cómo identifica el login a qué gimnasio pertenece alguien: por usuario /
@@ -74,7 +109,7 @@ solo para la URL. El login pasa a ser por gimnasio (`/g/:slug/login`).
       **D4 propone cerrarlo por slug** (`/g/:slug/login`): el usuario se busca solo
       dentro del gimnasio de la URL.
 - [ ] Qué catálogos son globales (compartidos) y cuáles por gimnasio:
-      especialidades, ejercicios base.
+      especialidades. *(Ejercicios: resuelto en D5, catálogo mixto.)*
 - [ ] Roles definitivos (superadmin, administrador, instructor, cliente) —
       validar contra las historias de usuario.
 - [ ] Si el superadmin de plataforma entra en esta entrega o después.

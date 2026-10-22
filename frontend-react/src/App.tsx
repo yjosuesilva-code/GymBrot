@@ -21,6 +21,20 @@ import { Contacto } from "./pages/Contacto";                  // [multitenant-sl
 import { BuscarGimnasio } from "./pages/BuscarGimnasio";      // [multitenant-slug]
 import { TenantProvider } from "./tenant/TenantProvider";     // [multitenant-slug]
 import { RedirigirAlPortal } from "./tenant/RedirigirAlPortal"; // [multitenant-slug]
+import { CambiarContrasena } from "./pages/CambiarContrasena";
+// TODO(T3): reemplazar placeholders por vistas completas
+import { DashboardInstructor } from "./pages/DashboardInstructor";
+import { Alumnos } from "./pages/Alumnos";
+// TODO(T4): reemplazar placeholders por vistas completas
+import { DashboardCliente } from "./pages/DashboardCliente";
+import { MiMembresia } from "./pages/MiMembresia";
+import { MisCitas } from "./pages/MisCitas";
+import { MiProgreso } from "./pages/MiProgreso";
+import { MiRutina } from "./pages/MiRutina";
+// TODO(T2): reemplazar por layout y panel completos de plataforma
+import { LayoutPlataforma } from "./pages/LayoutPlataforma";
+import { LoginPlataforma } from "./pages/LoginPlataforma";
+import { DashboardPlataforma } from "./pages/DashboardPlataforma";
 
 /* [multitenant-slug] Rutas privadas de un gimnasio, relativas a /g/:slug.
    Una sola lista: la usan el portal y las redirecciones de compatibilidad,
@@ -41,6 +55,16 @@ const RUTAS_PORTAL: { path: string; element: ReactNode }[] = [
   { path: "acceso", element: <Navigate to="../clientes" relative="path" replace /> },
   { path: "ejercicios", element: <Ejercicios /> },              // [P4]
   { path: "gymbrot-ai", element: <GymbrotAI /> },               // [P1]
+  // TODO(T3): estas rutas se filtran por rol en el sidebar/guard; las vistas son placeholders
+  { path: "instructor-dashboard", element: <DashboardInstructor /> },
+  { path: "alumnos", element: <Alumnos /> },
+  // TODO(T4)
+  { path: "mi-dashboard", element: <DashboardCliente /> },
+  { path: "mi-membresia", element: <MiMembresia /> },
+  { path: "mis-citas", element: <MisCitas /> },
+  { path: "mi-progreso", element: <MiProgreso /> },
+  { path: "mi-rutina", element: <MiRutina /> },
+  { path: "cambiar-contrasena", element: <CambiarContrasena /> },
 ];
 
 function App() {
@@ -53,6 +77,15 @@ function App() {
       <Route path="/registro" element={<Registro />} />
       {/* /login ya no autentica: pregunta por el gimnasio y manda a /g/:slug/login */}
       <Route path="/login" element={<BuscarGimnasio />} />
+
+      {/* Plataforma SUPERADMIN (fuera del portal multitenant) */}
+      <Route path="/plataforma/login" element={<LoginPlataforma />} />
+      <Route path="/plataforma" element={<LayoutPlataforma />}>
+        <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard" element={<DashboardPlataforma />} />
+        <Route path="cambiar-contrasena" element={<CambiarContrasena />} />
+        {/* TODO(T2): gimnasios, planes, suscripciones */}
+      </Route>
 
       {/* Portal de cada gimnasio. TenantProvider resuelve :slug antes de pintar
           nada; Layout es el guard (sesion con acceso a ESE gimnasio). */}

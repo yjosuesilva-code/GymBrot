@@ -1,5 +1,5 @@
 // TODO(T3): reemplazar por el dashboard completo del INSTRUCTOR
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { current } from "../lib/auth";
 
 export function DashboardInstructor() {

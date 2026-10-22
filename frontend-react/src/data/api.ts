@@ -610,7 +610,7 @@ function ejTiempo(
 }
 // ===== [/P3] Ejercicios: generadores de la semilla =====
 
-const USUARIOS_INSTRUCTORES: any[] = [];
+const USUARIOS_INSTRUCTORES: Usuario[] = [];
 (function poblarUsuariosInstructores(){
   const crear = (gimnasio_id, num, nombre, apellidos, correo, estado) => ({
     gimnasio_id,

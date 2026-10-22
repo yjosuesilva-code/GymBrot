@@ -1,5 +1,5 @@
 // TODO(T4): reemplazar por dashboard completo del CLIENTE
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { current } from "../lib/auth";
 
 export function DashboardCliente() {

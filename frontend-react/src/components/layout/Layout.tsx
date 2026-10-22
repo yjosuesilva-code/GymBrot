@@ -2,7 +2,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { paginas } from "./paginas";
-import { current, tieneAcceso, rutaInicioRol } from "../../lib/auth";
+import { current, tieneAcceso } from "../../lib/auth";
 import { useTenant } from "../../tenant/TenantContext";
 
 /* [multitenant-slug] Guard de las rutas privadas de /g/:slug/... Vive dentro

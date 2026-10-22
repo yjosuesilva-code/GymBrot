@@ -81,8 +81,12 @@ export interface Usuario {
   correo: string;
   contrasena: string;
   estado: 'ACTIVO' | 'INACTIVO' | 'SUSPENDIDO' | 'BLOQUEADO';
-  tipo_usuario: 'ADMINISTRADOR' | 'INSTRUCTOR' | 'CLIENTE';
+  tipo_usuario: 'SUPERADMIN' | 'ADMINISTRADOR' | 'INSTRUCTOR' | 'CLIENTE';
   rol: string;
+  /* true en las cuentas nuevas (instructores y clientes creados por el admin
+     con clave automatica): el portal obliga a cambiar la contrasena antes de
+     dejar entrar a cualquier otra vista. */
+  debe_cambiar_contrasena?: boolean;
 }
 
 /* PLANES_MEMBRESIAS. id_plan es la clave que el legacy separa del nombre:
@@ -250,7 +254,9 @@ export interface Sesion {
      lo hace el slug de la URL (TenantProvider). Se conserva para redirigir
      las rutas viejas (/dashboard) y por compatibilidad con sesiones guardadas
      antes del slug. */
-  gimnasio_id: Gimnasio['gimnasio_id'];
+  /* Opcional desde los roles: el SUPERADMIN es dueno del software y no
+     pertenece a ningun gimnasio, asi que su sesion no lo trae. */
+  gimnasio_id?: Gimnasio['gimnasio_id'];
   /* Opcional: las sesiones guardadas antes del slug no lo traen y siguen
      siendo validas; auth.accesosDe() lo completa con gimnasio_id. */
   accesos?: AccesoGimnasio[];
@@ -261,6 +267,9 @@ export interface Sesion {
   correo: string;
   rol: string;
   tipo_usuario: Usuario['tipo_usuario'];
+  /* Espeja Usuario.debe_cambiar_contrasena: el guard lo lee para forzar el
+     cambio antes de dejar pasar a cualquier otra vista. */
+  debe_cambiar_contrasena?: boolean;
 }
 
 // ===== [P3] Instructores =====
@@ -302,6 +311,9 @@ export interface Instructor {
   horario: HorarioInstructor;      // intervalos por día; el texto legible se deriva con disponibilidadTexto
   fecha_contratacion: string;      // 'YYYY-MM-DD'
   estado: EstadoInstructor;
+  /* Ruta a la foto ('/recursos/fotos/instructor-XXXX.jpg') o dataURL base64
+     como respaldo si se subio un archivo desde el navegador. */
+  foto?: string;
 }
 
 // Lo que se envía al crear: gimnasio_id, estado y fecha_contratacion los pone api.instructores.create
@@ -347,6 +359,11 @@ export interface RutinaEjercicio {
   orden: number;                   // posición dentro del día: 1, 2, 3...
   dia_semana: DiaSemana;
   notas_instructor: string;
+  /* El cliente puede adicionar/cambiar ejercicios de su rutina (con aviso de
+     que lo consulto con su instructor): esos quedan marcados para que el
+     instructor los revise. */
+  agregado_por_cliente?: boolean;
+  confirmado_instructor?: boolean;
 }
 
 // Lo que se envía al crear: gimnasio_id, id_rutina y fecha_creacion los pone api.rutinas.create
@@ -370,3 +387,26 @@ export interface Cita {
 // Lo que se envía al crear: gimnasio_id, el id y el estado los pone api.citas.create
 export type CitaNueva = Omit<Cita, 'gimnasio_id' | 'id_cita' | 'estado'>;
 // ===== [/P2] Citas =====
+
+// ===== [roles] Clases generales =====
+/* Una clase grupal con aforo (rumba terapia, core, zumba...). La crea el
+   instructor; los clientes se agendan mientras haya cupo. */
+export type TipoClase = 'RUMBA' | 'ZUMBA' | 'CORE' | 'FUNCIONAL' | 'YOGA' | 'OTRA';
+
+export interface Clase {
+  gimnasio_id: Gimnasio['gimnasio_id'];
+  id_clase: number;             // autoincremental global (lo pone apiClases)
+  id_instructor: string;        // Instructor.numero_identificacion
+  nombre: string;
+  tipo_clase: TipoClase;
+  dia_semana: DiaSemana;
+  hora: string;                 // 'HH:MM'
+  duracion_min: number;         // ej. 60
+  aforo_max: number;            // cupos máximos
+  inscritos: string[];          // Cliente.numero_identificacion de los agendados
+  estado: 'ACTIVA' | 'CANCELADA';
+}
+
+// Lo que manda la vista al crear: gimnasio_id, id_clase, inscritos y estado los pone apiClases
+export type ClaseNueva = Omit<Clase, 'gimnasio_id' | 'id_clase' | 'inscritos' | 'estado'>;
+// ===== [/roles] Clases generales =====

@@ -478,10 +478,11 @@ for (let i = 0; i < 93; i++) {
       nombre,
       apellidos,
       correo: "socio" + id + "@mail.com",
-      contrasena: "socio" + id.slice(-6),
+      contrasena: contrasenaInicial(nombre, id),
       estado,
       tipo_usuario: 'CLIENTE',
       rol: 'CLIENTE',
+      debe_cambiar_contrasena: true,
     });
   }
 }
@@ -609,6 +610,43 @@ function ejTiempo(
 }
 // ===== [/P3] Ejercicios: generadores de la semilla =====
 
+const USUARIOS_INSTRUCTORES: Usuario[] = [];
+(function poblarUsuariosInstructores(){
+  const crear = (
+    gimnasio_id: string,
+    num: string,
+    nombre: string,
+    apellidos: string,
+    correo: string,
+    estado: Usuario["estado"],
+  ): Usuario => ({
+    gimnasio_id,
+    numero_identificacion: num,
+    nombre,
+    apellidos,
+    correo,
+    contrasena: contrasenaInicial(nombre, num),
+    estado,
+    tipo_usuario: 'INSTRUCTOR',
+    rol: 'INSTRUCTOR',
+    debe_cambiar_contrasena: true,
+  });
+  USUARIOS_INSTRUCTORES.push(
+    crear('gym-centro','2000000001','Camilo','Herrera Díaz','camilo.herrera@gymbrot.com','ACTIVO'),
+    crear('gym-centro','2000000002','Natalia','Vargas Rojas','natalia.vargas@gymbrot.com','ACTIVO'),
+    crear('gym-centro','2000000003','Mateo','Silva Castro','mateo.silva@gymbrot.com','INACTIVO'),
+    crear('gym-titan','2000000002','Natalia','Vargas Rojas','natalia.vargas@titanfitness.com','ACTIVO'),
+    crear('gym-titan','2000000101','Jorge','Mendoza Ochoa','jorge.mendoza@titanfitness.com','ACTIVO'),
+  );
+  // instructores extra
+  for(let i=4;i<=20;i++){
+    const num = '200000' + String(i).padStart(4,'0');
+    const nom = ['Lucía','Andrés','Sofía','Martín','Valeria'][i%5];
+    USUARIOS_INSTRUCTORES.push(crear('gym-centro', num, nom, 'Entrenador '+i, nom.toLowerCase()+i+'@gymbrot.com', i%7===0?'INACTIVO':'ACTIVO'));
+  }
+})();
+
+
 const SEED: Seed = {
   // Lo que la plataforma vende a los gimnasios (pagina de planes y registro).
   // max_clientes todavia no se hace cumplir: solo se muestra.
@@ -632,32 +670,20 @@ const SEED: Seed = {
   // Pagos de suscripcion que hacen los gimnasios nuevos desde /registro.
   pagosSoftware: [],
 
-  // Personal con acceso al panel. El legacy exige tipo_usuario
-  // 'ADMINISTRADOR' para iniciar sesion (loginController.java:156), asi que
-  // instructor y cliente quedan sembrados para probar ese rechazo, no para
-  // entrar. Cuando haya roles reales, estos 3 pasan a ser los perfiles.
-  //
-  // Los 7 clientes tienen fila propia con su clave: es la que compara el modo
-  // manual de control de acceso (RegistroEntradaController.handleValidarIngreso
-  // -> AuthService.validarContrasena). Sin fila no hay clave y ese socio solo
-  // podria entrar por huella. El estado espeja el del cliente, asi que
-  // suspenderlo en Clientes lo suspende aqui tambien.
+  // SUPERADMIN dueno del software (fuera del portal /g/:slug).
+  // ADMINISTRADORES de gimnasio por rol real. INSTRUCTOR/CLIENTE se generan con
+  // contrasena inicial nombre+ultimos4 y cambio obligatorio.
+  // Se conserva el caso '1 de cada 6 sin codigo' en los socios masivos: sin
+  // fila en usuarios no pueden ingresar.
   usuarios: [
-    { gimnasio_id:'gym-centro', numero_identificacion:'1001000001', nombre:'admin', apellidos:'Administrador', correo:'admin@gymbrot.com', contrasena:'admin',      estado:'ACTIVO',     tipo_usuario:'ADMINISTRADOR', rol:'SUPERADMIN' },
-    { gimnasio_id:'gym-centro', numero_identificacion:'2001000001', nombre:'Diego', apellidos:'Morales',       correo:'diego.morales@gymbrot.com', contrasena:'instructor', estado:'ACTIVO',     tipo_usuario:'INSTRUCTOR',   rol:'INSTRUCTOR' },
-    { gimnasio_id:'gym-centro', numero_identificacion:'1000000001', nombre:'Ana María',    apellidos:'Ruiz',     correo:'ana.ruiz@mail.com',   contrasena:'ana123',    estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
-    { gimnasio_id:'gym-centro', numero_identificacion:'1000000002', nombre:'Carlos Andrés', apellidos:'Pérez',    correo:'carlos.perez@mail.com', contrasena:'carlos123', estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
-    { gimnasio_id:'gym-centro', numero_identificacion:'1000000003', nombre:'Juan David',    apellidos:'Gómez',    correo:'juan.gomez@mail.com',  contrasena:'juan123',   estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
-    { gimnasio_id:'gym-centro', numero_identificacion:'1000000004', nombre:'Laura Sofía',   apellidos:'Martínez', correo:'laura.m@mail.com',     contrasena:'laura123',  estado:'SUSPENDIDO', tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
-    { gimnasio_id:'gym-centro', numero_identificacion:'1000000005', nombre:'Diego Fernando',apellidos:'Ríos',     correo:'diego.rios@mail.com',  contrasena:'diego123',  estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
-    { gimnasio_id:'gym-centro', numero_identificacion:'1000000006', nombre:'Valentina',     apellidos:'Torres',   correo:'valen.torres@mail.com',contrasena:'valen123',  estado:'INACTIVO',   tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
-    { gimnasio_id:'gym-centro', numero_identificacion:'1000000007', nombre:'Andrés Felipe', apellidos:'Navarro',  correo:'andres.nav@mail.com',  contrasena:'andres123', estado:'ACTIVO',     tipo_usuario:'CLIENTE',      rol:'CLIENTE' },
-    // --- gym-titan ---
-    { gimnasio_id:'gym-titan', numero_identificacion:'1001000002', nombre:'titan', apellidos:'Administrador', correo:'admin@titanfitness.com', contrasena:'titan', estado:'ACTIVO', tipo_usuario:'ADMINISTRADOR', rol:'ADMINISTRADOR' },
-    { gimnasio_id:'gym-titan', numero_identificacion:'1000000001', nombre:'Ana María', apellidos:'Ruiz', correo:'ana.ruiz@mail.com', contrasena:'anatitan', estado:'ACTIVO', tipo_usuario:'CLIENTE', rol:'CLIENTE' },
-    { gimnasio_id:'gym-titan', numero_identificacion:'1000000101', nombre:'Sebastián', apellidos:'Castro', correo:'sebas.castro@mail.com', contrasena:'sebas123', estado:'ACTIVO', tipo_usuario:'CLIENTE', rol:'CLIENTE' },
-    // --- socios masivos de gym-centro (v12). 1 de cada 6 no tiene fila === no
-    // tiene codigo de acceso, y el modo manual lo reporta como "sin codigo". ---
+    { gimnasio_id:'gym-centro', numero_identificacion:'1001000001', nombre:'admin', apellidos:'Administrador', correo:'admin@gymbrot.com', contrasena:'admin',      estado:'ACTIVO',     tipo_usuario:'ADMINISTRADOR', rol:'ADMINISTRADOR' },
+    { gimnasio_id:'gym-titan',  numero_identificacion:'1001000002', nombre:'titan', apellidos:'Administrador', correo:'admin@titanfitness.com', contrasena:'titan', estado:'ACTIVO', tipo_usuario:'ADMINISTRADOR', rol:'ADMINISTRADOR' },
+    // gimnasio_id '' = plataforma: Usuario lo exige y ningun gimnasio real
+    // tiene id vacio. sesionDe() lo deja fuera de la sesion.
+    { gimnasio_id:'', numero_identificacion:'9000000001', nombre:'superadmin', apellidos:'Plataforma', correo:'dueno@gymbrot.com', contrasena:'gymbrot2026', estado:'ACTIVO', tipo_usuario:'SUPERADMIN', rol:'SUPERADMIN' },
+    ...USUARIOS_INSTRUCTORES,
+    { gimnasio_id:'gym-titan', numero_identificacion:'1000000001', nombre:'Ana María', apellidos:'Ruiz', correo:'ana.ruiz@mail.com', contrasena: contrasenaInicial('Ana María','1000000001'), estado:'ACTIVO', tipo_usuario:'CLIENTE', rol:'CLIENTE', debe_cambiar_contrasena: true },
+    { gimnasio_id:'gym-titan', numero_identificacion:'1000000101', nombre:'Sebastián', apellidos:'Castro', correo:'sebas.castro@mail.com', contrasena: contrasenaInicial('Sebastián','1000000101'), estado:'ACTIVO', tipo_usuario:'CLIENTE', rol:'CLIENTE', debe_cambiar_contrasena: true },
     ...USUARIOS_CLIENTES,
   ],
 
@@ -888,7 +914,14 @@ const SEED: Seed = {
 // rutinas (gym-centro), rutinas masivas desde el id 7 (5 y 6 son de Titan) y
 // sus ejercicios tomados del catalogo base de P3. Se retira el generador de
 // 100 ejercicios de P1: el catalogo es el mixto de P3.
-const SEED_VERSION = "14";
+function quitarAcentos(t:string){ return t.normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function contrasenaInicial(nombre:string, id:string){
+  const pnombre = quitarAcentos(nombre).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z]/g,'') || 'socio';
+  const ult4 = (id.slice(-4)).padStart(4,'0');
+  return pnombre + ult4;
+}
+
+const SEED_VERSION = "15";
 const CLAVE_VERSION = "gymbrot_seed_version";
 const CLAVE_LECTOR = "gymbrot_lector_conectado";
 
@@ -1582,6 +1615,20 @@ export const api = {
       u.estado = estado;
       db.writeTenant("usuarios", usuarios);
       return { ok: true, mensaje: "Estado actualizado", data: u };
+    },
+
+    /* Fase roles: cambio de contrasena desde el portal con flag de primer ingreso. */
+    async cambiarContrasena(id: string, contrasena: string): Promise<ApiResp<Usuario>> {
+      await api._delay();
+      const limpia = contrasena.trim();
+      if (limpia.length < 6) return { ok: false, mensaje: "La contraseña debe tener al menos 6 caracteres" };
+      const usuarios = db.read<Usuario>("usuarios");
+      const u = usuarios.find((x) => x.numero_identificacion === id);
+      if (!u) return { ok: false, mensaje: "Usuario no encontrado" };
+      u.contrasena = limpia;
+      u.debe_cambiar_contrasena = false;
+      db.write("usuarios", usuarios);
+      return { ok: true, mensaje: "Contraseña actualizada", data: u };
     },
   },
 

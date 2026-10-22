@@ -163,9 +163,10 @@ function GraficaAsistencia({ ingresos }: { ingresos: Ingreso[] }) {
       {
         label: "Entradas",
         data: valores,
-        backgroundColor: valores.map((v) => (maximo > 0 && v === maximo ? "#D4FF00" : "#2a4a50")),
-        borderRadius: 2,
-        maxBarThickness: 8,
+        backgroundColor: valores.map((v) => (maximo > 0 && v === maximo ? "#D4FF00" : "#3a5a60")),
+        borderRadius: 6,
+        borderSkipped: false,
+        maxBarThickness: 10,
       },
     ],
   };
@@ -173,13 +174,64 @@ function GraficaAsistencia({ ingresos }: { ingresos: Ingreso[] }) {
   const options: ChartOptions<"bar"> = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
+    interaction: {
+      mode: "index",
+      intersect: false,
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: "#1a1d21",
+        borderColor: "#1f2125",
+        borderWidth: 1,
+        padding: 10,
+        titleColor: "#ffffff",
+        bodyColor: "#d5d9de",
+        titleFont: {
+          family: "var(--f-title)",
+          size: 13,
+          weight: 600,
+        },
+        bodyFont: {
+          family: "var(--f-body)",
+          size: 12,
+        },
+        displayColors: false,
+        callbacks: {
+          title: (items) => (items.length > 0 ? items[0].label : ""),
+          label: (ctx) => `${ctx.parsed.y} entradas`,
+        },
+      },
+    },
     scales: {
-      x: { grid: { display: false }, ticks: { color: "#6b7280", precision: 0 } },
+      x: {
+        grid: { display: false },
+        ticks: {
+          color: "#6b7280",
+          precision: 0,
+          font: {
+            family: "var(--f-body)",
+            size: 11,
+          },
+        },
+      },
       y: {
         beginAtZero: true,
-        grid: { color: "#1f2125" },
-        ticks: { color: "#6b7280", precision: 0 },
+        grid: {
+          color: "rgba(31, 33, 37, 0.6)",
+          drawTicks: true,
+        },
+        // Chart.js 4: el punteado del eje va en border.dash, no en grid.
+        border: { dash: [4, 4] },
+        ticks: {
+          color: "#6b7280",
+          precision: 0,
+          font: {
+            family: "var(--f-body)",
+            size: 11,
+          },
+          padding: 4,
+        },
       },
     },
   };
@@ -208,7 +260,7 @@ function GraficaAsistencia({ ingresos }: { ingresos: Ingreso[] }) {
           </button>
         </div>
       </div>
-      <div style={{ height: 210 }}>
+      <div style={{ height: 220 }}>
         <Bar data={data} options={options} />
       </div>
     </div>

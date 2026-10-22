@@ -20,6 +20,7 @@ import { Registro } from "./pages/Registro";                  // [P2] plataforma
 import { BuscarGimnasio } from "./pages/BuscarGimnasio";      // [multitenant-slug]
 import { TenantProvider } from "./tenant/TenantProvider";     // [multitenant-slug]
 import { RedirigirAlPortal } from "./tenant/RedirigirAlPortal"; // [multitenant-slug]
+import { useTenant } from "./tenant/TenantContext";             // [multitenant-slug]
 import { CambiarContrasena } from "./pages/CambiarContrasena";
 // TODO(T3): reemplazar placeholders por vistas completas
 import { DashboardInstructor } from "./pages/DashboardInstructor";
@@ -68,6 +69,15 @@ const RUTAS_PORTAL: { path: string; element: ReactNode }[] = [
 
 const SECCIONES_LANDING: SeccionLanding[] = ["modulos", "panel", "aislamiento", "planes", "preguntas", "contacto"];
 
+/* [multitenant-slug] Destino de una ruta desconocida dentro de /g/:slug. Un
+   <Navigate to="dashboard"> relativo dentro de una ruta "*" se resuelve contra
+   la URL completa (/g/x/no-existe/dashboard) y se repite sin fin; con ruta()
+   el destino queda absoluto. */
+function AlDashboardDelPortal() {
+  const { ruta } = useTenant();
+  return <Navigate to={ruta("/dashboard")} replace />;
+}
+
 function App() {
   return (
     <Routes>
@@ -88,6 +98,10 @@ function App() {
         <Route path="dashboard" element={<DashboardPlataforma />} />
         <Route path="cambiar-contrasena" element={<CambiarContrasena />} />
         {/* TODO(T2): gimnasios, planes, suscripciones */}
+        {/* Una ruta de plataforma que no existe vuelve al dashboard, no a la landing.
+            Ruta absoluta: en una ruta "*" un "dashboard" relativo se resuelve
+            contra la URL completa y se repite sin fin. */}
+        <Route path="*" element={<Navigate to="/plataforma/dashboard" replace />} />
       </Route>
 
       {/* Portal de cada gimnasio. TenantProvider resuelve :slug antes de pintar
@@ -106,7 +120,7 @@ function App() {
           {RUTAS_PORTAL.map((r) => (
             <Route key={r.path} path={r.path} element={r.element} />
           ))}
-          <Route path="*" element={<Navigate to="dashboard" replace />} />
+          <Route path="*" element={<AlDashboardDelPortal />} />
         </Route>
       </Route>
 

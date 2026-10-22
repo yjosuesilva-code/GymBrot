@@ -48,9 +48,9 @@ function calcularVigencia(r: Rutina): Vigencia {
   const avance = total > 0 ? Math.min(100, Math.max(0, Math.round((transcurridos / total) * 100))) : 100;
 
   if (restantes < 0) return { texto: "Vencida", clase: "badge-vencida", avance };
-  if (restantes === 0) return { texto: "Vence hoy", clase: "badge-suspendido", avance };
+  if (restantes === 0) return { texto: "Vence hoy", clase: "badge-pendiente", avance };
   if (restantes < DIAS_AVISO)
-    return { texto: "Vence en " + restantes + (restantes === 1 ? " día" : " días"), clase: "badge-suspendido", avance };
+    return { texto: "Vence en " + restantes + (restantes === 1 ? " día" : " días"), clase: "badge-pendiente", avance };
   return { texto: "Vigente", clase: "badge-activo", avance };
 }
 

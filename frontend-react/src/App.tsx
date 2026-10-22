@@ -31,10 +31,12 @@ import { MiMembresia } from "./pages/MiMembresia";
 import { MisCitas } from "./pages/MisCitas";
 import { MiProgreso } from "./pages/MiProgreso";
 import { MiRutina } from "./pages/MiRutina";
-// TODO(T2): reemplazar por layout y panel completos de plataforma
+// [T2] Panel del SUPERADMIN
 import { LayoutPlataforma } from "./pages/LayoutPlataforma";
 import { LoginPlataforma } from "./pages/LoginPlataforma";
 import { DashboardPlataforma } from "./pages/DashboardPlataforma";
+import { GimnasiosPlataforma } from "./pages/GimnasiosPlataforma";
+import { PlanesSoftware } from "./pages/PlanesSoftware";
 
 /* [multitenant-slug] Rutas privadas de un gimnasio, relativas a /g/:slug.
    Una sola lista: la usan el portal y las redirecciones de compatibilidad,
@@ -97,7 +99,9 @@ function App() {
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPlataforma />} />
         <Route path="cambiar-contrasena" element={<CambiarContrasena />} />
-        {/* TODO(T2): gimnasios, planes, suscripciones */}
+        <Route path="gimnasios" element={<GimnasiosPlataforma />} />
+        <Route path="planes" element={<PlanesSoftware />} />
+        {/* TODO(T2): gimnasios/:id y suscripciones, cuando T1 exporte db */}
         {/* Una ruta de plataforma que no existe vuelve al dashboard, no a la landing.
             Ruta absoluta: en una ruta "*" un "dashboard" relativo se resuelve
             contra la URL completa y se repite sin fin. */}

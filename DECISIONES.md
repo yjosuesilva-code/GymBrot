@@ -96,6 +96,17 @@ propios usan `writeTenant`, que conserva intactas las filas base.
 **Rechazado:** catálogo solo global (los gimnasios no podrían agregar los suyos) y solo
 por gimnasio (cada gimnasio arrancaría vacío y se duplicaría el mismo ejercicio en todos).
 
+**Imágenes del catálogo base (KAN-96).** Vienen de
+[free-exercise-db](https://github.com/yuhonas/free-exercise-db) (yuhonas), publicado
+bajo **The Unlicense** (dominio público: se pueden copiar, modificar y redistribuir sin
+atribución obligatoria; la dejamos por cortesía). Son 2 JPG por ejercicio (posición
+inicial y final), reducidos a 400 px de ancho, en
+`frontend-react/public/recursos/ejercicios/<id>-0.jpg` y `<id>-1.jpg`. El seed guarda la
+ruta de la `-0` en `recurso_url` y la vista alterna las dos (`AnimacionEjercicio`).
+39 de los 40 base tienen imagen (33 equivalentes exactos y 6 aproximados); *Burpees*
+no tiene equivalente y muestra el ícono de respaldo. Los propios de cada gimnasio usan
+la URL que les pongan (una imagen o GIF externo se muestra tal cual).
+
 ---
 
 ## Decisiones pendientes (por cerrar en equipo)

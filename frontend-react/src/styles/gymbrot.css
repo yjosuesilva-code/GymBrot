@@ -1466,3 +1466,10 @@ body {
   .inst-agenda-fila { flex-wrap: wrap; }
   .inst-motivos { justify-content: flex-start; }
 }
+
+/* [P3] .inst-* · Imagen animada de ejercicio (KAN-96): las dos posiciones apiladas, se alterna la de arriba */
+.inst-anim { position: relative; display: block; overflow: hidden; }
+.inst-ej-grande.inst-anim { aspect-ratio: 3 / 2; }
+.inst-anim img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.inst-ej-grande.inst-anim img { object-fit: contain; }
+.inst-anim img.oculta { visibility: hidden; }

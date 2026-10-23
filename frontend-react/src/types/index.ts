@@ -374,8 +374,6 @@ export interface Rutina {
   fecha_creacion: string;          // 'YYYY-MM-DD' = inicio de la rutina
   fecha_fin: string | null;        // 'YYYY-MM-DD' = fin de la vigencia (null = sin fin)
   objetivo: ObjetivoRutina;
-  /** @deprecated v1: días fijos de la semana. Las rutinas v2 usan `division`. */
-  dias_semana?: DiaSemana[];
   sesiones_planeadas?: number;     // meta de entrenamientos, ej. 19 (avance = registros / planeadas)
   division?: LetraSesion[];        // sesiones de la rutina en orden: ['A'], ['A','B'], ['A','B','C']...
   finalizada_el?: string | null;   // 'YYYY-MM-DD' si se finalizó a mano (distingue FINALIZADA de VENCIDA)
@@ -403,8 +401,6 @@ export interface RutinaEjercicio {
   revisado_por_instructor?: boolean;
   /** @deprecated usar `revisado_por_instructor` (tenía dos significados). */
   confirmado_instructor?: boolean;
-  /** @deprecated v1: día fijo. En v2 se usa `sesion`. */
-  dia_semana?: DiaSemana;
 }
 
 // Lo que manda el constructor por cada ejercicio de una sesión (id_rutina y gimnasio los pone la API)
@@ -449,6 +445,15 @@ export interface ResumenSupervision {
   vencidas_sin_renovar: number[];  // id_rutina: la última rutina de un cliente ACTIVO venció y no tiene otra vigente
   sin_rutina: string[];            // cédulas de clientes ACTIVOS sin rutina vigente (sin contar los de arriba)
   carga: { id_instructor: string; nombre: string; vigentes: number }[]; // rutinas vigentes por instructor
+}
+
+// Una fila de la tabla de supervisión: la rutina con lo que se calcula de ella (api.rutinas.listaSupervision)
+export interface FilaSupervision {
+  rutina: Rutina;
+  estado: EstadoRutina;
+  avance: AvanceRutina;
+  siguiente: LetraSesion | null;
+  cambios_sin_revisar: number;     // ejercicios que el cliente cambió y nadie ha revisado
 }
 
 // Lo que se envía al crear: gimnasio_id, id_rutina, fecha_creacion y finalizada_el los pone api.rutinas

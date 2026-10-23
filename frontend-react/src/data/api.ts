@@ -1,6 +1,7 @@
 import { utils } from "../lib/utils";
 import { membresiaVigente } from "../lib/membresias";
 import { notificarCambioDeDatos } from "../lib/datos";
+import { OBJETIVOS_RUTINA } from "../lib/rutinas"; // [P3] única lista de objetivos
 import { slugUnico, slugify, validarSlug, normalizarSlugDeUrl } from "../lib/slug"; // [multitenant-slug]
 import { gimnasioFijado } from "../tenant/tenantActivo"; // [multitenant-slug]
 import { migrarDisponibilidadTexto, diaDisponible, horaDisponible, choque, validarHorario } from "../lib/horarios"; // [P3] horario de instructores y citas
@@ -35,8 +36,6 @@ import type {
   Rutina, // [P3]
   RutinaNueva, // [P3]
   RutinaEjercicio, // [P3]
-  DiaSemana, // [P3]
-  ObjetivoRutina, // [P3]
   LetraSesion, // [P3] Rutinas v2
   EstadoRutina, // [P3]
   SesionEjercicioNuevo, // [P3]
@@ -44,6 +43,7 @@ import type {
   RegistroNuevo, // [P3]
   AvanceRutina, // [P3]
   ResumenSupervision, // [P3]
+  FilaSupervision, // [P3]
 } from "../types";
 
 interface Seed {
@@ -553,7 +553,6 @@ const GRUPOS_POR_DIVISION: Record<number, Ejercicio["grupo_muscular"][][]> = {
   2: [["Pecho", "Espalda", "Hombros", "Bíceps", "Tríceps"], ["Piernas", "Glúteos", "Abdomen", "Cardio"]],
   3: [["Pecho", "Tríceps", "Hombros"], ["Espalda", "Bíceps", "Abdomen"], ["Piernas", "Glúteos", "Cardio"]],
 };
-const OBJETIVOS_SEMILLA: ObjetivoRutina[] = ["Ganancia muscular", "Pérdida de peso", "Tonificación", "Resistencia", "Rehabilitación"];
 
 function generarRutinasV2(seed: Seed): void {
   const base = seed.ejercicios.filter((e) => e.gimnasio_id === null && e.estado === "ACTIVO");
@@ -585,7 +584,7 @@ function generarRutinasV2(seed: Seed): void {
     const nSesiones = 1 + (k % 3);                      // A, A/B o A/B/C
     const division = (["A", "B", "C"] as LetraSesion[]).slice(0, nSesiones);
     const nivel = NIVELES_SEMILLA[(k + 1) % 3];
-    const objetivo = OBJETIVOS_SEMILLA[k % OBJETIVOS_SEMILLA.length];
+    const objetivo = OBJETIVOS_RUTINA[(k * 3 + Math.floor(k / 5)) % OBJETIVOS_RUTINA.length] // variado entre escenarios;
     const frecuencia = nSesiones + 1;                   // veces por semana
     const duracion = fin === null ? 56 : Math.max(7, Math.round((Date.parse(fin) - Date.parse(inicio)) / 86400000));
     const planeadas = Math.max(4, Math.round((duracion / 7) * frecuencia));
@@ -1493,7 +1492,6 @@ function borrarCuentaInstructor(id: string): void {
 // ===== [/P3] Instructores: cuenta de usuario =====
 
 // ===== [P3] Rutinas: auxiliares =====
-const DIAS: DiaSemana[] = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"];
 
 // Mensaje de error si el instructor o el cliente no existen; null si ambos existen
 function validarReferencias(idInstructor: string, idCliente: string): string | null {
@@ -2771,34 +2769,6 @@ export const api = {
       return { ok: true, mensaje: "Rutina eliminada", data: r };
     },
 
-    // Ejercicios de una rutina, ordenados por día y luego por orden
-    async ejercicios(id: number): Promise<RutinaEjercicio[]> {
-      await api._delay();
-      return db
-        .readTenant<RutinaEjercicio>("rutina_ejercicios")
-        .filter((e) => e.id_rutina === id)
-        .sort((a, b) => (a.dia_semana ? DIAS.indexOf(a.dia_semana) : 0) - (b.dia_semana ? DIAS.indexOf(b.dia_semana) : 0) || a.orden - b.orden);
-    },
-
-    // Reemplaza todos los ejercicios de la rutina por la lista recibida.
-    // Solo acepta ejercicios que existan en el catálogo que ve el gimnasio (base + propios).
-    async guardarEjercicios(
-      id: number,
-      lista: Omit<RutinaEjercicio, "id_rutina" | "gimnasio_id">[]
-    ): Promise<ApiResp<RutinaEjercicio[]>> {
-      await api._delay();
-      if (!db.readTenant<Rutina>("rutinas").some((r) => r.id_rutina === id))
-        return { ok: false, mensaje: "Rutina no encontrada" };
-      const catalogo = leerCatalogo();
-      const faltante = lista.find((e) => !catalogo.some((c) => c.id_ejercicio === e.id_ejercicio));
-      if (faltante) return { ok: false, mensaje: "El ejercicio " + faltante.id_ejercicio + " no existe" };
-      const gym = gimnasioParaEscribir();
-      const nuevos: RutinaEjercicio[] = lista.map((e) => ({ ...e, gimnasio_id: gym, id_rutina: id }));
-      const otros = db.readTenant<RutinaEjercicio>("rutina_ejercicios").filter((e) => e.id_rutina !== id);
-      db.writeTenant("rutina_ejercicios", otros.concat(nuevos));
-      return { ok: true, mensaje: "Ejercicios guardados", data: nuevos };
-    },
-
     // ---------------- Rutinas v2 (KAN-54) ----------------
 
     // Rutina vigente (VIGENTE o POR_VENCER) de un cliente, o null. La usará el portal del cliente.
@@ -2940,7 +2910,6 @@ export const api = {
           id_rutina: copia.id_rutina,
           agregado_por_cliente: false,
           revisado_por_instructor: true,
-          confirmado_instructor: undefined,
         }));
       db.writeTenant("rutina_ejercicios", todos.concat(copiados));
       return { ok: true, mensaje: "Rutina duplicada para el cliente", data: copia };
@@ -2990,6 +2959,23 @@ export const api = {
       e.revisado_por_instructor = true;
       db.writeTenant("rutina_ejercicios", todos);
       return { ok: true, mensaje: "Ejercicio marcado como revisado", data: e };
+    },
+
+    // Todas las rutinas del gimnasio con su estado, avance, siguiente sesión y cambios del cliente
+    // sin revisar, en UNA sola lectura (la tabla de supervisión no tiene que pedir rutina por rutina)
+    async listaSupervision(): Promise<FilaSupervision[]> {
+      await api._delay();
+      const registros = db.readTenant<RegistroEntrenamiento>("registros_entrenamiento");
+      const filas = db.readTenant<RutinaEjercicio>("rutina_ejercicios");
+      return db.readTenant<Rutina>("rutinas").map((r) => ({
+        rutina: r,
+        estado: estadoDe(r),
+        avance: avanceDe(r, registros),
+        siguiente: siguienteDe(r, registros),
+        cambios_sin_revisar: filas.filter(
+          (f) => f.id_rutina === r.id_rutina && f.agregado_por_cliente === true && f.revisado_por_instructor === false
+        ).length,
+      }));
     },
 
     // Indicadores de la supervisión del admin (los 4 grupos son disjuntos) + carga por instructor

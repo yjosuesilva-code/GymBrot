@@ -1484,3 +1484,31 @@ body {
   .inst-tabla-alumnos td > * { min-width: 0; overflow-wrap: anywhere; }
   .inst-tabla-alumnos .inst-avance-mini { width: auto; }
 }
+
+/* [P3] .inst-* · Pictograma e imágenes sugeridas (KAN-97) */
+.inst-picto { display: flex; align-items: center; justify-content: center; color: var(--picto); background: color-mix(in srgb, var(--picto) 12%, var(--bg-input)); border-color: color-mix(in srgb, var(--picto) 40%, transparent); }
+.inst-ej-mini.inst-picto { font-size: 20px; }
+.inst-ej-grande.inst-picto { flex-direction: column; gap: 6px; min-height: 120px; font-size: 34px; }
+.inst-picto small { font-size: 12px; color: var(--muted); }
+.inst-picto-pecho { --picto: #ff8a8a; }
+.inst-picto-espalda { --picto: #7cc4ff; }
+.inst-picto-hombros { --picto: #ffcf5c; }
+.inst-picto-biceps { --picto: #c39bff; }
+.inst-picto-triceps { --picto: #e39bff; }
+.inst-picto-piernas { --picto: #6ee7b7; }
+.inst-picto-gluteos { --picto: #ffa36b; }
+.inst-picto-abdomen { --picto: #bdf4ff; }
+.inst-picto-cardio { --picto: #ff6b9a; }
+.inst-picto-cuerpo-completo { --picto: #d4ff00; }
+.inst-sug { margin-top: 4px; }
+.inst-sug-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.inst-sug-item { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 6px; background: var(--bg-input); border: 1px solid var(--border-btn); border-radius: var(--radius-sm); color: var(--text); font-size: 12px; text-align: left; cursor: pointer; }
+.inst-sug-item:hover { border-color: var(--neon); }
+.inst-sug-item.elegida { border-color: var(--neon); box-shadow: inset 0 0 0 1px var(--neon); }
+.inst-sug-img { display: block; width: 100%; aspect-ratio: 3 / 2; border-radius: var(--radius-sm); object-fit: cover; background: #fff; }
+.inst-sug-nombre { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.inst-sug-img.inst-picto { display: flex; font-size: 28px; background: color-mix(in srgb, var(--picto) 12%, var(--bg-input)); }
+.inst-sug-check { position: absolute; top: 10px; right: 10px; color: var(--neon); font-size: 18px; }
+@media (max-width: 576px) {
+  .inst-sug-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

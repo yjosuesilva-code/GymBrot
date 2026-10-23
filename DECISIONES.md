@@ -107,6 +107,17 @@ ruta de la `-0` en `recurso_url` y la vista alterna las dos (`AnimacionEjercicio
 no tiene equivalente y muestra el ícono de respaldo. Los propios de cada gimnasio usan
 la URL que les pongan (una imagen o GIF externo se muestra tal cual).
 
+**Imágenes sugeridas para ejercicios propios (KAN-97).** `frontend-react/public/recursos/indice-imagenes.json`
+(185 KB) es un índice derivado de la misma fuente, free-exercise-db (**The Unlicense**, dominio
+público): los 873 ejercicios que traen dos imágenes, con nombre en inglés, nombre en español
+(traducción propia con un glosario fijo), palabras clave en español (sinónimos usados en gimnasios de
+Colombia), grupo muscular y equipo convertidos a nuestras listas, y categoría (fuerza, cardio,
+estiramiento). Al crear o editar un ejercicio propio se sugieren hasta 6 imágenes según el nombre; las
+imágenes **no se copian al proyecto**: `recurso_url` queda con el enlace a
+`raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/<id>/0.jpg`. La imagen nunca es
+obligatoria: sin imagen se muestra un pictograma por grupo muscular, y también se puede subir una foto
+(reducida a ~400 px y ~20 KB en base64) o pegar un enlace.
+
 ---
 
 ## Decisiones pendientes (por cerrar en equipo)

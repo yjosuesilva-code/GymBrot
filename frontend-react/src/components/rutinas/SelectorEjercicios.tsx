@@ -101,7 +101,7 @@ export function SelectorEjercicios({ show, sesion, catalogo, excluidos, onAgrega
               return (
                 <label key={e.id_ejercicio} className={"inst-opcion-ej" + (marcado ? " marcado" : "")}>
                   <input type="checkbox" checked={marcado} onChange={() => alternar(e)} />
-                  <VistaPreviaRecurso key={e.recurso_url} url={e.recurso_url} tamano="mini" alt={e.nombre} />
+                  <VistaPreviaRecurso key={e.recurso_url} url={e.recurso_url} tamano="mini" alt={e.nombre} grupo={e.grupo_muscular} />
                   <span>
                     <span className="person-name">{e.nombre}</span>
                     {e.gimnasio_id === null && <span className="badge-g badge-confirmada ms-2">Base</span>}

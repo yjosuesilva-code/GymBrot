@@ -19,7 +19,7 @@ export function FilaEjercicio({ fila, ejercicio, acciones }: Props) {
   return (
     <div className="inst-fila-ej">
       <span className="inst-orden">{fila.orden}</span>
-      <VistaPreviaRecurso key={ejercicio?.recurso_url ?? ""} url={ejercicio?.recurso_url ?? ""} tamano="mini" alt={ejercicio?.nombre ?? ""} />
+      <VistaPreviaRecurso key={ejercicio?.recurso_url ?? ""} url={ejercicio?.recurso_url ?? ""} tamano="mini" alt={ejercicio?.nombre ?? ""} grupo={ejercicio?.grupo_muscular} />
       <div className="inst-fila-ej-texto">
         <div className="person-name">
           {ejercicio?.nombre ?? "Ejercicio " + fila.id_ejercicio}

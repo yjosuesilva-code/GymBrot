@@ -1473,3 +1473,14 @@ body {
 .inst-anim img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .inst-ej-grande.inst-anim img { object-fit: contain; }
 .inst-anim img.oculta { visibility: hidden; }
+
+/* [P3] .inst-* · Alumnos del instructor (B2 · KAN-90) */
+.inst-tabla-alumnos td { vertical-align: middle; }
+.inst-tabla-alumnos td:nth-child(1) { min-width: 200px; }
+.inst-tabla-alumnos td:nth-child(2) { min-width: 160px; }
+.inst-motivos-izq { justify-content: flex-start; }
+@media (max-width: 640px) {
+  .inst-tabla-alumnos td:nth-child(1), .inst-tabla-alumnos td:nth-child(2) { min-width: 0; }
+  .inst-tabla-alumnos td > * { min-width: 0; overflow-wrap: anywhere; }
+  .inst-tabla-alumnos .inst-avance-mini { width: auto; }
+}

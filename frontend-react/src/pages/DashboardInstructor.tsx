@@ -5,8 +5,7 @@ import { api } from "../data/api";
 import { current } from "../lib/auth";
 import { utils } from "../lib/utils";
 import { DIAS_ORDEN } from "../lib/horarios";
-import { MOTIVO_ATENCION, motivosAtencion } from "../lib/rutinas";
-import type { MotivoAtencion } from "../lib/rutinas";
+import { MOTIVO_ATENCION, alumnosDeInstructor } from "../lib/rutinas";
 import { useTenant } from "../tenant/TenantContext";
 import type { Cita, Cliente, FilaSupervision, Instructor, TipoCita } from "../types";
 
@@ -18,11 +17,6 @@ const NOMBRE_TIPO: Record<TipoCita, string> = {
 };
 
 const MAX_ATENCION = 8; // filas de "Requieren atención" que se muestran
-
-interface ItemAtencion {
-  fila: FilaSupervision;
-  motivos: MotivoAtencion[];
-}
 
 // Día de hoy como DiaSemana: getDay() da 0 = domingo, y DIAS_ORDEN empieza en lunes
 function diaDeHoy() {
@@ -84,25 +78,11 @@ export function DashboardInstructor() {
     (c) => (c.estado === "PENDIENTE" || c.estado === "CONFIRMADA") && (c.fecha > hoy || (c.fecha === hoy && c.hora >= ahora))
   );
 
-  // ---- Rutinas: las mías ----
-  const esActiva = (f: FilaSupervision) => f.estado === "VIGENTE" || f.estado === "POR_VENCER";
-  const misFilas = filas.filter((f) => f.rutina.id_instructor === yo.numero_identificacion);
-  const activas = misFilas.filter(esActiva);
-  const alumnos = new Set(activas.map((f) => f.rutina.id_cliente)).size;
-  const cambios = activas.filter((f) => f.cambios_sin_revisar > 0).length;
-
-  // Una vencida solo preocupa si es la última rutina del cliente y no tiene otra vigente (de cualquier instructor)
-  const renovada = (f: FilaSupervision) =>
-    filas.some(
-      (o) =>
-        o.rutina.id_cliente === f.rutina.id_cliente &&
-        o.rutina.id_rutina !== f.rutina.id_rutina &&
-        (esActiva(o) || o.rutina.fecha_creacion > f.rutina.fecha_creacion)
-    );
-  const atencion: ItemAtencion[] = misFilas
-    .map((fila) => ({ fila, motivos: motivosAtencion(fila, renovada(fila)) }))
-    .filter((item) => item.motivos.length > 0)
-    .sort((a, b) => b.motivos.length - a.motivos.length);
+  // ---- Alumnos: la misma regla que la vista Alumnos (lib/rutinas.ts) ----
+  const alumnos = alumnosDeInstructor(filas, clientes, yo.numero_identificacion);
+  const conRutinaVigente = alumnos.filter((a) => a.fila.estado === "VIGENTE" || a.fila.estado === "POR_VENCER").length;
+  const cambios = alumnos.filter((a) => a.motivos.includes("CAMBIOS")).length;
+  const atencion = alumnos.filter((a) => a.motivos.length > 0); // ya vienen ordenados: más motivos primero
 
   // ---- Horario de hoy ----
   const intervalos = yo.horario?.[diaDeHoy()] ?? [];
@@ -125,8 +105,8 @@ export function DashboardInstructor() {
       {/* Indicadores */}
       <div className="row g-3">
         <Indicador etiqueta="Citas hoy" valor={citasHoy.length} detalle={proxima ? "Próxima: " + (proxima.fecha === hoy ? "hoy" : utils.fecha(proxima.fecha)) + " " + proxima.hora : "Sin citas próximas"} />
-        <Indicador etiqueta="Alumnos activos" valor={alumnos} detalle={activas.length + " rutinas vigentes"} />
-        <Indicador etiqueta="Cambios por revisar" valor={cambios} detalle="Ejercicios cambiados por el cliente" alerta={cambios > 0} />
+        <Indicador etiqueta="Alumnos" valor={alumnos.length} detalle={conRutinaVigente + " con rutina vigente"} />
+        <Indicador etiqueta="Cambios por revisar" valor={cambios} detalle="Alumnos que cambiaron ejercicios" alerta={cambios > 0} />
         <Indicador etiqueta="Requieren atención" valor={atencion.length} detalle="Atrasadas, por vencer o vencidas" alerta={atencion.length > 0} />
       </div>
 

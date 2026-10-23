@@ -3,11 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { useTenant } from "../tenant/TenantContext";
-import { utils } from "../lib/utils";
 import { OBJETIVOS_RUTINA, diasRestantes, normalizar, textoVigencia } from "../lib/rutinas";
 import { Paginador } from "../components/Paginador";
 import { BadgeEstadoRutina } from "../components/rutinas/BadgeEstadoRutina";
 import { ModalDuplicar } from "../components/rutinas/ModalDuplicar";
+import { PersonaCliente } from "../components/rutinas/PersonaCliente";
 import type { Cliente, EstadoRutina, FilaSupervision, Instructor, ObjetivoRutina, ResumenSupervision } from "../types";
 
 /* [P3] Supervisión de rutinas del admin (KAN-58): /g/:slug/rutinas.
@@ -293,7 +293,7 @@ export function Rutinas() {
                   deLaPagina.map((x) =>
                     x.tipo === "sin" ? (
                       <tr key={"sin-" + x.cliente.numero_identificacion}>
-                        <td data-label="Cliente"><Persona cliente={x.cliente} /></td>
+                        <td data-label="Cliente"><PersonaCliente cliente={x.cliente} /></td>
                         <td data-label="Rutina" colSpan={5}><span className="card-sub">Sin rutina vigente</span></td>
                         <td>
                           <button className="btn-neon inst-btn-sm" onClick={() => navigate(ruta("/rutinas/nueva?cliente=" + x.cliente.numero_identificacion))}>
@@ -304,7 +304,7 @@ export function Rutinas() {
                     ) : (
                       <tr key={x.f.rutina.id_rutina}>
                         <td data-label="Cliente">
-                          <Persona cliente={x.cliente} cedula={x.f.rutina.id_cliente} />
+                          <PersonaCliente cliente={x.cliente} cedula={x.f.rutina.id_cliente} />
                         </td>
                         <td data-label="Rutina">
                           <div className="person-name">
@@ -402,18 +402,5 @@ export function Rutinas() {
         onCerrar={() => setADuplicar(null)}
       />
     </>
-  );
-}
-
-// Avatar con iniciales + nombre + cédula del cliente
-function Persona({ cliente, cedula }: { cliente: Cliente | undefined; cedula?: string }) {
-  return (
-    <div className="person">
-      <div className="person-avatar">{cliente ? utils.iniciales(cliente.nombre, cliente.apellidos) : "?"}</div>
-      <div>
-        <div className="person-name">{cliente ? cliente.nombre + " " + cliente.apellidos : cedula}</div>
-        <div className="person-sub">{cliente?.numero_identificacion ?? cedula}</div>
-      </div>
-    </div>
   );
 }

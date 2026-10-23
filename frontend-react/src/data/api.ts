@@ -2983,6 +2983,10 @@ export const api = {
         cambios_sin_revisar: filas.filter(
           (f) => f.id_rutina === r.id_rutina && f.agregado_por_cliente === true && f.revisado_por_instructor === false
         ).length,
+        // Fechas 'YYYY-MM-DD' se comparan como texto: la mayor es la más reciente
+        ultima_sesion: registros
+          .filter((g) => g.id_rutina === r.id_rutina)
+          .reduce<string | null>((max, g) => (max === null || g.fecha > max ? g.fecha : max), null),
       }));
     },
 

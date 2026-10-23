@@ -454,6 +454,7 @@ export interface FilaSupervision {
   avance: AvanceRutina;
   siguiente: LetraSesion | null;
   cambios_sin_revisar: number;     // ejercicios que el cliente cambió y nadie ha revisado
+  ultima_sesion: string | null;    // fecha del último registro de entrenamiento (KAN-90)
 }
 
 // Lo que se envía al crear: gimnasio_id, id_rutina, fecha_creacion y finalizada_el los pone api.rutinas

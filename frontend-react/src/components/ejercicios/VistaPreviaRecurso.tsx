@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { AnimacionEjercicio } from "./AnimacionEjercicio";
 
 /* [P3] Vista previa del recurso de un ejercicio (KAN-88).
    Si recurso_url es una imagen (png, jpg, gif, webp, svg o data:image) se muestra;
    si no carga, si está vacío o si es otro tipo de enlace (un video, una página),
    se muestra un ícono de respaldo. No sube archivos: solo muestra la URL guardada.
+   Las imágenes en par del catálogo base (<id>-0.jpg / <id>-1.jpg) se animan con AnimacionEjercicio (KAN-96).
 
    El estado "fallo" no se reinicia solo al cambiar la URL: quien lo usa le pone
    key={url}, así React crea un componente nuevo por cada URL distinta. */
@@ -23,7 +25,7 @@ export function VistaPreviaRecurso({ url, tamano, alt }: Props) {
   const clase = tamano === "mini" ? "inst-ej-mini" : "inst-ej-grande";
 
   if (limpia && esImagen && !fallo) {
-    return <img src={limpia} alt={alt} className={clase} loading="lazy" onError={() => setFallo(true)} />;
+    return <AnimacionEjercicio url={limpia} alt={alt} className={clase} onFallo={() => setFallo(true)} />;
   }
 
   // Respaldo: sin recurso, imagen que no cargó, o enlace que no es imagen (video, página)

@@ -734,9 +734,17 @@ function ejReps(
     repeticiones_min_sugeridas: repsMin,
     repeticiones_max_sugeridas: repsMax,
     segundos_sugeridos: null,
-    recurso_url: "",
+    recurso_url: recursoSemilla(id, gimnasio_id),
     estado: "ACTIVO",
   };
+}
+
+// [P3] KAN-96: imágenes del catálogo base (free-exercise-db, dominio público). Están en
+// public/recursos/ejercicios/<id>-0.jpg y <id>-1.jpg; se guarda la "-0" y AnimacionEjercicio busca la "-1".
+// Los propios de cada gimnasio (gimnasio_id) y los base sin equivalente (38 Burpees) quedan sin imagen.
+const BASE_SIN_IMAGEN = [38];
+function recursoSemilla(id: number, gimnasio_id: string | null): string {
+  return gimnasio_id === null && !BASE_SIN_IMAGEN.includes(id) ? "/recursos/ejercicios/" + id + "-0.jpg" : "";
 }
 
 function ejTiempo(
@@ -757,7 +765,7 @@ function ejTiempo(
     repeticiones_min_sugeridas: null,
     repeticiones_max_sugeridas: null,
     segundos_sugeridos: segundos,
-    recurso_url: "",
+    recurso_url: recursoSemilla(id, gimnasio_id),
     estado: "ACTIVO",
   };
 }

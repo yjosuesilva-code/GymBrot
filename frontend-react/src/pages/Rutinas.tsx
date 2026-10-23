@@ -1,650 +1,419 @@
 import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
+import { useTenant } from "../tenant/TenantContext";
 import { utils } from "../lib/utils";
+import { OBJETIVOS_RUTINA, diasRestantes, normalizar, textoVigencia } from "../lib/rutinas";
 import { Paginador } from "../components/Paginador";
-import type { Rutina, RutinaNueva, Instructor, Cliente, ObjetivoRutina, DiaSemana } from "../types";
+import { BadgeEstadoRutina } from "../components/rutinas/BadgeEstadoRutina";
+import { ModalDuplicar } from "../components/rutinas/ModalDuplicar";
+import type { Cliente, EstadoRutina, FilaSupervision, Instructor, ObjetivoRutina, ResumenSupervision } from "../types";
 
-const OBJETIVOS: ObjetivoRutina[] = [
-  "Pérdida de peso",
-  "Ganancia muscular",
-  "Resistencia",
-  "Tonificación",
-  "Rehabilitación",
+/* [P3] Supervisión de rutinas del admin (KAN-58): /g/:slug/rutinas.
+   Arriba 4 indicadores clicables; por defecto la tabla muestra solo lo que "requiere
+   atención" (por vencer, vencidas sin renovar y clientes activos sin rutina). Tabla compacta
+   paginada con búsqueda y filtros, y a un lado la carga de rutinas vigentes por instructor. */
+
+type Indicador = "" | "VIGENTES" | "POR_VENCER" | "SIN_RUTINA" | "VENCIDAS";
+type FiltroEstado = "" | EstadoRutina | "CAMBIOS" | "SIN_RUTINA";
+
+// Una fila de la tabla: una rutina, o un cliente activo sin rutina
+type Fila =
+  | { tipo: "rutina"; f: FilaSupervision; cliente: Cliente | undefined; instructor: Instructor | undefined }
+  | { tipo: "sin"; cliente: Cliente };
+
+const POR_PAGINA = 10;
+
+const INDICADORES: { clave: Exclude<Indicador, "">; titulo: string; icono: string; ayuda: string }[] = [
+  { clave: "VIGENTES", titulo: "Vigentes", icono: "bi-check-circle", ayuda: "Con más de 14 días por delante" },
+  { clave: "POR_VENCER", titulo: "Por vencer", icono: "bi-hourglass-split", ayuda: "Vencen en menos de 15 días" },
+  { clave: "SIN_RUTINA", titulo: "Sin rutina", icono: "bi-person-dash", ayuda: "Clientes activos sin rutina" },
+  { clave: "VENCIDAS", titulo: "Vencidas sin renovar", icono: "bi-x-circle", ayuda: "Clientes activos con la rutina vencida" },
 ];
-
-// Los 7 días en orden con su letra (X = miércoles, para no repetir la M de martes)
-const DIAS: { dia: DiaSemana; letra: string }[] = [
-  { dia: "LUNES", letra: "L" },
-  { dia: "MARTES", letra: "M" },
-  { dia: "MIERCOLES", letra: "X" },
-  { dia: "JUEVES", letra: "J" },
-  { dia: "VIERNES", letra: "V" },
-  { dia: "SABADO", letra: "S" },
-  { dia: "DOMINGO", letra: "D" },
-];
-
-const DIAS_AVISO = 15; // con menos días que esto se muestra "Vence en N días"
-
-// Días entre dos fechas 'YYYY-MM-DD' (b - a). Se usa Date.UTC con año, mes y día
-// para que el resultado sea un número entero exacto, sin horas ni cambios de horario.
-function diasEntre(a: string, b: string): number {
-  const [ya, ma, da] = a.split("-").map(Number);
-  const [yb, mb, db] = b.split("-").map(Number);
-  return Math.round((Date.UTC(yb, mb - 1, db) - Date.UTC(ya, ma - 1, da)) / 86400000);
-}
-
-type Vigencia = { texto: string; clase: string; avance: number | null };
-
-// Estado de la rutina según fecha_fin, y % de avance entre fecha_creacion y fecha_fin
-function calcularVigencia(r: Rutina): Vigencia {
-  if (!r.fecha_fin) return { texto: "Sin fecha fin", clase: "badge-inactivo", avance: null };
-
-  const hoy = utils.isoDate();
-  const restantes = diasEntre(hoy, r.fecha_fin);
-  const total = diasEntre(r.fecha_creacion, r.fecha_fin);
-  const transcurridos = diasEntre(r.fecha_creacion, hoy);
-  // Si total es 0 o negativo (fechas raras), se considera completa
-  const avance = total > 0 ? Math.min(100, Math.max(0, Math.round((transcurridos / total) * 100))) : 100;
-
-  if (restantes < 0) return { texto: "Vencida", clase: "badge-vencida", avance };
-  if (restantes === 0) return { texto: "Vence hoy", clase: "badge-pendiente", avance };
-  if (restantes < DIAS_AVISO)
-    return { texto: "Vence en " + restantes + (restantes === 1 ? " día" : " días"), clase: "badge-pendiente", avance };
-  return { texto: "Vigente", clase: "badge-activo", avance };
-}
-
-// Vigente = sin fecha fin, o con fecha fin de hoy en adelante (la misma regla que api.rutinas)
-function esVigente(r: Rutina): boolean {
-  return r.fecha_fin === null || r.fecha_fin >= utils.isoDate();
-}
-
-// El formulario usa "" en fecha_fin cuando no hay fecha (un <input type="date"> vacío vale "");
-// al guardar se convierte a null
-// dias_semana es opcional en el tipo desde v2 (KAN-87); el formulario v1 lo sigue usando hasta A10
-type FormRutina = Omit<RutinaNueva, "fecha_fin" | "dias_semana"> & { fecha_fin: string; dias_semana: DiaSemana[] };
-
-const VACIO: FormRutina = {
-  nombre: "",
-  objetivo: "Ganancia muscular",
-  id_cliente: "",
-  id_instructor: "",
-  dias_semana: [],
-  fecha_fin: "",
-  descripcion: "",
-};
-
-// Devuelve el primer error encontrado, o "" si el formulario es válido.
-// fechaOriginal: al editar, si la fecha fin no se cambió no se exige que sea de hoy en adelante
-// (así se puede corregir, por ejemplo, el nombre de una rutina que ya está en el historial).
-function validar(f: FormRutina, fechaOriginal: string): string {
-  if (!f.nombre) return "El nombre es obligatorio";
-  if (!f.id_cliente) return "Selecciona un cliente";
-  if (!f.id_instructor) return "Selecciona un instructor";
-  if (f.dias_semana.length === 0) return "Selecciona al menos un día";
-  if (f.fecha_fin && f.fecha_fin !== fechaOriginal && f.fecha_fin < utils.isoDate())
-    return "La fecha fin no puede ser anterior a hoy";
-  return "";
-}
-
-// Alerta de la parte superior: tipo define el color (alert-ok verde neón, alert-error rojo).
-// idCliente (opcional): muestra el botón "Crear la siguiente rutina" para ese cliente.
-type Alerta = { tipo: "ok" | "error"; mensaje: string; idCliente?: string };
 
 export function Rutinas() {
-  const [rutinas, setRutinas] = useState<Rutina[]>([]);
-  const [instructores, setInstructores] = useState<Instructor[]>([]);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const { ruta } = useTenant();
+  const navigate = useNavigate();
+
   const [cargando, setCargando] = useState(true);
+  const [version, setVersion] = useState(0);
+  const [filas, setFilas] = useState<FilaSupervision[]>([]);
+  const [resumen, setResumen] = useState<ResumenSupervision | null>(null);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [instructores, setInstructores] = useState<Instructor[]>([]);
 
-  // Búsqueda, filtro ("" = todos) y modo agrupado
+  const [indicador, setIndicador] = useState<Indicador>("");
+  const [soloAtencion, setSoloAtencion] = useState(true);
   const [busqueda, setBusqueda] = useState("");
+  const [filtroInstructor, setFiltroInstructor] = useState("");
   const [filtroObjetivo, setFiltroObjetivo] = useState<ObjetivoRutina | "">("");
-  const [agrupar, setAgrupar] = useState(false);
-
-  // Paginación: 10 por página; al buscar o filtrar se vuelve a la 1
-  const POR_PAGINA = 10;
+  const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>("");
   const [pagina, setPagina] = useState(1);
 
-  const [alerta, setAlerta] = useState<Alerta | null>(null);
-
-  // Modal crear/editar: editandoId es null al crear y el id de la rutina al editar
-  const [show, setShow] = useState(false);
-  const [editandoId, setEditandoId] = useState<number | null>(null);
-  const [form, setForm] = useState<FormRutina>(VACIO);
-  const [error, setError] = useState("");
+  const [alerta, setAlerta] = useState<{ tipo: "ok" | "error"; mensaje: string } | null>(null);
+  const [aFinalizar, setAFinalizar] = useState<FilaSupervision | null>(null);
+  const [aDuplicar, setADuplicar] = useState<FilaSupervision | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [errorModal, setErrorModal] = useState("");
 
-  // Confirmación de finalizar (aFinalizar no se limpia al cerrar, por la animación de salida)
-  const [showFinalizar, setShowFinalizar] = useState(false);
-  const [aFinalizar, setAFinalizar] = useState<Rutina | null>(null);
-  const [errorFinalizar, setErrorFinalizar] = useState("");
-
-  // Confirmación de eliminar (mismo patrón que finalizar)
-  const [showEliminar, setShowEliminar] = useState(false);
-  const [aEliminar, setAEliminar] = useState<Rutina | null>(null);
-  const [errorEliminar, setErrorEliminar] = useState("");
-
-  // Carga las tres colecciones a la vez: las rutinas solo guardan ids,
-  // y los nombres salen de instructores y clientes
   useEffect(() => {
-    Promise.all([api.rutinas.list(), api.instructores.list(), api.clientes.list()]).then(([r, i, c]) => {
-      setRutinas(r);
-      setInstructores(i);
-      setClientes(c);
-      setCargando(false);
-    });
-  }, []);
+    let activo = true;
+    Promise.all([api.rutinas.listaSupervision(), api.rutinas.resumenSupervision(), api.clientes.list(), api.instructores.list()]).then(
+      ([f, r, c, i]) => {
+        if (!activo) return;
+        setFilas(f);
+        setResumen(r);
+        setClientes(c);
+        setInstructores(i);
+        setCargando(false);
+      }
+    );
+    return () => {
+      activo = false;
+    };
+  }, [version]);
 
-  // La alerta desaparece a los 4 segundos, o a los 10 si trae un botón (para alcanzar a usarlo).
-  // El cleanup cancela el temporizador anterior si llega otra alerta antes.
   useEffect(() => {
     if (!alerta) return;
-    const t = setTimeout(() => setAlerta(null), alerta.idCliente ? 10000 : 4000);
+    const t = setTimeout(() => setAlerta(null), 4000);
     return () => clearTimeout(t);
   }, [alerta]);
 
-  function buscarInstructor(id: string): Instructor | undefined {
-    return instructores.find((x) => x.numero_identificacion === id);
+  // Cualquier cambio de filtro vuelve a la página 1
+  function conPagina1<T>(set: (v: T) => void) {
+    return (v: T) => {
+      set(v);
+      setPagina(1);
+    };
   }
 
-  function buscarCliente(id: string): Cliente | undefined {
-    return clientes.find((x) => x.numero_identificacion === id);
-  }
+  const clienteDe = (cedula: string) => clientes.find((c) => c.numero_identificacion === cedula);
+  const instructorDe = (cedula: string) => instructores.find((i) => i.numero_identificacion === cedula);
+  const filaRutina = (f: FilaSupervision): Fila => ({ tipo: "rutina", f, cliente: clienteDe(f.rutina.id_cliente), instructor: instructorDe(f.rutina.id_instructor) });
+  const vencidas = new Set(resumen?.vencidas_sin_renovar ?? []);
+  const sinRutina: Fila[] = (resumen?.sin_rutina ?? [])
+    .map((cedula) => clienteDe(cedula))
+    .filter((c): c is Cliente => c !== undefined)
+    .map((c) => ({ tipo: "sin", cliente: c }));
 
-  // Nombre completo o "—" si ya no existe
-  function nombre(p: Instructor | Cliente | undefined): string {
-    return p ? p.nombre + " " + p.apellidos : "—";
-  }
+  // 1) Qué grupo se ve: el indicador elegido, "requieren atención" o todas
+  let base: Fila[];
+  if (indicador === "VIGENTES") base = filas.filter((f) => f.estado === "VIGENTE").map(filaRutina);
+  else if (indicador === "POR_VENCER") base = filas.filter((f) => f.estado === "POR_VENCER").map(filaRutina);
+  else if (indicador === "VENCIDAS") base = filas.filter((f) => vencidas.has(f.rutina.id_rutina)).map(filaRutina);
+  else if (indicador === "SIN_RUTINA") base = sinRutina;
+  // "Requieren atención" solo aplica sin filtro de estado: si se elige un estado se busca en todas
+  else if (soloAtencion && filtroEstado === "")
+    base = [
+      ...filas.filter((f) => f.estado === "POR_VENCER").map(filaRutina),
+      ...filas.filter((f) => vencidas.has(f.rutina.id_rutina)).map(filaRutina),
+      ...sinRutina,
+    ];
+  else base = [...filas.map(filaRutina), ...sinRutina];
 
-  // Lista filtrada: se recalcula en cada render a partir de la lista completa y los filtros
-  const texto = busqueda.trim().toLowerCase();
-  const filtradas = rutinas.filter((r) => {
-    const datos = (
-      r.nombre + " " + nombre(buscarCliente(r.id_cliente)) + " " + nombre(buscarInstructor(r.id_instructor))
-    ).toLowerCase();
-    return datos.includes(texto) && (filtroObjetivo === "" || r.objetivo === filtroObjetivo);
+  // 2) Búsqueda y filtros
+  const q = normalizar(busqueda);
+  const visibles = base.filter((x) => {
+    const c = x.cliente;
+    if (q && !(c && normalizar(c.nombre + " " + c.apellidos + " " + c.numero_identificacion).includes(q))) return false;
+    if (x.tipo === "sin") return filtroInstructor === "" && filtroObjetivo === "" && (filtroEstado === "" || filtroEstado === "SIN_RUTINA");
+    if (filtroInstructor && x.f.rutina.id_instructor !== filtroInstructor) return false;
+    if (filtroObjetivo && x.f.rutina.objetivo !== filtroObjetivo) return false;
+    if (filtroEstado === "SIN_RUTINA") return false;
+    if (filtroEstado === "CAMBIOS") return x.f.cambios_sin_revisar > 0;
+    return filtroEstado === "" || x.f.estado === filtroEstado;
   });
-  const hayFiltros = texto !== "" || filtroObjetivo !== "";
-  // La página se recorta a un rango válido ("paginaSegura") cuando la lista
-  // filtrada es más corta; así al buscar se vuelve solo al rango disponible.
-  const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
+
+  // 3) Orden: primero lo más urgente (por vencer, por días), luego vencidas, después el resto por nombre
+  const prioridad = (x: Fila) =>
+    x.tipo === "sin" ? 3 : x.f.estado === "POR_VENCER" ? 0 : vencidas.has(x.f.rutina.id_rutina) ? 1 : x.f.estado === "VIGENTE" ? 2 : 4;
+  const nombreDe = (x: Fila) => (x.cliente ? x.cliente.nombre + " " + x.cliente.apellidos : "");
+  visibles.sort(
+    (a, b) =>
+      prioridad(a) - prioridad(b) ||
+      (a.tipo === "rutina" && b.tipo === "rutina" ? (diasRestantes(a.f.rutina) ?? 9999) - (diasRestantes(b.f.rutina) ?? 9999) : 0) ||
+      nombreDe(a).localeCompare(nombreDe(b))
+  );
+
+  const totalPaginas = Math.max(1, Math.ceil(visibles.length / POR_PAGINA));
   const paginaSegura = Math.min(pagina, totalPaginas);
-  const paginadas = filtradas.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA);
+  const deLaPagina = visibles.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA);
+  const hayFiltros = q !== "" || filtroInstructor !== "" || filtroObjetivo !== "" || filtroEstado !== "" || indicador !== "";
 
-  // Agrupa por instructor: { "2000000001": [rutina, rutina], "2000000002": [rutina] }
-  const grupos = filtradas.reduce<Record<string, Rutina[]>>((acc, r) => {
-    if (!acc[r.id_instructor]) acc[r.id_instructor] = [];
-    acc[r.id_instructor].push(r);
-    return acc;
-  }, {});
-  // Pasa el objeto a una lista [id, rutinas] ordenada por nombre del instructor
-  const listaGrupos = Object.entries(grupos).sort(([a], [b]) =>
-    nombre(buscarInstructor(a)).localeCompare(nombre(buscarInstructor(b)))
-  );
+  const conteo: Record<Exclude<Indicador, "">, number> = {
+    VIGENTES: resumen?.vigentes ?? 0,
+    POR_VENCER: resumen?.por_vencer ?? 0,
+    SIN_RUTINA: resumen?.sin_rutina.length ?? 0,
+    VENCIDAS: resumen?.vencidas_sin_renovar.length ?? 0,
+  };
+  const maxCarga = Math.max(1, ...(resumen?.carga ?? []).map((c) => c.vigentes));
+  const conVigente = new Set(filas.filter((f) => f.estado === "VIGENTE" || f.estado === "POR_VENCER").map((f) => f.rutina.id_cliente));
+  const candidatos = clientes.filter((c) => c.estado === "ACTIVO" && !conVigente.has(c.numero_identificacion));
 
-  function limpiarFiltros() {
+  function limpiar() {
     setBusqueda("");
+    setFiltroInstructor("");
     setFiltroObjetivo("");
-  }
-
-  // ----- Modal crear/editar -----
-
-  // Rutina vigente de cada cliente: { idCliente: "nombre de la rutina" }.
-  // No cuenta la rutina que se está editando (si no, su propio cliente saldría como ocupado).
-  const vigentePorCliente = rutinas
-    .filter((r) => r.id_rutina !== editandoId && esVigente(r))
-    .reduce<Record<string, string>>((acc, r) => {
-      acc[r.id_cliente] = r.nombre;
-      return acc;
-    }, {});
-
-  // Solo activos; al editar se incluye el ya elegido aunque esté inactivo, para que el select lo muestre
-  const clientesSelect = clientes.filter((c) => c.estado === "ACTIVO" || c.numero_identificacion === form.id_cliente);
-  const instructoresSelect = instructores.filter(
-    (i) => i.estado === "ACTIVO" || i.numero_identificacion === form.id_instructor
-  );
-
-  // Cambia un solo campo; K hace que el valor tenga el tipo correcto de ese campo
-  function setCampo<K extends keyof FormRutina>(campo: K, valor: FormRutina[K]) {
-    setForm((f) => ({ ...f, [campo]: valor }));
-  }
-
-  // Activa o desactiva un día y deja la lista en el orden L → D
-  function alternarDia(dia: DiaSemana) {
-    setForm((f) => {
-      const marcados = f.dias_semana.includes(dia)
-        ? f.dias_semana.filter((d) => d !== dia)
-        : [...f.dias_semana, dia];
-      return { ...f, dias_semana: DIAS.map((d) => d.dia).filter((d) => marcados.includes(d)) };
-    });
-  }
-
-  function abrirNuevo() {
-    setEditandoId(null);
-    setForm(VACIO);
-    setError("");
-    setShow(true);
-  }
-
-  function abrirEdicion(r: Rutina) {
-    setEditandoId(r.id_rutina);
-    setForm({
-      nombre: r.nombre,
-      objetivo: r.objetivo,
-      id_cliente: r.id_cliente,
-      id_instructor: r.id_instructor,
-      dias_semana: r.dias_semana ?? [],
-      fecha_fin: r.fecha_fin ?? "",
-      descripcion: r.descripcion,
-    });
-    setError("");
-    setShow(true);
-  }
-
-  async function guardar() {
-    const limpio: FormRutina = { ...form, nombre: form.nombre.trim(), descripcion: form.descripcion.trim() };
-    const original = rutinas.find((r) => r.id_rutina === editandoId);
-    const msg = validar(limpio, original?.fecha_fin ?? "");
-    if (msg) {
-      setError(msg);
-      return;
-    }
-
-    // Lo que espera la api: fecha_fin vacía se guarda como null
-    const datos: RutinaNueva = { ...limpio, fecha_fin: limpio.fecha_fin || null };
-
-    setGuardando(true);
-    const res = editandoId !== null ? await api.rutinas.update(editandoId, datos) : await api.rutinas.create(datos);
-    setGuardando(false);
-
-    if (!res.ok) {
-      setError(res.mensaje);
-      return;
-    }
-    setShow(false);
-    setAlerta({ tipo: "ok", mensaje: res.mensaje });
-    setRutinas(await api.rutinas.list());
-  }
-
-  // ----- Finalizar -----
-
-  function pedirFinalizar(r: Rutina) {
-    setErrorFinalizar("");
-    setAFinalizar(r);
-    setShowFinalizar(true);
+    setFiltroEstado("");
+    setIndicador("");
+    setPagina(1);
   }
 
   async function confirmarFinalizar() {
     if (!aFinalizar) return;
-    const res = await api.rutinas.finalizar(aFinalizar.id_rutina);
+    setGuardando(true);
+    const res = await api.rutinas.finalizar(aFinalizar.rutina.id_rutina);
+    setGuardando(false);
     if (!res.ok) {
-      setErrorFinalizar(res.mensaje);
+      setErrorModal(res.mensaje);
       return;
     }
-    setShowFinalizar(false);
-    // La alerta lleva el cliente para ofrecer crearle la siguiente rutina
-    setAlerta({ tipo: "ok", mensaje: res.mensaje, idCliente: aFinalizar.id_cliente });
-    setRutinas(await api.rutinas.list());
+    setAFinalizar(null);
+    setAlerta({ tipo: "ok", mensaje: res.mensaje });
+    setVersion((v) => v + 1);
   }
 
-  // ----- Eliminar -----
-
-  function pedirEliminar(r: Rutina) {
-    setErrorEliminar("");
-    setAEliminar(r);
-    setShowEliminar(true);
-  }
-
-  async function confirmarEliminar() {
-    if (!aEliminar) return;
-    const res = await api.rutinas.remove(aEliminar.id_rutina);
-    if (!res.ok) {
-      setErrorEliminar(res.mensaje);
+  async function confirmarDuplicar(idCliente: string) {
+    if (!aDuplicar) return;
+    setGuardando(true);
+    const res = await api.rutinas.duplicar(aDuplicar.rutina.id_rutina, idCliente);
+    setGuardando(false);
+    if (!res.ok || !res.data) {
+      setErrorModal(res.mensaje);
       return;
     }
-    setShowEliminar(false);
-    setAlerta({ tipo: "ok", mensaje: "Rutina «" + aEliminar.nombre + "» eliminada" });
-    setRutinas(await api.rutinas.list());
-  }
-
-  // Desde el modal de eliminar: cambia a la confirmación de finalizar con la misma rutina
-  function finalizarEnLugarDeEliminar() {
-    if (!aEliminar) return;
-    setShowEliminar(false);
-    pedirFinalizar(aEliminar);
-  }
-
-  // Abre el modal de nueva rutina con el cliente ya elegido
-  function crearSiguiente(idCliente: string) {
-    setAlerta(null);
-    setEditandoId(null);
-    setForm({ ...VACIO, id_cliente: idCliente });
-    setError("");
-    setShow(true);
-  }
-
-  // Una tarjeta de rutina (se usa igual en la vista normal y en la agrupada)
-  function tarjeta(r: Rutina) {
-    const cliente = buscarCliente(r.id_cliente);
-    const instructor = buscarInstructor(r.id_instructor);
-    const v = calcularVigencia(r);
-
-    return (
-      <div key={r.id_rutina} className="card-g rutina-card">
-        <div className="rutina-top">
-          <div>
-            <div className="rutina-nombre">{r.nombre}</div>
-            <div className="person-sub">{r.objetivo}</div>
-          </div>
-          <span className={"badge-g " + v.clase}>{v.texto}</span>
-        </div>
-
-        <div className="rutina-personas">
-          <div className="person">
-            <div className="person-avatar">{cliente ? utils.iniciales(cliente.nombre, cliente.apellidos) : "?"}</div>
-            <div>
-              <div className="person-name">{nombre(cliente)}</div>
-              <div className="person-sub">Cliente</div>
-            </div>
-          </div>
-          <div className="person">
-            <div className="person-avatar">{instructor ? utils.iniciales(instructor.nombre, instructor.apellidos) : "?"}</div>
-            <div>
-              <div className="person-name">{nombre(instructor)}</div>
-              <div className="person-sub">Instructor</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="rutina-dias">
-          {DIAS.map(({ dia, letra }) => (
-            <span key={dia} className={"dia-pill" + ((r.dias_semana ?? []).includes(dia) ? " activo" : "")} title={dia}>
-              {letra}
-            </span>
-          ))}
-        </div>
-
-        <div>
-          <div className="rutina-fechas">
-            <span>{utils.fecha(r.fecha_creacion)} → {r.fecha_fin ? utils.fecha(r.fecha_fin) : "Sin fecha fin"}</span>
-            {v.avance !== null && <span>{v.avance}%</span>}
-          </div>
-          {v.avance !== null && (
-            <div className="kpi-bar">
-              <span style={{ width: v.avance + "%" }}></span>
-            </div>
-          )}
-        </div>
-
-        {/* Ver solo se muestra: su lógica llega con el modal "Ver" */}
-        <div className="cell-actions rutina-acciones">
-          <button className="btn-icon" title="Ver detalle"><i className="bi bi-eye" aria-hidden /></button>
-          <button className="btn-icon" title="Editar" onClick={() => abrirEdicion(r)}><i className="bi bi-pencil" aria-hidden /></button>
-          {/* Finalizar solo tiene sentido si la rutina sigue vigente */}
-          {esVigente(r) && (
-            <button className="btn-icon" title="Finalizar" onClick={() => pedirFinalizar(r)}><i className="bi bi-flag" aria-hidden /></button>
-          )}
-          <button className="btn-icon" title="Eliminar" onClick={() => pedirEliminar(r)}><i className="bi bi-trash" aria-hidden /></button>
-        </div>
-      </div>
-    );
-  }
-
-  // Para el modal de eliminar: ¿la rutina tiene historial que valga la pena conservar?
-  // Si se creó hoy no hay nada que conservar; si no, se sugiere finalizarla (vigente)
-  // o se avisa que forma parte del historial (vencida).
-  const eliminarCreadaHoy = aEliminar !== null && aEliminar.fecha_creacion >= utils.isoDate();
-  const eliminarVigente = aEliminar !== null && esVigente(aEliminar);
-  const sugerirFinalizar = !eliminarCreadaHoy && eliminarVigente;
-
-  let contenido;
-  if (cargando) {
-    contenido = (
-      <div className="card-g">
-        <div className="loader"><span className="spinner-g"></span>Cargando...</div>
-      </div>
-    );
-  } else if (filtradas.length === 0) {
-    contenido = (
-      <div className="card-g">
-        <p className="empty-state">
-          {rutinas.length === 0
-            ? "No hay rutinas registradas todavía. Crea la primera con «+ Nueva rutina»."
-            : "Ninguna rutina coincide con la búsqueda o el filtro."}
-        </p>
-      </div>
-    );
-  } else if (agrupar) {
-    contenido = listaGrupos.map(([idInstructor, lista]) => {
-      const instructor = buscarInstructor(idInstructor);
-      return (
-        <section key={idInstructor}>
-          <div className="person rutina-grupo-head">
-            <div className="person-avatar">{instructor ? utils.iniciales(instructor.nombre, instructor.apellidos) : "?"}</div>
-            <div>
-              <div className="person-name">{nombre(instructor)}</div>
-              <div className="person-sub">{lista.length} {lista.length === 1 ? "rutina" : "rutinas"}</div>
-            </div>
-          </div>
-          <div className="rutinas-grid">{lista.map(tarjeta)}</div>
-        </section>
-      );
-    });
-  } else {
-    contenido = (
-      <>
-        <div className="rutinas-grid">{paginadas.map(tarjeta)}</div>
-        <div className="card-g">
-          <Paginador
-            pagina={paginaSegura}
-            total={filtradas.length}
-            porPagina={POR_PAGINA}
-            onCambiar={setPagina}
-          />
-        </div>
-      </>
-    );
+    setADuplicar(null);
+    navigate(ruta("/rutinas/" + res.data.id_rutina));
   }
 
   return (
     <>
-      <div className="card-g">
-        <div className="card-head">
-          <div>
-            <h2 className="card-title">Rutinas</h2>
-            <p className="card-sub">Planes de entrenamiento asignados a cada cliente</p>
-          </div>
-          <button className="btn-neon" onClick={abrirNuevo}>+ Nueva rutina</button>
+      <div className="card-head inst-sin-margen">
+        <div>
+          <h1 className="card-title">Rutinas</h1>
+          <p className="card-sub">Supervisión de las rutinas de los clientes del gimnasio</p>
         </div>
-
-        {alerta && (
-          <div className={"alert-g show alert-" + alerta.tipo + (alerta.idCliente ? " alerta-accion" : "")}>
-            <span>{alerta.mensaje}</span>
-            {alerta.idCliente && (
-              <button className="btn-dark" onClick={() => crearSiguiente(alerta.idCliente ?? "")}>
-                Crear la siguiente rutina para {nombre(buscarCliente(alerta.idCliente))}
-              </button>
-            )}
-          </div>
-        )}
-
-        <div className="toolbar">
-          <div className="search-box">
-            <span className="search-ico"><i className="bi bi-search" aria-hidden /></span>
-            <input
-              type="text"
-              className="form-control-dark"
-              placeholder="Buscar por rutina, cliente o instructor..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-            />
-          </div>
-          <select
-            className="form-control-dark"
-            style={{ width: "auto" }}
-            value={filtroObjetivo}
-            onChange={(e) => setFiltroObjetivo(e.target.value as ObjetivoRutina | "")}
-          >
-            <option value="">Todos los objetivos</option>
-            {OBJETIVOS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-          {/* El botón cambia de estilo cuando está activo (neón) */}
-          <button className={agrupar ? "btn-neon" : "btn-dark"} onClick={() => setAgrupar(!agrupar)}>
-            Agrupar por instructor
-          </button>
-          {hayFiltros && <button className="btn-dark" onClick={limpiarFiltros}>Limpiar</button>}
-        </div>
+        <button className="btn-neon" onClick={() => navigate(ruta("/rutinas/nueva"))}>
+          <i className="bi bi-plus-lg me-1" aria-hidden /> Nueva rutina
+        </button>
       </div>
 
-      {contenido}
+      {alerta && <div className={"alert-g show alert-" + alerta.tipo}>{alerta.mensaje}</div>}
 
-      <Modal show={show} onHide={() => setShow(false)} centered size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>{editandoId !== null ? "Editar rutina" : "Nueva rutina"}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {error && <div className="alert-g alert-error show">{error}</div>}
-          <div className="row g-3">
-            <div className="col-md-8">
-              <label className="form-label-g">Nombre</label>
-              <input className="form-control-dark" value={form.nombre} onChange={(e) => setCampo("nombre", e.target.value)} />
-            </div>
-            <div className="col-md-4">
-              <label className="form-label-g">Objetivo</label>
-              <select
-                className="form-control-dark"
-                value={form.objetivo}
-                onChange={(e) => setCampo("objetivo", e.target.value as ObjetivoRutina)}
-              >
-                {OBJETIVOS.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div className="col-md-6">
-              <label className="form-label-g">Cliente</label>
-              <select className="form-control-dark" value={form.id_cliente} onChange={(e) => setCampo("id_cliente", e.target.value)}>
-                <option value="">Selecciona un cliente</option>
-                {clientesSelect.map((c) => {
-                  const vigente = vigentePorCliente[c.numero_identificacion];
-                  return (
-                    <option key={c.numero_identificacion} value={c.numero_identificacion} disabled={vigente !== undefined}>
-                      {c.nombre} {c.apellidos}
-                      {vigente !== undefined ? " — ya tiene vigente: " + vigente : ""}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-            <div className="col-md-6">
-              <label className="form-label-g">Instructor</label>
-              <select className="form-control-dark" value={form.id_instructor} onChange={(e) => setCampo("id_instructor", e.target.value)}>
-                <option value="">Selecciona un instructor</option>
-                {instructoresSelect.map((i) => (
-                  <option key={i.numero_identificacion} value={i.numero_identificacion}>
-                    {i.nombre} {i.apellidos} — {i.especialidad}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="col-md-6">
-              <label className="form-label-g">Días de entrenamiento</label>
-              <div className="rutina-dias">
-                {DIAS.map(({ dia, letra }) => (
-                  <button
-                    key={dia}
-                    type="button"
-                    title={dia}
-                    className={"dia-pill dia-pill-btn" + (form.dias_semana.includes(dia) ? " activo" : "")}
-                    onClick={() => alternarDia(dia)}
-                  >
-                    {letra}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="col-md-6">
-              <label className="form-label-g">Fecha fin (opcional)</label>
-              <input
-                className="form-control-dark"
-                type="date"
-                min={utils.isoDate()}
-                value={form.fecha_fin}
-                onChange={(e) => setCampo("fecha_fin", e.target.value)}
-              />
-            </div>
-            <div className="col-12">
-              <label className="form-label-g">Descripción</label>
-              <textarea
-                className="form-control-dark"
-                rows={3}
-                value={form.descripcion}
-                onChange={(e) => setCampo("descripcion", e.target.value)}
-              />
-            </div>
-            <div className="col-12">
-              <p className="card-sub">Los ejercicios se agregarán cuando esté listo el catálogo de ejercicios (P4).</p>
-            </div>
-          </div>
-        </Modal.Body>
-        <Modal.Footer>
-          <button className="btn-dark" onClick={() => setShow(false)}>Cancelar</button>
-          <button className="btn-neon" onClick={guardar} disabled={guardando}>
-            {guardando ? "Guardando..." : "Guardar"}
+      {/* Indicadores clicables: filtran la tabla; otro clic quita el filtro */}
+      <div className="inst-kpis">
+        {INDICADORES.map((k) => (
+          <button
+            key={k.clave}
+            type="button"
+            className={"card-g kpi inst-kpi" + (indicador === k.clave ? " activo" : "") + (k.clave !== "VIGENTES" && conteo[k.clave] > 0 ? " alerta" : "")}
+            onClick={() => conPagina1(setIndicador)(indicador === k.clave ? "" : k.clave)}
+            aria-pressed={indicador === k.clave}
+          >
+            <span className="kpi-label"><i className={"bi " + k.icono} aria-hidden /> {k.titulo}</span>
+            <span className="kpi-value">{cargando ? "…" : conteo[k.clave]}</span>
+            <span className="kpi-sub">{k.ayuda}</span>
           </button>
-        </Modal.Footer>
-      </Modal>
+        ))}
+      </div>
 
-      {/* Confirmación de finalizar */}
-      <Modal show={showFinalizar} onHide={() => setShowFinalizar(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Finalizar rutina</Modal.Title>
-        </Modal.Header>
+      <div className="inst-sup">
+        <section className="card-g">
+          <div className="toolbar mb-3">
+            {indicador === "" ? (
+              <div className="inst-seg" role="group" aria-label="Qué mostrar">
+                <button type="button" className={soloAtencion && filtroEstado === "" ? "activo" : ""} onClick={() => conPagina1(setSoloAtencion)(true)}>
+                  Requieren atención
+                </button>
+                <button type="button" className={!soloAtencion || filtroEstado !== "" ? "activo" : ""} onClick={() => conPagina1(setSoloAtencion)(false)}>
+                  Todas
+                </button>
+              </div>
+            ) : (
+              <span className="inst-chip">
+                {INDICADORES.find((k) => k.clave === indicador)?.titulo}
+                <button type="button" title="Quitar" onClick={() => conPagina1(setIndicador)("")}><i className="bi bi-x" aria-hidden /></button>
+              </span>
+            )}
+            <div className="search-box">
+              <span className="search-ico"><i className="bi bi-search" aria-hidden /></span>
+              <input
+                type="search"
+                className="form-control-dark"
+                placeholder="Buscar cliente o cédula…"
+                aria-label="Buscar cliente o cédula"
+                value={busqueda}
+                onChange={(e) => conPagina1(setBusqueda)(e.target.value)}
+              />
+            </div>
+            <select className="form-control-dark" style={{ width: "auto" }} aria-label="Instructor" value={filtroInstructor} onChange={(e) => conPagina1(setFiltroInstructor)(e.target.value)}>
+              <option value="">Todos los instructores</option>
+              {instructores.map((i) => (
+                <option key={i.numero_identificacion} value={i.numero_identificacion}>{i.nombre} {i.apellidos}</option>
+              ))}
+            </select>
+            <select className="form-control-dark" style={{ width: "auto" }} aria-label="Objetivo" value={filtroObjetivo} onChange={(e) => conPagina1(setFiltroObjetivo)(e.target.value as ObjetivoRutina | "")}>
+              <option value="">Todos los objetivos</option>
+              {OBJETIVOS_RUTINA.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+            <select className="form-control-dark" style={{ width: "auto" }} aria-label="Estado" value={filtroEstado} onChange={(e) => conPagina1(setFiltroEstado)(e.target.value as FiltroEstado)}>
+              <option value="">Todos los estados</option>
+              <option value="VIGENTE">Vigente</option>
+              <option value="POR_VENCER">Por vencer</option>
+              <option value="VENCIDA">Vencida</option>
+              <option value="FINALIZADA">Finalizada</option>
+              <option value="CAMBIOS">Cambios por revisar</option>
+              <option value="SIN_RUTINA">Sin rutina</option>
+            </select>
+            {hayFiltros && <button className="btn-dark" onClick={limpiar}>Limpiar</button>}
+          </div>
+
+          <div className="table-wrap">
+            <table className="table-g tabla-stack inst-tabla-sup">
+              <thead>
+                <tr>
+                  <th>Cliente</th><th>Rutina</th><th>Instructor</th><th>Sesiones</th><th>Vigencia</th><th>Avance</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {cargando ? (
+                  <tr><td colSpan={7} className="loader"><span className="spinner-g"></span>Cargando...</td></tr>
+                ) : deLaPagina.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="empty-state">
+                      {filas.length === 0 && sinRutina.length === 0
+                        ? "Todavía no hay rutinas ni clientes activos."
+                        : soloAtencion && !hayFiltros
+                        ? "Nada requiere atención: todas las rutinas están al día."
+                        : "Ninguna fila coincide con la búsqueda o los filtros."}
+                    </td>
+                  </tr>
+                ) : (
+                  deLaPagina.map((x) =>
+                    x.tipo === "sin" ? (
+                      <tr key={"sin-" + x.cliente.numero_identificacion}>
+                        <td data-label="Cliente"><Persona cliente={x.cliente} /></td>
+                        <td data-label="Rutina" colSpan={5}><span className="card-sub">Sin rutina vigente</span></td>
+                        <td>
+                          <button className="btn-neon inst-btn-sm" onClick={() => navigate(ruta("/rutinas/nueva?cliente=" + x.cliente.numero_identificacion))}>
+                            <i className="bi bi-plus-lg me-1" aria-hidden /> Asignar rutina
+                          </button>
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={x.f.rutina.id_rutina}>
+                        <td data-label="Cliente">
+                          <Persona cliente={x.cliente} cedula={x.f.rutina.id_cliente} />
+                        </td>
+                        <td data-label="Rutina">
+                          <div className="person-name">
+                            {x.f.rutina.nombre}
+                            {x.f.cambios_sin_revisar > 0 && (
+                              <i
+                                className="bi bi-person-exclamation inst-icono-aviso ms-2"
+                                title={x.f.cambios_sin_revisar + " cambio(s) del cliente por revisar"}
+                                aria-label="Cambios del cliente por revisar"
+                              />
+                            )}
+                          </div>
+                          <div className="person-sub">{x.f.rutina.objetivo}</div>
+                        </td>
+                        <td data-label="Instructor">{x.instructor ? x.instructor.nombre + " " + x.instructor.apellidos : x.f.rutina.id_instructor}</td>
+                        <td data-label="Sesiones">
+                          <span className="inst-letras">
+                            {(x.f.rutina.division ?? []).map((l) => (
+                              <span key={l} className={"inst-letra inst-letra-sm" + (l === x.f.siguiente ? " siguiente" : "")} title={l === x.f.siguiente ? "Siguiente sesión" : undefined}>{l}</span>
+                            ))}
+                          </span>
+                        </td>
+                        <td data-label="Vigencia">
+                          <BadgeEstadoRutina estado={x.f.estado} />
+                          <div className="person-sub">{textoVigencia(x.f.rutina, x.f.estado)}</div>
+                        </td>
+                        <td data-label="Avance">
+                          <div className="inst-avance-mini">
+                            <div className="kpi-bar"><span style={{ width: x.f.avance.porcentaje + "%" }}></span></div>
+                            <span>{x.f.avance.completadas}/{x.f.avance.planeadas}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="cell-actions">
+                            <Link className="btn-icon" title="Ver detalle" to={ruta("/rutinas/" + x.f.rutina.id_rutina)}><i className="bi bi-eye" aria-hidden /></Link>
+                            <Link className="btn-icon" title="Editar" to={ruta("/rutinas/" + x.f.rutina.id_rutina + "/editar")}><i className="bi bi-pencil" aria-hidden /></Link>
+                            {(x.f.estado === "VIGENTE" || x.f.estado === "POR_VENCER") && (
+                              <button className="btn-icon" title="Finalizar" onClick={() => { setErrorModal(""); setAFinalizar(x.f); }}><i className="bi bi-flag" aria-hidden /></button>
+                            )}
+                            {vencidas.has(x.f.rutina.id_rutina) && (
+                              <button className="btn-icon" title="Renovar: nueva rutina para el cliente" onClick={() => navigate(ruta("/rutinas/nueva?cliente=" + x.f.rutina.id_cliente))}>
+                                <i className="bi bi-arrow-repeat" aria-hidden />
+                              </button>
+                            )}
+                            <button className="btn-icon" title="Duplicar para otro cliente" onClick={() => { setErrorModal(""); setADuplicar(x.f); }}><i className="bi bi-copy" aria-hidden /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+          <Paginador pagina={paginaSegura} total={visibles.length} porPagina={POR_PAGINA} onCambiar={setPagina} />
+        </section>
+
+        {/* Carga por instructor: clic filtra la tabla por ese instructor */}
+        <aside className="card-g inst-carga">
+          <h2 className="card-title">Carga por instructor</h2>
+          <p className="card-sub">Rutinas vigentes de cada instructor activo</p>
+          {(resumen?.carga ?? []).map((c) => (
+            <button
+              key={c.id_instructor}
+              type="button"
+              className={"inst-carga-fila" + (filtroInstructor === c.id_instructor ? " activo" : "")}
+              onClick={() => conPagina1(setFiltroInstructor)(filtroInstructor === c.id_instructor ? "" : c.id_instructor)}
+            >
+              <span className="inst-carga-nombre">{c.nombre}</span>
+              <span className="kpi-bar"><span style={{ width: (c.vigentes / maxCarga) * 100 + "%" }}></span></span>
+              <span className="inst-carga-num">{c.vigentes}</span>
+            </button>
+          ))}
+        </aside>
+      </div>
+
+      <Modal show={aFinalizar !== null} onHide={() => setAFinalizar(null)} centered>
+        <Modal.Header closeButton><Modal.Title>Finalizar rutina</Modal.Title></Modal.Header>
         <Modal.Body>
-          {errorFinalizar && <div className="alert-g alert-error show">{errorFinalizar}</div>}
-          <p>
-            ¿Finalizar <strong>{aFinalizar?.nombre}</strong> de{" "}
-            <strong>{aFinalizar ? nombre(buscarCliente(aFinalizar.id_cliente)) : ""}</strong>?
-            Su fecha fin pasará a ser ayer y quedará en el historial del cliente, que podrá recibir una rutina nueva.
-          </p>
+          {errorModal && <div className="alert-g alert-error show">{errorModal}</div>}
+          <p>¿Finalizar «{aFinalizar?.rutina.nombre}»? Queda en el historial del cliente y podrá recibir una rutina nueva hoy mismo.</p>
         </Modal.Body>
         <Modal.Footer>
-          <button className="btn-dark" onClick={() => setShowFinalizar(false)}>Cancelar</button>
-          <button className="btn-neon" onClick={confirmarFinalizar}>Sí, finalizar</button>
+          <button className="btn-dark" onClick={() => setAFinalizar(null)}>Cancelar</button>
+          <button className="btn-neon" disabled={guardando} onClick={confirmarFinalizar}><i className="bi bi-flag me-1" aria-hidden /> Sí, finalizar</button>
         </Modal.Footer>
       </Modal>
-
-      {/* Confirmación de eliminar */}
-      <Modal show={showEliminar} onHide={() => setShowEliminar(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Eliminar rutina</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {errorEliminar && <div className="alert-g alert-error show">{errorEliminar}</div>}
-          <p>
-            ¿Seguro que quieres eliminar <strong>{aEliminar?.nombre}</strong> de{" "}
-            <strong>{aEliminar ? nombre(buscarCliente(aEliminar.id_cliente)) : ""}</strong>? Esta acción no se puede
-            deshacer.
-          </p>
-          {sugerirFinalizar && (
-            <p className="card-sub">
-              Esta rutina ya está en uso desde el {aEliminar ? utils.fecha(aEliminar.fecha_creacion) : ""}. Si el
-              cliente solo terminó con ella, mejor <strong>finalízala</strong>: queda en su historial y el cliente
-              puede recibir una rutina nueva.
-            </p>
-          )}
-          {!eliminarCreadaHoy && !eliminarVigente && (
-            <p className="card-sub">Esta rutina forma parte del historial del cliente: al eliminarla se pierde ese registro.</p>
-          )}
-          {eliminarCreadaHoy && <p className="card-sub">Se creó hoy, así que no hay historial que conservar.</p>}
-        </Modal.Body>
-        <Modal.Footer>
-          <button className="btn-dark" onClick={() => setShowEliminar(false)}>Cancelar</button>
-          {sugerirFinalizar && (
-            <button className="btn-neon" onClick={finalizarEnLugarDeEliminar}>Finalizar en su lugar</button>
-          )}
-          <button className="btn-danger-g" onClick={confirmarEliminar}>Sí, eliminar</button>
-        </Modal.Footer>
-      </Modal>
+      <ModalDuplicar
+        show={aDuplicar !== null}
+        nombreRutina={aDuplicar?.rutina.nombre ?? ""}
+        candidatos={candidatos}
+        guardando={guardando}
+        error={errorModal}
+        onConfirmar={confirmarDuplicar}
+        onCerrar={() => setADuplicar(null)}
+      />
     </>
+  );
+}
+
+// Avatar con iniciales + nombre + cédula del cliente
+function Persona({ cliente, cedula }: { cliente: Cliente | undefined; cedula?: string }) {
+  return (
+    <div className="person">
+      <div className="person-avatar">{cliente ? utils.iniciales(cliente.nombre, cliente.apellidos) : "?"}</div>
+      <div>
+        <div className="person-name">{cliente ? cliente.nombre + " " + cliente.apellidos : cedula}</div>
+        <div className="person-sub">{cliente?.numero_identificacion ?? cedula}</div>
+      </div>
+    </div>
   );
 }

@@ -1081,24 +1081,6 @@ body {
 .btn-danger-g { background: #ff6b6b; color: #000; border: none; padding: 8px 16px; border-radius: var(--radius-sm); font-family: var(--f-title); font-weight: 700; font-size: 13px; cursor: pointer; }
 .btn-danger-g:hover { filter: brightness(1.08); }
 
-/* Rutinas: cuadrÃ­cula de tarjetas. min(300px, 100%) evita desbordar en celulares angostos */
-.rutinas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 20px; }
-.rutina-card { display: flex; flex-direction: column; gap: 16px; padding: 20px; }
-.rutina-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.rutina-nombre { font-family: var(--f-title); font-size: 16px; font-weight: 600; color: #fff; }
-.rutina-personas { display: flex; flex-direction: column; gap: 10px; }
-.rutina-dias { display: flex; gap: 6px; }
-.dia-pill { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--f-label); font-size: 11px; font-weight: 700; background: var(--bg-input); color: var(--muted); border: 1px solid var(--border-btn); }
-.dia-pill.activo { background: var(--neon); color: #000; border-color: var(--neon); }
-.dia-pill-btn { padding: 0; cursor: pointer; }  /* versiÃ³n botÃ³n (en el modal): se activa con clic */
-.dia-pill-btn:hover { border-color: var(--neon); }
-.rutina-fechas { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); }
-.rutina-acciones { margin-top: auto; justify-content: flex-end; padding-top: 14px; border-top: 1px solid var(--border); }
-.rutina-grupo-head { margin-bottom: 16px; }
-/* Alerta con un botÃ³n al lado del mensaje (ej. "Crear la siguiente rutina") */
-.alert-g.alerta-accion.show { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-
-
 /* ===== [P4] Estilos propios Â· ejercicios, membresias ===== */
 
 /* Barra compacta de busqueda y filtros de Membresias. */
@@ -1111,39 +1093,6 @@ body {
 .membresias-filtros .membresias-limpiar:hover { color: var(--neon); border-color: var(--neon); }
 @media (max-width: 576px) {
   .membresias-filtros .membresias-busqueda { flex-basis: 100%; }
-}
-
-/* Pegar UNA vez al final de css/gymbrot.css, en la secciÃ³n [P4].
-   Reutiliza tokens y clases de la base. Solo afecta a ejercicios.html.
-   Coordinar esta adiciÃ³n al CSS compartido antes de integrarla. */
-body[data-modulo="ejercicios"] .nav-item::before { display: none; }
-body[data-modulo="ejercicios"] .sidebar { overflow-y: auto; }
-body[data-modulo="ejercicios"] .table-g td:first-child { min-width: 180px; max-width: 320px; }
-body[data-modulo="ejercicios"] .table-wrap:focus-visible { outline: 2px solid var(--neon); }
-body[data-modulo="ejercicios"] button:disabled { opacity: .6; cursor: wait; }
-
-@media (max-width: 992px) {
-  body[data-modulo="ejercicios"] .sidebar { width: 72px; min-width: 72px; padding: 16px 8px; }
-  body[data-modulo="ejercicios"] .sidebar-logo { padding: 4px 0 24px; text-align: center; }
-  body[data-modulo="ejercicios"] .sidebar-logo img { display: none; }
-  body[data-modulo="ejercicios"] .sidebar-logo::after {
-    content: "GB";
-    font-family: var(--f-title);
-    font-size: 22px;
-    font-weight: 900;
-    font-style: italic;
-    color: var(--neon);
-  }
-  body[data-modulo="ejercicios"] .nav-item { justify-content: center; font-size: 0; gap: 0; padding: 12px 0; }
-  body[data-modulo="ejercicios"] .nav-item::before { display: block; content: attr(data-abreviatura); font-size: 13px; }
-}
-@media (max-width: 576px) {
-  body[data-modulo="ejercicios"] .content { padding: 16px; gap: 16px; }
-  body[data-modulo="ejercicios"] .topbar { padding: 0 16px; }
-  body[data-modulo="ejercicios"] .topbar-title { font-size: 14px; }
-  body[data-modulo="ejercicios"] .topbar-user { display: none; }
-  body[data-modulo="ejercicios"] .card-g { padding: 16px; }
-  body[data-modulo="ejercicios"] #btnNuevoEjercicio { width: 100%; }
 }
 
 /* En pantallas angostas las tablas de Instructores y MembresÃ­as se apilan como
@@ -1345,4 +1294,193 @@ body[data-modulo="ejercicios"] button:disabled { opacity: .6; cursor: wait; }
 .plat-plan-uso b { color: #fff; }
 @media (max-width: 575.98px) {
   .plat-filtros > select.form-control-dark { width: 100%; }
+}
+
+/* ===== [P3] .inst-* · Ejercicios: vista previa del recurso (KAN-88) ===== */
+.inst-ej-fila { display: flex; gap: 12px; align-items: flex-start; }
+.inst-ej-mini { width: 48px; height: 48px; flex-shrink: 0; border-radius: var(--radius-sm); object-fit: cover; background: var(--bg-input); border: 1px solid var(--border-btn); }
+.inst-ej-grande { display: block; width: 100%; max-height: 240px; object-fit: contain; margin-top: 10px; border-radius: var(--radius); background: var(--bg-input); border: 1px solid var(--border-btn); }
+.inst-ej-respaldo { display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.inst-ej-mini.inst-ej-respaldo { font-size: 20px; }
+.inst-ej-grande.inst-ej-respaldo { flex-direction: column; gap: 6px; min-height: 120px; font-size: 34px; }
+.inst-ej-respaldo small { font-size: 12px; }
+
+/* ===== [P3] .inst-* · Instructores: panel de cuenta creada (KAN-86) ===== */
+.inst-cuenta { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; padding: 14px 16px; border: 1px solid rgba(212,255,0,.35); border-radius: var(--radius-sm); background: rgba(212,255,0,.06); color: var(--text); font-size: 13px; }
+.inst-cuenta code { color: var(--neon); font-size: 13px; }
+.inst-cuenta-acciones { display: flex; gap: 8px; align-items: center; }
+
+/* ===== [P3] .inst-* · Rutinas v2: constructor, detalle y supervisión (KAN-56/57/58) ===== */
+/* Encabezado de página: volver + título + acciones */
+.inst-encabezado { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.inst-encabezado .btn-icon { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.inst-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.inst-sin-margen { margin-bottom: 0; }
+.inst-link { background: none; border: none; padding: 0; color: var(--neon); font-size: 12px; text-decoration: underline; cursor: pointer; }
+.inst-btn-sm { padding: 6px 12px; font-size: 12px; white-space: nowrap; }
+
+/* Letra de sesión (A, B, C...) */
+.inst-letra { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 10px; background: var(--neon); color: #000; font-family: var(--f-title); font-weight: 800; font-size: 17px; flex-shrink: 0; }
+.inst-letra-sm { width: 22px; height: 22px; border-radius: 6px; font-size: 11px; background: var(--bg-input); color: var(--nav-text); border: 1px solid var(--border-btn); }
+.inst-letra-sm.siguiente { background: var(--neon); color: #000; border-color: var(--neon); }
+.inst-letras { display: inline-flex; gap: 4px; }
+
+/* Botones segmentados (división, frecuencia, vista) */
+.inst-seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.inst-seg button { background: var(--bg-input); color: var(--nav-text); border: 1px solid var(--border-btn); border-radius: var(--radius-sm); padding: 8px 14px; font-family: var(--f-title); font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.inst-seg button:hover { border-color: var(--neon); color: #fff; }
+.inst-seg button.activo { background: var(--neon); color: #000; border-color: var(--neon); }
+.inst-sugerida { font-family: var(--f-label); font-size: 9px; text-transform: uppercase; letter-spacing: .05em; opacity: .75; }
+.inst-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--neon); color: var(--neon); font-size: 12px; font-family: var(--f-label); }
+.inst-chip button { background: none; border: none; color: inherit; padding: 0; cursor: pointer; line-height: 1; }
+
+/* Pestañas grandes de sesión */
+.inst-tabs { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.inst-tab { display: flex; align-items: center; gap: 12px; min-width: 210px; padding: 12px 14px; background: var(--bg-input); border: 1px solid var(--border-btn); border-radius: var(--radius); color: var(--text); text-align: left; cursor: pointer; }
+.inst-tab .inst-letra { background: var(--bg-card); color: var(--nav-text); border: 1px solid var(--border-btn); }
+.inst-tab.activa { border-color: var(--neon); background: rgba(212,255,0,.06); }
+.inst-tab.activa .inst-letra { background: var(--neon); color: #000; border-color: var(--neon); }
+.inst-tab.con-aviso { border-color: rgba(255,107,107,.55); }
+.inst-tab.con-aviso .inst-tab-resumen { color: #ff8a8a; }
+.inst-tab-texto { display: flex; flex-direction: column; min-width: 0; }
+.inst-tab-titulo { font-family: var(--f-title); font-weight: 600; font-size: 14px; }
+.inst-tab-resumen { font-size: 11px; color: var(--muted); }
+
+/* Ejercicio en modo lectura */
+.inst-lista-ej { display: flex; flex-direction: column; margin-top: 14px; }
+.inst-fila-ej { display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--border); }
+.inst-fila-ej:last-child { border-bottom: none; }
+.inst-orden { width: 20px; text-align: center; color: var(--muted); font-family: var(--f-label); font-size: 12px; }
+.inst-fila-ej-texto { flex: 1; min-width: 0; }
+.inst-presc { font-family: var(--f-title); font-size: 13px; color: var(--neon); white-space: nowrap; }
+.inst-fila-ej-acciones { flex-shrink: 0; }
+
+/* Avance: anillo SVG */
+.inst-avance { display: flex; align-items: center; gap: 20px; }
+.inst-anillo-fondo { stroke: var(--border-btn); }
+.inst-anillo-valor { stroke: var(--neon); transition: stroke-dashoffset .4s ease; }
+.inst-anillo-num { fill: #fff; font-family: var(--f-title); font-size: 30px; font-weight: 800; }
+.inst-anillo-sub { fill: var(--muted); font-family: var(--f-label); font-size: 12px; }
+.inst-avance-info { display: flex; flex-direction: column; gap: 6px; }
+.inst-avance-titulo { font-family: var(--f-title); font-size: 18px; font-weight: 700; color: #fff; }
+.inst-siguiente { display: flex; align-items: center; gap: 8px; font-family: var(--f-label); font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.inst-bloque-avance { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+
+/* Detalle: cabecera del cliente y datos de la rutina */
+.inst-cabecera-cliente { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.inst-cabecera-cliente .inst-link { margin-left: auto; }
+.inst-datos-rutina { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 14px; font-size: 13px; color: var(--text-table); }
+
+/* Autocompletado de cliente */
+.inst-auto { position: relative; }
+.inst-auto-lista { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0; max-height: 300px; overflow-y: auto; margin: 0; padding: 6px; list-style: none; background: var(--bg-card); border: 1px solid var(--border-btn); border-radius: var(--radius-sm); box-shadow: 0 12px 30px rgba(0,0,0,.45); }
+.inst-auto-opcion { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; background: none; border: none; border-radius: var(--radius-sm); color: var(--text); text-align: left; cursor: pointer; }
+.inst-auto-opcion:hover { background: var(--bg-input); }
+.inst-auto-vacio { padding: 10px; color: var(--muted); font-size: 13px; }
+.inst-cliente-elegido { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--neon); border-radius: var(--radius-sm); background: rgba(212,255,0,.04); }
+
+/* Constructor */
+.inst-constructor { display: flex; flex-direction: column; gap: 24px; }
+.inst-paso { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-right: 8px; border-radius: 50%; background: var(--neon); color: #000; font-size: 13px; font-weight: 800; vertical-align: middle; }
+.inst-lista-edit { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.inst-fila-edit { border: 1px solid var(--border-btn); border-radius: var(--radius); padding: 12px 14px; background: var(--bg-side); }
+.inst-fila-edit.con-error { border-color: rgba(255,107,107,.55); }
+.inst-fila-edit-cab { display: flex; align-items: center; gap: 12px; }
+.inst-mover { display: flex; flex-direction: column; gap: 4px; }
+.inst-mover .btn-icon { width: 26px; height: 22px; font-size: 11px; }
+.inst-campos { display: grid; grid-template-columns: 90px 170px 110px 120px 1fr; gap: 10px; margin-top: 12px; }
+.inst-campos label { display: flex; flex-direction: column; margin: 0; }
+.inst-campos .form-control-dark { padding: 8px 10px; font-size: 13px; }
+.inst-rango { display: flex; gap: 6px; }
+.inst-error-fila { margin-top: 8px; color: #ff8a8a; font-size: 12px; }
+.inst-acciones-pie { display: flex; justify-content: flex-end; gap: 10px; position: sticky; bottom: 0; padding: 12px 0; background: linear-gradient(transparent, var(--bg) 40%); }
+
+/* Selector de ejercicios (modal) */
+.inst-selector { display: grid; grid-template-columns: 1fr 280px; gap: 16px; }
+.inst-selector-lista { display: flex; flex-direction: column; gap: 6px; max-height: 55vh; overflow-y: auto; padding-right: 4px; }
+.inst-opcion-ej { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.inst-opcion-ej:hover { border-color: var(--border-btn); background: var(--bg-input); }
+.inst-opcion-ej.marcado { border-color: var(--neon); background: rgba(212,255,0,.05); }
+.inst-opcion-ej input { accent-color: var(--neon); }
+.inst-selector-elegidos { border-left: 1px solid var(--border); padding-left: 16px; display: flex; flex-direction: column; gap: 6px; }
+.inst-elegido { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+
+/* Supervisión: indicadores, tabla y carga por instructor */
+.inst-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.inst-kpi { min-height: 120px; text-align: left; cursor: pointer; color: var(--text); font: inherit; }
+.inst-kpi.alerta .kpi-value { color: var(--neon); }
+.inst-kpi.activo { border-color: var(--neon); box-shadow: inset 0 0 0 1px var(--neon); }
+.inst-sup { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; align-items: start; }
+.inst-tabla-sup td { vertical-align: middle; }
+.inst-tabla-sup td:nth-child(1) { min-width: 210px; }
+.inst-tabla-sup td:nth-child(2) { min-width: 170px; }
+.inst-tabla-sup td:nth-child(3) { min-width: 150px; }
+.inst-tabla-sup td:nth-child(5) { min-width: 120px; }
+.inst-icono-aviso { color: #ffcf5c; }
+.inst-avance-mini { display: flex; align-items: center; gap: 8px; min-width: 110px; font-family: var(--f-label); font-size: 12px; }
+.inst-avance-mini .kpi-bar { flex: 1; margin-top: 0; }
+.inst-carga { display: flex; flex-direction: column; gap: 4px; }
+.inst-carga-fila { display: grid; grid-template-columns: 1fr 70px 24px; align-items: center; gap: 8px; padding: 8px; background: none; border: 1px solid transparent; border-radius: var(--radius-sm); color: var(--text); font-size: 12px; text-align: left; cursor: pointer; }
+.inst-carga-fila:hover { background: var(--bg-input); }
+.inst-carga-fila.activo { border-color: var(--neon); }
+.inst-carga-fila .kpi-bar { margin-top: 0; }
+.inst-carga-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inst-carga-num { text-align: right; font-family: var(--f-title); font-weight: 700; }
+
+@media (max-width: 1100px) {
+  .inst-sup { grid-template-columns: 1fr; }
+  .inst-campos { grid-template-columns: repeat(2, 1fr); }
+  .inst-campo-notas { grid-column: 1 / -1; }
+}
+@media (max-width: 768px) {
+  .inst-kpis { grid-template-columns: repeat(2, 1fr); }
+  .inst-kpi { min-height: 100px; }
+  .inst-kpi .kpi-value { font-size: 32px; }
+  .inst-selector { grid-template-columns: 1fr; }
+  .inst-selector-elegidos { border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 12px; }
+  .inst-fila-ej { flex-wrap: wrap; }
+  .inst-presc { width: 100%; padding-left: 32px; white-space: normal; }
+  .inst-avance { flex-direction: column; text-align: center; }
+  .inst-bloque-avance { justify-content: center; }
+  .inst-acciones { margin-left: 0; width: 100%; }
+  .inst-cabecera-cliente .inst-link { margin-left: 0; }
+}
+@media (max-width: 640px) {
+  /* En móvil la tabla se apila (tabla-stack): sin anchos mínimos por columna */
+  .inst-tabla-sup td:nth-child(n) { min-width: 0; }
+  .inst-avance-mini { min-width: 0; width: 60%; }
+}
+
+/* [P3] .inst-* · Dashboard del instructor (B1 · KAN-89) */
+.inst-kpi-alerta .kpi-value { color: var(--neon); }
+.inst-agenda { display: flex; flex-direction: column; gap: 8px; }
+.inst-agenda-fila { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); }
+.inst-agenda-fila.proxima { border-color: var(--neon); }
+.inst-agenda-hora { font-family: var(--f-title); font-weight: 700; min-width: 48px; }
+.inst-agenda-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.inst-agenda-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inst-fila-link { text-decoration: none; }
+.inst-fila-link:hover { background: var(--bg-input); border-color: var(--border-btn); color: var(--text); }
+.inst-motivos { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+@media (max-width: 640px) {
+  .inst-agenda-fila { flex-wrap: wrap; }
+  .inst-motivos { justify-content: flex-start; }
+}
+
+/* [P3] .inst-* · Imagen animada de ejercicio (KAN-96): las dos posiciones apiladas, se alterna la de arriba */
+.inst-anim { position: relative; display: block; overflow: hidden; }
+.inst-ej-grande.inst-anim { aspect-ratio: 3 / 2; }
+.inst-anim img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.inst-ej-grande.inst-anim img { object-fit: contain; }
+.inst-anim img.oculta { visibility: hidden; }
+
+/* [P3] .inst-* · Alumnos del instructor (B2 · KAN-90) */
+.inst-tabla-alumnos td { vertical-align: middle; }
+.inst-tabla-alumnos td:nth-child(1) { min-width: 200px; }
+.inst-tabla-alumnos td:nth-child(2) { min-width: 160px; }
+.inst-motivos-izq { justify-content: flex-start; }
+@media (max-width: 640px) {
+  .inst-tabla-alumnos td:nth-child(1), .inst-tabla-alumnos td:nth-child(2) { min-width: 0; }
+  .inst-tabla-alumnos td > * { min-width: 0; overflow-wrap: anywhere; }
+  .inst-tabla-alumnos .inst-avance-mini { width: auto; }
 }

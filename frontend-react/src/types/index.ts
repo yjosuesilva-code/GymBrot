@@ -318,6 +318,19 @@ export interface Instructor {
 
 // Lo que se envía al crear: gimnasio_id, estado y fecha_contratacion los pone api.instructores.create
 export type InstructorNuevo = Omit<Instructor, 'gimnasio_id' | 'estado' | 'fecha_contratacion'>;
+
+/* KAN-86: al crear un instructor se crea tambien su Usuario INSTRUCTOR. La contraseña
+   temporal solo viaja en esta respuesta, para que el admin se la entregue; al primer
+   ingreso se pide cambiarla (debe_cambiar_contrasena). */
+export interface CuentaInicial {
+  usuario: string;              // con lo que inicia sesion (el correo)
+  contrasena_temporal: string;
+}
+export interface InstructorCreado {
+  instructor: Instructor;
+  cuenta: CuentaInicial | null; // null si no se pudo crear la cuenta (ver aviso)
+  aviso?: string;
+}
 // ===== [/P3] Instructores =====
 
 // ===== [P3] Rutinas =====
@@ -338,6 +351,19 @@ export type ObjetivoRutina =
   | 'Tonificación'
   | 'Rehabilitación';
 
+/* ---- Rutinas v2 (KAN-87, contrato ADITIVO) -------------------------------
+   Una rutina tiene vigencia (fecha_creacion → fecha_fin) y una meta de sesiones
+   (sesiones_planeadas). Se divide en sesiones A/B/C/D sin dias fijos: el sistema
+   sugiere la siguiente por rotacion segun el ultimo RegistroEntrenamiento.
+   Los campos v2 son opcionales en el tipo para que las filas v1 sigan
+   compilando; api.rutinas los exige en las rutinas nuevas. */
+
+// Letra de cada sesión de la rutina (máximo 4)
+export type LetraSesion = 'A' | 'B' | 'C' | 'D';
+
+// Estado CALCULADO por api.rutinas.estado(); nunca se guarda
+export type EstadoRutina = 'VIGENTE' | 'POR_VENCER' | 'VENCIDA' | 'FINALIZADA';
+
 export interface Rutina {
   gimnasio_id: Gimnasio['gimnasio_id']; // tenant: lo pone api.ts, la vista no lo conoce
   id_rutina: number;               // llave, autoincremental global (como un SERIAL)
@@ -345,29 +371,94 @@ export interface Rutina {
   id_cliente: string;              // Cliente.numero_identificacion
   nombre: string;
   descripcion: string;
-  fecha_creacion: string;          // 'YYYY-MM-DD'
-  fecha_fin: string | null;        // 'YYYY-MM-DD' o null si no tiene fin
-  dias_semana: DiaSemana[];        // días en que se entrena
+  fecha_creacion: string;          // 'YYYY-MM-DD' = inicio de la rutina
+  fecha_fin: string | null;        // 'YYYY-MM-DD' = fin de la vigencia (null = sin fin)
   objetivo: ObjetivoRutina;
+  sesiones_planeadas?: number;     // meta de entrenamientos, ej. 19 (avance = registros / planeadas)
+  division?: LetraSesion[];        // sesiones de la rutina en orden: ['A'], ['A','B'], ['A','B','C']...
+  finalizada_el?: string | null;   // 'YYYY-MM-DD' si se finalizó a mano (distingue FINALIZADA de VENCIDA)
 }
 
-// Un ejercicio dentro de una rutina (tabla intermedia Rutina <-> Ejercicio del diagrama ER)
+/* Un ejercicio dentro de una sesión de la rutina (tabla intermedia Rutina <-> Ejercicio).
+   Llave en v2: (id_rutina, sesion, id_ejercicio): el mismo ejercicio puede ir en dos sesiones. */
 export interface RutinaEjercicio {
   gimnasio_id: Gimnasio['gimnasio_id']; // el mismo de su rutina
   id_rutina: number;               // Rutina.id_rutina
   id_ejercicio: number;            // Ejercicio.id_ejercicio (base o propio del mismo gimnasio)
-  orden: number;                   // posición dentro del día: 1, 2, 3...
-  dia_semana: DiaSemana;
+  orden: number;                   // posición dentro de la sesión: 1, 2, 3...
   notas_instructor: string;
-  /* El cliente puede adicionar/cambiar ejercicios de su rutina (con aviso de
-     que lo consulto con su instructor): esos quedan marcados para que el
-     instructor los revise. */
+  sesion?: LetraSesion;            // v2: sesión a la que pertenece
+  series?: number;                 // v2: series a realizar
+  reps_min?: number | null;        // v2: rango de repeticiones (si el ejercicio es por REPETICIONES)
+  reps_max?: number | null;
+  segundos?: number | null;        // v2: duración por serie (si el ejercicio es por TIEMPO)
+  peso_kg?: number | null;         // v2: carga sugerida (null = peso corporal o libre)
+  descanso_seg?: number | null;    // v2: descanso entre series
+  /* El cliente puede cambiar o agregar ejercicios de su rutina (con aviso de que lo
+     consultó con su instructor): quedan con agregado_por_cliente = true y
+     revisado_por_instructor = false hasta que el instructor los revise. */
   agregado_por_cliente?: boolean;
+  revisado_por_instructor?: boolean;
+  /** @deprecated usar `revisado_por_instructor` (tenía dos significados). */
   confirmado_instructor?: boolean;
 }
 
-// Lo que se envía al crear: gimnasio_id, id_rutina y fecha_creacion los pone api.rutinas.create
-export type RutinaNueva = Omit<Rutina, 'gimnasio_id' | 'id_rutina' | 'fecha_creacion'>;
+// Lo que manda el constructor por cada ejercicio de una sesión (id_rutina y gimnasio los pone la API)
+export type SesionEjercicioNuevo = Omit<RutinaEjercicio, 'gimnasio_id' | 'id_rutina'>;
+
+// Lo que hizo el cliente en un ejercicio durante una sesión registrada (opcional)
+export interface EjercicioRealizado {
+  id_ejercicio: number;
+  series?: number;
+  reps?: number | null;
+  segundos?: number | null;
+  peso_kg?: number | null;
+}
+
+// Una sesión de entrenamiento completada (de aquí salen la siguiente sesión y el avance)
+export interface RegistroEntrenamiento {
+  gimnasio_id: Gimnasio['gimnasio_id'];
+  id_registro: number;             // global (db.siguienteId)
+  id_rutina: number;
+  id_cliente: string;              // el dueño de la rutina
+  sesion: LetraSesion;             // qué sesión hizo (puede no ser la sugerida)
+  fecha: string;                   // 'YYYY-MM-DD'
+  registrado_por: string;          // cédula de quien la registró (admin, instructor o el propio cliente)
+  notas: string;
+  ejercicios_realizados?: EjercicioRealizado[];
+}
+
+// Lo que se manda al registrar una sesión completada
+export type RegistroNuevo = Pick<RegistroEntrenamiento, 'sesion' | 'fecha' | 'notas' | 'ejercicios_realizados'>;
+
+// Avance "12 de 19": completadas = registros de la rutina, planeadas = sesiones_planeadas
+export interface AvanceRutina {
+  completadas: number;
+  planeadas: number;
+  porcentaje: number;              // 0–100, con tope en 100
+}
+
+// Conteos de la vista de supervisión del admin (api.rutinas.resumenSupervision, KAN-54)
+export interface ResumenSupervision {
+  vigentes: number;                // estado VIGENTE (más de 14 días por delante o sin fecha fin)
+  por_vencer: number;              // estado POR_VENCER (vence en menos de 15 días)
+  vencidas_sin_renovar: number[];  // id_rutina: la última rutina de un cliente ACTIVO venció y no tiene otra vigente
+  sin_rutina: string[];            // cédulas de clientes ACTIVOS sin rutina vigente (sin contar los de arriba)
+  carga: { id_instructor: string; nombre: string; vigentes: number }[]; // rutinas vigentes por instructor
+}
+
+// Una fila de la tabla de supervisión: la rutina con lo que se calcula de ella (api.rutinas.listaSupervision)
+export interface FilaSupervision {
+  rutina: Rutina;
+  estado: EstadoRutina;
+  avance: AvanceRutina;
+  siguiente: LetraSesion | null;
+  cambios_sin_revisar: number;     // ejercicios que el cliente cambió y nadie ha revisado
+  ultima_sesion: string | null;    // fecha del último registro de entrenamiento (KAN-90)
+}
+
+// Lo que se envía al crear: gimnasio_id, id_rutina, fecha_creacion y finalizada_el los pone api.rutinas
+export type RutinaNueva = Omit<Rutina, 'gimnasio_id' | 'id_rutina' | 'fecha_creacion' | 'finalizada_el'>;
 // ===== [/P3] Rutinas =====
 
 // ===== [P2] Citas =====

@@ -1,6 +1,7 @@
 import type {
   Ejercicio,
   EstadoRutina,
+  FilaSupervision,
   LetraSesion,
   ObjetivoRutina,
   Rutina,
@@ -116,4 +117,26 @@ export function textoVigencia(r: Rutina, estado: EstadoRutina): string {
 // Normaliza texto para buscar sin tildes ni mayúsculas
 export function normalizar(texto: string): string {
   return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
+// [B1 · KAN-89] Por qué una rutina necesita al instructor. Una fila puede tener varios motivos.
+export type MotivoAtencion = "CAMBIOS" | "ATRASADA" | "POR_VENCER" | "VENCIDA";
+export const UMBRAL_ATRASO = 2; // sesiones por debajo del ideal para considerarla atrasada
+
+export const MOTIVO_ATENCION: Record<MotivoAtencion, { texto: string; icono: string }> = {
+  CAMBIOS: { texto: "Cambios del cliente", icono: "bi-person-exclamation" },
+  ATRASADA: { texto: "Atrasada", icono: "bi-graph-down-arrow" },
+  POR_VENCER: { texto: "Por vencer", icono: "bi-hourglass-split" },
+  VENCIDA: { texto: "Vencida sin renovar", icono: "bi-x-circle" },
+};
+
+// `renovada` = el cliente ya tiene otra rutina vigente (entonces una vencida no es problema)
+export function motivosAtencion(f: FilaSupervision, renovada: boolean): MotivoAtencion[] {
+  const motivos: MotivoAtencion[] = [];
+  const activa = f.estado === "VIGENTE" || f.estado === "POR_VENCER";
+  if (activa && f.cambios_sin_revisar > 0) motivos.push("CAMBIOS");
+  if (activa && idealAHoy(f.rutina) - f.avance.completadas >= UMBRAL_ATRASO) motivos.push("ATRASADA");
+  if (f.estado === "POR_VENCER") motivos.push("POR_VENCER");
+  if (f.estado === "VENCIDA" && !renovada) motivos.push("VENCIDA");
+  return motivos;
 }

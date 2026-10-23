@@ -1450,3 +1450,19 @@ body {
   .inst-tabla-sup td:nth-child(n) { min-width: 0; }
   .inst-avance-mini { min-width: 0; width: 60%; }
 }
+
+/* [P3] .inst-* · Dashboard del instructor (B1 · KAN-89) */
+.inst-kpi-alerta .kpi-value { color: var(--neon); }
+.inst-agenda { display: flex; flex-direction: column; gap: 8px; }
+.inst-agenda-fila { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); }
+.inst-agenda-fila.proxima { border-color: var(--neon); }
+.inst-agenda-hora { font-family: var(--f-title); font-weight: 700; min-width: 48px; }
+.inst-agenda-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.inst-agenda-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inst-fila-link { text-decoration: none; }
+.inst-fila-link:hover { background: var(--bg-input); border-color: var(--border-btn); color: var(--text); }
+.inst-motivos { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+@media (max-width: 640px) {
+  .inst-agenda-fila { flex-wrap: wrap; }
+  .inst-motivos { justify-content: flex-start; }
+}

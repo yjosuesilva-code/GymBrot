@@ -1,14 +1,16 @@
-import { useState } from "react";
+import type { GrupoMuscular } from "../../types";
 import { AnimacionEjercicio } from "./AnimacionEjercicio";
+import { Pictograma } from "./Pictograma";
 
-/* [P3] Vista previa del recurso de un ejercicio (KAN-88).
-   Si recurso_url es una imagen (png, jpg, gif, webp, svg o data:image) se muestra;
-   si no carga, si está vacío o si es otro tipo de enlace (un video, una página),
-   se muestra un ícono de respaldo. No sube archivos: solo muestra la URL guardada.
-   Las imágenes en par del catálogo base (<id>-0.jpg / <id>-1.jpg) se animan con AnimacionEjercicio (KAN-96).
+/* [P3] Vista previa del recurso de un ejercicio (KAN-88, KAN-96, KAN-97).
+   - Imagen (png, jpg, gif, webp, svg, avif o data:image): AnimacionEjercicio la muestra (y anima
+     los pares 0/1). Si no carga, muestra el pictograma.
+   - Vacío: pictograma del grupo muscular (si se conoce) o un ícono genérico.
+   - Otro enlace (un video, una página): ícono de enlace.
+   No sube archivos: solo muestra la URL guardada.
 
-   El estado "fallo" no se reinicia solo al cambiar la URL: quien lo usa le pone
-   key={url}, así React crea un componente nuevo por cada URL distinta. */
+   Quien lo usa le pone key={url}: así React crea un componente nuevo por cada URL distinta
+   y el estado "falló la carga" de AnimacionEjercicio empieza de cero. */
 
 const IMAGEN = /\.(png|jpe?g|gif|webp|svg|avif)(\?.*)?$/i;
 
@@ -16,21 +18,25 @@ type Props = {
   url: string;
   tamano: "mini" | "grande";
   alt: string;
+  grupo?: GrupoMuscular;
 };
 
-export function VistaPreviaRecurso({ url, tamano, alt }: Props) {
-  const [fallo, setFallo] = useState(false);
+export function VistaPreviaRecurso({ url, tamano, alt, grupo }: Props) {
   const limpia = url.trim();
   const esImagen = limpia.startsWith("data:image/") || IMAGEN.test(limpia);
   const clase = tamano === "mini" ? "inst-ej-mini" : "inst-ej-grande";
 
-  if (limpia && esImagen && !fallo) {
-    return <AnimacionEjercicio url={limpia} alt={alt} className={clase} onFallo={() => setFallo(true)} />;
+  if (limpia && esImagen) {
+    return <AnimacionEjercicio url={limpia} alt={alt} className={clase} grupo={grupo} />;
   }
 
-  // Respaldo: sin recurso, imagen que no cargó, o enlace que no es imagen (video, página)
-  const icono = !limpia ? "bi-image" : fallo ? "bi-file-earmark-x" : "bi-link-45deg";
-  const texto = !limpia ? "Sin imagen" : fallo ? "No se pudo cargar la imagen" : "Enlace externo (no es una imagen)";
+  if (!limpia && grupo) {
+    return <Pictograma grupo={grupo} className={clase} texto={tamano === "grande" ? "Sin imagen" : undefined} />;
+  }
+
+  // Respaldo genérico: sin recurso y sin grupo conocido, o enlace que no es imagen (video, página)
+  const icono = !limpia ? "bi-image" : "bi-link-45deg";
+  const texto = !limpia ? "Sin imagen" : "Enlace externo (no es una imagen)";
 
   return (
     <div className={clase + " inst-ej-respaldo"} title={texto} role="img" aria-label={texto}>

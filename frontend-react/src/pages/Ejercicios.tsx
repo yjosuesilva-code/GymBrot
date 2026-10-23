@@ -3,6 +3,9 @@ import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { Paginador } from "../components/Paginador";
 import { VistaPreviaRecurso } from "../components/ejercicios/VistaPreviaRecurso";
+import { SelectorImagenEjercicio } from "../components/ejercicios/SelectorImagenEjercicio";
+import { cargarIndice } from "../lib/indiceImagenes";
+import type { EntradaIndice } from "../lib/indiceImagenes";
 import type {
   Ejercicio,
   EjercicioNuevo,
@@ -84,6 +87,20 @@ export function Ejercicios() {
   const [error, setError] = useState("");
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState("");
+
+  // [KAN-97] Índice de imágenes sugeridas: se pide la primera vez que se abre el modal (no va en el bundle)
+  const [indice, setIndice] = useState<EntradaIndice[] | null>(null);
+  const [errorIndice, setErrorIndice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!show || indice !== null) return;
+    let activo = true;
+    cargarIndice()
+      .then((datos) => activo && setIndice(datos))
+      .catch(() => activo && setErrorIndice("No se pudieron cargar las imágenes sugeridas. Puedes subir una foto o pegar un enlace."));
+    return () => {
+      activo = false;
+    };
+  }, [show, indice]);
 
   // Paginación: 10 ejercicios por página; cada cambio de búsqueda o filtro vuelve a la página 1 (KAN-43)
   const POR_PAGINA = 10;
@@ -391,13 +408,13 @@ export function Ejercicios() {
                 <tr key={e.id_ejercicio}>
                   <td>
                     <div className="inst-ej-fila">
-                      {/* Miniatura: si hay recurso, al hacer clic se abre en otra pestaña */}
-                      {e.recurso_url.trim() ? (
+                      {/* Miniatura: si hay un enlace, al hacer clic se abre en otra pestaña (una foto subida en base64 no) */}
+                      {e.recurso_url.trim() && !e.recurso_url.startsWith("data:") ? (
                         <a href={e.recurso_url.trim()} target="_blank" rel="noopener noreferrer" title="Abrir recurso">
-                          <VistaPreviaRecurso key={e.recurso_url} url={e.recurso_url} tamano="mini" alt={e.nombre} />
+                          <VistaPreviaRecurso key={e.recurso_url} url={e.recurso_url} tamano="mini" alt={e.nombre} grupo={e.grupo_muscular} />
                         </a>
                       ) : (
-                        <VistaPreviaRecurso url="" tamano="mini" alt={e.nombre} />
+                        <VistaPreviaRecurso key={e.recurso_url} url={e.recurso_url} tamano="mini" alt={e.nombre} grupo={e.grupo_muscular} />
                       )}
                       <div>
                         <strong>{e.nombre}</strong>
@@ -599,14 +616,15 @@ export function Ejercicios() {
             </div>
 
             <div className="col-12">
-              <label className="form-label-g">Recurso URL (imagen o GIF de referencia)</label>
-              <input
-                className="form-control-dark"
-                placeholder="https://… o /recursos/ejercicios/archivo.gif"
-                value={form.recurso_url}
-                onChange={(e) => setCampo("recurso_url", e.target.value)}
+              <SelectorImagenEjercicio
+                nombre={form.nombre}
+                grupo={form.grupo_muscular}
+                equipo={form.equipo}
+                valor={form.recurso_url}
+                indice={indice}
+                errorIndice={errorIndice}
+                onCambiar={(url) => setCampo("recurso_url", url)}
               />
-              <VistaPreviaRecurso key={form.recurso_url} url={form.recurso_url} tamano="grande" alt="Vista previa del recurso" />
             </div>
           </div>
         </Modal.Body>
@@ -646,7 +664,7 @@ export function Ejercicios() {
             ajustarlo, personalízalo para crear tu propia copia.
           </p>
           {verEjercicio && (
-            <VistaPreviaRecurso key={verEjercicio.recurso_url} url={verEjercicio.recurso_url} tamano="grande" alt={verEjercicio.nombre} />
+            <VistaPreviaRecurso key={verEjercicio.recurso_url} url={verEjercicio.recurso_url} tamano="grande" alt={verEjercicio.nombre} grupo={verEjercicio.grupo_muscular} />
           )}
           {verEjercicio && (
             <div className="table-wrap">

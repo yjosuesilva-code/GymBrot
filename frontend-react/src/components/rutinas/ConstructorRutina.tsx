@@ -384,7 +384,7 @@ export function ConstructorRutina(props: Props) {
                         <i className="bi bi-arrow-down" aria-hidden />
                       </button>
                     </div>
-                    <VistaPreviaRecurso key={ej?.recurso_url ?? ""} url={ej?.recurso_url ?? ""} tamano="mini" alt={ej?.nombre ?? ""} />
+                    <VistaPreviaRecurso key={ej?.recurso_url ?? ""} url={ej?.recurso_url ?? ""} tamano="mini" alt={ej?.nombre ?? ""} grupo={ej?.grupo_muscular} />
                     <div className="inst-fila-ej-texto">
                       <div className="person-name">{i + 1}. {ej?.nombre ?? "Ejercicio " + f.id_ejercicio}</div>
                       <div className="person-sub">

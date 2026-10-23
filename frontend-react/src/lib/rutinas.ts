@@ -1,4 +1,5 @@
 import type {
+  Cliente,
   Ejercicio,
   EstadoRutina,
   FilaSupervision,
@@ -139,4 +140,43 @@ export function motivosAtencion(f: FilaSupervision, renovada: boolean): MotivoAt
   if (f.estado === "POR_VENCER") motivos.push("POR_VENCER");
   if (f.estado === "VENCIDA" && !renovada) motivos.push("VENCIDA");
   return motivos;
+}
+
+// [B2 · KAN-90] Alumnos del instructor (los usan el dashboard y la vista Alumnos)
+export interface Alumno {
+  fila: FilaSupervision;            // su rutina actual (la mía)
+  cliente: Cliente | undefined;
+  motivos: MotivoAtencion[];
+}
+
+export const esActiva = (f: FilaSupervision) => f.estado === "VIGENTE" || f.estado === "POR_VENCER";
+
+/* Alumnos = clientes cuya rutina ACTUAL es del instructor:
+   - si el cliente tiene una rutina vigente (solo puede tener una), esa es la actual;
+   - si no, la más reciente, y solo cuenta si VENCIÓ (no si se finalizó a propósito) y el cliente sigue ACTIVO. */
+export function alumnosDeInstructor(filas: FilaSupervision[], clientes: Cliente[], idInstructor: string): Alumno[] {
+  const porCliente = new Map<string, FilaSupervision[]>();
+  for (const f of filas) {
+    const lista = porCliente.get(f.rutina.id_cliente) ?? [];
+    lista.push(f);
+    porCliente.set(f.rutina.id_cliente, lista);
+  }
+  const alumnos: Alumno[] = [];
+  porCliente.forEach((suyas, cedula) => {
+    const cliente = clientes.find((c) => c.numero_identificacion === cedula);
+    const recientes = [...suyas].sort(
+      (a, b) => b.rutina.fecha_creacion.localeCompare(a.rutina.fecha_creacion) || b.rutina.id_rutina - a.rutina.id_rutina
+    );
+    const actual = recientes.find(esActiva) ?? recientes[0];
+    if (actual.rutina.id_instructor !== idInstructor) return;
+    if (!esActiva(actual) && (actual.estado !== "VENCIDA" || cliente?.estado !== "ACTIVO")) return;
+    // `renovada` es false: la actual es la última del cliente, así que una vencida no fue renovada
+    alumnos.push({ fila: actual, cliente, motivos: motivosAtencion(actual, false) });
+  });
+  // Primero los que más necesitan atención; luego por nombre
+  return alumnos.sort(
+    (a, b) =>
+      b.motivos.length - a.motivos.length ||
+      (a.cliente?.nombre ?? "").localeCompare(b.cliente?.nombre ?? "")
+  );
 }

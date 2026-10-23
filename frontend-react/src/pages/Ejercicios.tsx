@@ -300,7 +300,7 @@ export function Ejercicios() {
 
       <div className="toolbar mb-3">
         <div className="search-box">
-          <span className="search-ico" aria-hidden="true">{"\u{1F50D}"}</span>
+          <span className="search-ico" aria-hidden="true"><i className="bi bi-search" /></span>
           <input
             type="search"
             className="form-control-dark"

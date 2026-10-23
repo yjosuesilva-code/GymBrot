@@ -61,7 +61,8 @@ function esVigente(r: Rutina): boolean {
 
 // El formulario usa "" en fecha_fin cuando no hay fecha (un <input type="date"> vacío vale "");
 // al guardar se convierte a null
-type FormRutina = Omit<RutinaNueva, "fecha_fin"> & { fecha_fin: string };
+// dias_semana es opcional en el tipo desde v2 (KAN-87); el formulario v1 lo sigue usando hasta A10
+type FormRutina = Omit<RutinaNueva, "fecha_fin" | "dias_semana"> & { fecha_fin: string; dias_semana: DiaSemana[] };
 
 const VACIO: FormRutina = {
   nombre: "",
@@ -233,7 +234,7 @@ export function Rutinas() {
       objetivo: r.objetivo,
       id_cliente: r.id_cliente,
       id_instructor: r.id_instructor,
-      dias_semana: r.dias_semana,
+      dias_semana: r.dias_semana ?? [],
       fecha_fin: r.fecha_fin ?? "",
       descripcion: r.descripcion,
     });
@@ -358,7 +359,7 @@ export function Rutinas() {
 
         <div className="rutina-dias">
           {DIAS.map(({ dia, letra }) => (
-            <span key={dia} className={"dia-pill" + (r.dias_semana.includes(dia) ? " activo" : "")} title={dia}>
+            <span key={dia} className={"dia-pill" + ((r.dias_semana ?? []).includes(dia) ? " activo" : "")} title={dia}>
               {letra}
             </span>
           ))}

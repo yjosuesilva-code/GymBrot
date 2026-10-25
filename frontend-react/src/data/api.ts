@@ -1,9 +1,11 @@
 import { utils } from "../lib/utils";
 import { membresiaVigente } from "../lib/membresias";
 import { notificarCambioDeDatos } from "../lib/datos";
+import { OBJETIVOS_RUTINA } from "../lib/rutinas"; // [P3] única lista de objetivos
+import { DIAS_MAX_INSCRIPCION, TIPOS_CLASE, aMinutos, diaSemanaDe, fechasDeClase, horaFin, seCruzan } from "../lib/clases"; // [P3] B7
 import { slugUnico, slugify, validarSlug, normalizarSlugDeUrl } from "../lib/slug"; // [multitenant-slug]
 import { gimnasioFijado } from "../tenant/tenantActivo"; // [multitenant-slug]
-import { migrarDisponibilidadTexto, diaDisponible, horaDisponible, choque } from "../lib/horarios"; // [P4-horarios]
+import { migrarDisponibilidadTexto, diaDisponible, horaDisponible, choque, validarHorario } from "../lib/horarios"; // [P3] horario de instructores y citas
 import type {
   Gimnasio, // [multitenant]
   GimnasioPublico, // [multitenant-slug]
@@ -28,13 +30,25 @@ import type {
   CitaNueva, // [P2]
   Instructor, // [P3]
   InstructorNuevo, // [P3]
+  InstructorCreado, // [P3]
+  CuentaInicial, // [P3]
   EstadoInstructor, // [P3]
   Especialidad, // [P3]
   Rutina, // [P3]
   RutinaNueva, // [P3]
   RutinaEjercicio, // [P3]
-  DiaSemana, // [P3]
-  ObjetivoRutina, // [P3]
+  LetraSesion, // [P3] Rutinas v2
+  EstadoRutina, // [P3]
+  Clase, // [P3] B7
+  ClaseNueva, // [P3] B7
+  InscripcionClase, // [P3] B7
+  SesionClase, // [P3] B7
+  SesionEjercicioNuevo, // [P3]
+  RegistroEntrenamiento, // [P3]
+  RegistroNuevo, // [P3]
+  AvanceRutina, // [P3]
+  ResumenSupervision, // [P3]
+  FilaSupervision, // [P3]
 } from "../types";
 
 interface Seed {
@@ -52,6 +66,9 @@ interface Seed {
   instructores: Instructor[]; // [P3]
   rutinas: Rutina[]; // [P3]
   rutina_ejercicios: RutinaEjercicio[]; // [P3]
+  registros_entrenamiento: RegistroEntrenamiento[]; // [P3] Rutinas v2
+  clases: Clase[]; // [P3] B7 · KAN-94
+  inscripciones_clase: InscripcionClase[]; // [P3] B7 · KAN-94
   progreso: Progreso[]; // [P2]
   citas: Cita[]; // [P2]
 }
@@ -514,50 +531,253 @@ for (let i = 0; i < 17; i++) {
   });
 }
 
-// 36 rutinas mas (total 40) repartidas entre los 20 instructores y los socios
-// nuevos, para que la criba por vigencia y por objetivo tenga volumen.
-const RUTINAS_EXTRA: Rutina[] = [];
-const RUTINA_EJERCICIOS_EXTRA: RutinaEjercicio[] = [];
-const DIAS_SEMANA: DiaSemana[] = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'DOMINGO'];
-const OBJETIVOS: ObjetivoRutina[] = [
-  'Pérdida de peso', 'Ganancia muscular', 'Resistencia', 'Tonificación', 'Rehabilitación',
+// ===== [P3] Rutinas v2: generador de la semilla (KAN-55) =====
+/* Reemplaza las rutinas v1 (dias_semana) por rutinas v2: división A, A/B o A/B/C, ejercicios del
+   catálogo base por sesión con valores según el nivel, y registros de entrenamiento con avances
+   variados. Se ejecuta DESPUÉS de armar el SEED (necesita clientes, instructores y ejercicios) y
+   no usa azar(): todo sale del índice de cada cliente, así la semilla es siempre la misma.
+
+   A cada cliente ACTIVO le toca un escenario del CICLO, para que la supervisión tenga los 4
+   indicadores: vigentes (al día o atrasadas), por vencer, vencidas sin renovar y sin rutina. */
+type EscenarioSemilla = "AL_DIA" | "ATRASADA" | "POR_VENCER" | "VENCIDA" | "RENOVADA" | "SIN_RUTINA";
+const CICLO_SEMILLA: EscenarioSemilla[] = [
+  "AL_DIA", "ATRASADA", "POR_VENCER", "AL_DIA", "VENCIDA", "RENOVADA", "ATRASADA", "SIN_RUTINA", "AL_DIA", "VENCIDA",
 ];
-{
-  // 5 y 6 son las rutinas de Titan del seed de P3.
-  let idRutina = 7;
-  for (let i = 0; i < 36; i++) {
-    const idCliente = String(1000000008 + i);
-    const idInstructor = "20000000" + String(1 + (i % 20)).padStart(2, "0");
-    const objetivo = OBJETIVOS[i % OBJETIVOS.length];
-    const vencida = i % 3 === 0;
-    const dias = [DIAS_SEMANA[i % 7], DIAS_SEMANA[(i + 2) % 7], DIAS_SEMANA[(i + 4) % 7]];
-    const ruta: Rutina = {
-      gimnasio_id: 'gym-centro',
-      id_rutina: idRutina,
-      id_instructor: idInstructor,
-      id_cliente: idCliente,
-      nombre: objetivo + " - ciclo " + (i + 1),
-      descripcion: "Plan " + objetivo.toLowerCase() + " diseñado para " + NOMBRES_SOCIO[i % NOMBRES_SOCIO.length] + ".",
-      fecha_creacion: dia(15 + (i * 2) % 90),
-      fecha_fin: vencida ? dia(5 + (i % 30)) : i % 3 === 1 ? null : dia(-(5 + (i % 35))),
-      dias_semana: dias,
-      objetivo,
-    };
-    RUTINAS_EXTRA.push(ruta);
-    for (let e = 0; e < 4; e++) {
-      RUTINA_EJERCICIOS_EXTRA.push({
-        gimnasio_id: 'gym-centro',
-        id_rutina: idRutina,
-        // Solo del catalogo base de P3 (ids 1-40): sirven en cualquier gimnasio.
-        id_ejercicio: azar(1, 40),
-        orden: e + 1,
-        dia_semana: dias[e % dias.length],
-        notas_instructor: "Serie " + (e + 1) + ": mantener postura y respirar.",
+type NivelSemilla = Ejercicio["nivel"];
+const NIVELES_SEMILLA: NivelSemilla[] = ["Principiante", "Intermedio", "Avanzado"];
+// Series, rango de repeticiones, descanso y % del peso base según el nivel
+const PRESCRIPCION: Record<NivelSemilla, { series: number; min: number; max: number; descanso: number; factor: number }> = {
+  Principiante: { series: 3, min: 12, max: 15, descanso: 60, factor: 0.5 },
+  Intermedio: { series: 4, min: 8, max: 12, descanso: 75, factor: 0.75 },
+  Avanzado: { series: 4, min: 6, max: 8, descanso: 90, factor: 1 },
+};
+const PESO_BASE: Record<Ejercicio["equipo"], number | null> = {
+  "Barra": 60, "Mancuerna": 16, "Máquina": 50, "Polea": 30, "Kettlebell": 16, "Banda elástica": null, "Peso corporal": null,
+};
+// Grupos musculares de cada sesión según cuántas sesiones tiene la división
+const GRUPOS_POR_DIVISION: Record<number, Ejercicio["grupo_muscular"][][]> = {
+  1: [["Piernas", "Pecho", "Espalda", "Abdomen", "Cardio"]],
+  2: [["Pecho", "Espalda", "Hombros", "Bíceps", "Tríceps"], ["Piernas", "Glúteos", "Abdomen", "Cardio"]],
+  3: [["Pecho", "Tríceps", "Hombros"], ["Espalda", "Bíceps", "Abdomen"], ["Piernas", "Glúteos", "Cardio"]],
+};
+
+// [P3] B7: orden de los días para listar clases, y hora local actual 'HH:MM'
+const DIAS_ORDEN_CLASE: Clase["dia_semana"][] = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"];
+function horaLocal(): string {
+  const d = new Date();
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+
+/* [P3] B7 · KAN-94 — Semilla de clases con aforo. Cada clase cae dentro del horario de su
+   instructor. Inscripciones: solo clientes ACTIVOS con membresía vigente del mismo gimnasio, en
+   las sesiones de hoy a hoy + 14 días. La primera sesión de Yoga de Centro queda llena (para ver
+   "sin cupo") y cada gimnasio tiene una inscripción RETIRADA (el cliente se retiró). */
+function generarClases(seed: Seed): void {
+  const hoy = utils.isoDate();
+  const base = (id: number, gym: string, ins: string, nombre: string, tipo: Clase["tipo_clase"], dia: Clase["dia_semana"], hora: string, dur: number, aforo: number): Clase => ({
+    gimnasio_id: gym, id_clase: id, id_instructor: ins, nombre, tipo_clase: tipo, dia_semana: dia,
+    hora, duracion_min: dur, aforo_max: aforo, inscritos: [], estado: "ACTIVA", fechas_canceladas: [],
+  });
+  seed.clases = [
+    // Centro: Natalia atiende Lun-Mié-Vie 16–21; Camilo Lun-Vie 6–14
+    base(1, "gym-centro", "2000000002", "Yoga al atardecer", "YOGA", "LUNES", "17:00", 60, 12),
+    base(2, "gym-centro", "2000000002", "Rumba terapia", "RUMBA", "MIERCOLES", "18:00", 60, 20),
+    base(3, "gym-centro", "2000000002", "Zumba", "ZUMBA", "VIERNES", "19:00", 60, 25),
+    base(4, "gym-centro", "2000000001", "Core express", "CORE", "LUNES", "12:00", 30, 8),
+    base(5, "gym-centro", "2000000001", "Core", "CORE", "MARTES", "07:00", 45, 10),
+    base(6, "gym-centro", "2000000001", "Funcional", "FUNCIONAL", "JUEVES", "08:00", 50, 15),
+    // Titan: Natalia atiende Sáb 8–12; Jorge Lun-Sáb 5–11
+    base(7, "gym-titan", "2000000002", "Yoga sabatino", "YOGA", "SABADO", "09:00", 60, 10),
+    base(8, "gym-titan", "2000000101", "Funcional al amanecer", "FUNCIONAL", "MIERCOLES", "06:00", 60, 12),
+  ];
+
+  const elegibles = (gym: string) =>
+    seed.clientes
+      .filter((c) => c.gimnasio_id === gym)
+      .filter((c) => seed.membresias.some((m) => m.gimnasio_id === gym && m.id_cliente === c.numero_identificacion && membresiaVigente(m, hoy, c)))
+      .map((c) => c.numero_identificacion);
+
+  const inscripciones: InscripcionClase[] = [];
+  let id = 1;
+  for (const clase of seed.clases) {
+    const clientes = elegibles(clase.gimnasio_id);
+    if (clientes.length === 0) continue;
+    fechasDeClase(clase, hoy, sumarDias(hoy, DIAS_MAX_INSCRIPCION)).forEach((fecha, n) => {
+      // Ocupación entre ~40 % y ~80 %; la primera sesión de Yoga de Centro, llena
+      const lleno = clase.id_clase === 1 && n === 0;
+      const cuantos = Math.min(clientes.length, lleno ? clase.aforo_max : Math.round(clase.aforo_max * (0.4 + ((clase.id_clase + n) % 5) * 0.1)));
+      for (let k = 0; k < cuantos; k++) {
+        const cliente = clientes[(clase.id_clase * 7 + n * 3 + k) % clientes.length];
+        if (inscripciones.some((x) => x.id_clase === clase.id_clase && x.fecha === fecha && x.id_cliente === cliente)) continue;
+        inscripciones.push({ gimnasio_id: clase.gimnasio_id, id_inscripcion: id++, id_clase: clase.id_clase, id_cliente: cliente, fecha, estado: "INSCRITA", creada_el: sumarDias(hoy, -1) });
+      }
+    });
+  }
+  // Una inscripción RETIRADA por gimnasio (la última de cada uno), para que el historial no esté vacío
+  for (const gym of ["gym-centro", "gym-titan"]) {
+    const ultima = [...inscripciones].reverse().find((x) => x.gimnasio_id === gym);
+    if (ultima) ultima.estado = "RETIRADA";
+  }
+  seed.inscripciones_clase = inscripciones;
+}
+
+function generarRutinasV2(seed: Seed): void {
+  const base = seed.ejercicios.filter((e) => e.gimnasio_id === null && e.estado === "ACTIVO");
+  const rutinas: Rutina[] = [];
+  const filas: RutinaEjercicio[] = [];
+  const registros: RegistroEntrenamiento[] = [];
+  let idRutina = 1;
+  let idRegistro = 1;
+
+  // Ejercicios de una sesión: hasta 5, repartidos entre sus grupos y sin pasar del nivel de la rutina
+  function ejerciciosDeSesion(grupos: Ejercicio["grupo_muscular"][], nivel: NivelSemilla, k: number): Ejercicio[] {
+    const tope = NIVELES_SEMILLA.indexOf(nivel);
+    const elegidos: Ejercicio[] = [];
+    for (let vuelta = 0; elegidos.length < 5 && vuelta < 3; vuelta++) {
+      for (const g of grupos) {
+        const opciones = base.filter((e) => e.grupo_muscular === g && NIVELES_SEMILLA.indexOf(e.nivel) <= tope);
+        const ej = opciones[(k + vuelta) % Math.max(1, opciones.length)];
+        if (ej && !elegidos.includes(ej) && elegidos.length < 5) elegidos.push(ej);
+      }
+    }
+    return elegidos;
+  }
+
+  // Crea la rutina, sus ejercicios y "hechas" registros repartidos entre el inicio y "hasta"
+  function crear(
+    gym: string, cliente: string, instructor: string, k: number,
+    inicio: string, fin: string | null, finalizada: string | null, hechas: (planeadas: number, transcurridos: number) => number
+  ): void {
+    const nSesiones = 1 + (k % 3);                      // A, A/B o A/B/C
+    const division = (["A", "B", "C"] as LetraSesion[]).slice(0, nSesiones);
+    const nivel = NIVELES_SEMILLA[(k + 1) % 3];
+    const objetivo = OBJETIVOS_RUTINA[(k * 3 + Math.floor(k / 5)) % OBJETIVOS_RUTINA.length] // variado entre escenarios;
+    const frecuencia = nSesiones + 1;                   // veces por semana
+    const duracion = fin === null ? 56 : Math.max(7, Math.round((Date.parse(fin) - Date.parse(inicio)) / 86400000));
+    const planeadas = Math.max(4, Math.round((duracion / 7) * frecuencia));
+    const id = idRutina++;
+    rutinas.push({
+      gimnasio_id: gym, id_rutina: id, id_instructor: instructor, id_cliente: cliente,
+      nombre: objetivo + " " + division.join("/"),
+      descripcion: "Plan de " + objetivo.toLowerCase() + " · nivel " + nivel.toLowerCase() + " · " + frecuencia + " veces por semana.",
+      fecha_creacion: inicio, fecha_fin: fin, objetivo,
+      sesiones_planeadas: planeadas, division, finalizada_el: finalizada,
+    });
+
+    const p = PRESCRIPCION[nivel];
+    division.forEach((letra, s) => {
+      ejerciciosDeSesion(GRUPOS_POR_DIVISION[nSesiones][s], nivel, k + s).forEach((ej, i) => {
+        const pesoBase = PESO_BASE[ej.equipo];
+        const porTiempo = ej.tipo_medicion === "TIEMPO";
+        filas.push({
+          gimnasio_id: gym, id_rutina: id, id_ejercicio: ej.id_ejercicio, orden: i + 1, sesion: letra,
+          series: porTiempo ? (ej.series_sugeridas ?? 1) : p.series,
+          reps_min: porTiempo ? null : p.min,
+          reps_max: porTiempo ? null : p.max,
+          segundos: porTiempo ? ej.segundos_sugeridos : null,
+          peso_kg: pesoBase === null || porTiempo ? null : Math.max(2, Math.round((pesoBase * p.factor) / 2) * 2),
+          descanso_seg: porTiempo ? 30 : p.descanso,
+          notas_instructor: i === 0 ? "Calienta 5 minutos antes de la primera serie." : "",
+          agregado_por_cliente: false,
+          revisado_por_instructor: true,
+        });
+      });
+    });
+    // En algunas vigentes el cliente cambió un ejercicio y el instructor aún no lo revisa (para B3 y T4)
+    if (k % 5 === 0 && finalizada === null && fin !== null && fin >= utils.isoDate()) {
+      const extra = base.find((e) => e.grupo_muscular === "Abdomen" && !filas.some((f) => f.id_rutina === id && f.sesion === "A" && f.id_ejercicio === e.id_ejercicio));
+      const enA = filas.filter((f) => f.id_rutina === id && f.sesion === "A").length;
+      if (extra) filas.push({
+        gimnasio_id: gym, id_rutina: id, id_ejercicio: extra.id_ejercicio, orden: enA + 1, sesion: "A",
+        series: 3, reps_min: 15, reps_max: 20, segundos: null, peso_kg: null, descanso_seg: 45,
+        notas_instructor: "", agregado_por_cliente: true, revisado_por_instructor: false,
       });
     }
-    idRutina++;
+
+    // Registros: repartidos entre el inicio y el último día entrenado (hoy, la fecha fin o la de finalización)
+    const hoy = utils.isoDate();
+    const hasta = finalizada ?? (fin !== null && fin < hoy ? fin : hoy);
+    const transcurridos = Math.max(0, Math.round((Date.parse(hasta) - Date.parse(inicio)) / 86400000));
+    const n = Math.min(planeadas, Math.max(0, hechas(planeadas, transcurridos)));
+    for (let i = 0; i < n; i++) {
+      registros.push({
+        gimnasio_id: gym, id_registro: idRegistro++, id_rutina: id, id_cliente: cliente,
+        sesion: division[i % division.length],
+        fecha: sumarDias(inicio, Math.floor(((i + 1) * transcurridos) / (n + 1))),
+        registrado_por: i % 3 === 2 ? cliente : instructor,
+        notas: i % 4 === 3 ? "Buen ritmo, subir carga la próxima." : "",
+      });
+    }
+  }
+
+  // Lo que deberían llevar al día: semanas transcurridas × frecuencia
+  const esperado = (k: number, t: number) => Math.floor((t / 7) * (1 + 1 + (k % 3)));
+
+  for (const gym of ["gym-centro", "gym-titan"]) {
+    const instructores = seed.instructores
+      .filter((i) => i.gimnasio_id === gym && i.estado === "ACTIVO" && !(gym === "gym-titan" && i.numero_identificacion === "2000000002"))
+      .sort((a, b) => a.numero_identificacion.localeCompare(b.numero_identificacion));
+    const clientes = seed.clientes
+      .filter((c) => c.gimnasio_id === gym)
+      .sort((a, b) => a.numero_identificacion.localeCompare(b.numero_identificacion));
+    let k = 0;
+    for (const c of clientes) {
+      const inst = instructores[(k * 3) % instructores.length].numero_identificacion;
+      const id = c.numero_identificacion;
+      if (c.estado !== "ACTIVO") {
+        // Historial: cada tercer cliente no activo tiene una rutina vencida (no cuenta en los indicadores)
+        if (k % 3 === 0) crear(gym, id, inst, k, dia(120), dia(40), null, (pl) => Math.round(pl * 0.5));
+        k++;
+        continue;
+      }
+      // Titan: Ana renovada, Sebastián por vencer, Mariana sin rutina
+      const escenario: EscenarioSemilla = gym === "gym-titan"
+        ? (["RENOVADA", "POR_VENCER", "SIN_RUTINA"] as EscenarioSemilla[])[clientes.filter((x) => x.estado === "ACTIVO").indexOf(c) % 3]
+        : CICLO_SEMILLA[k % CICLO_SEMILLA.length];
+      switch (escenario) {
+        case "AL_DIA":
+          crear(gym, id, inst, k, dia(14 + (k % 30)), k % 4 === 0 ? null : dia(-(25 + (k % 35))), null, (_pl, t) => esperado(k, t));
+          break;
+        case "ATRASADA":
+          crear(gym, id, inst, k, dia(20 + (k % 25)), dia(-(30 + (k % 30))), null, (_pl, t) => Math.round(esperado(k, t) * 0.45));
+          break;
+        case "POR_VENCER":
+          crear(gym, id, inst, k, dia(45 + (k % 15)), dia(-(2 + (k % 11))), null, (_pl, t) => Math.round(esperado(k, t) * 0.85));
+          break;
+        case "VENCIDA":
+          crear(gym, id, inst, k, dia(80 + (k % 20)), dia(4 + (k % 20)), null, (pl) => Math.round(pl * 0.6));
+          break;
+        case "RENOVADA":
+          // Una rutina finalizada a mano (historial) y la vigente que la reemplazó
+          crear(gym, id, inst, k, dia(110), dia(51), dia(50), (pl) => Math.round(pl * 0.8));
+          crear(gym, id, inst, k + 1, dia(49), dia(-35), null, (_pl, t) => esperado(k + 1, t));
+          break;
+        case "SIN_RUTINA":
+          break;
+      }
+      k++;
+    }
+  }
+
+  seed.rutinas = rutinas;
+  seed.rutina_ejercicios = filas;
+  seed.registros_entrenamiento = registros;
+
+  // Cuentas de instructor sincronizadas con su instructor (KAN-86): nombre, apellidos, correo,
+  // estado y contraseña inicial (primer nombre sin tildes + últimos 4 dígitos de la cédula)
+  for (const ins of seed.instructores) {
+    const u = seed.usuarios.find(
+      (x) => x.gimnasio_id === ins.gimnasio_id && x.numero_identificacion === ins.numero_identificacion && x.tipo_usuario === "INSTRUCTOR"
+    );
+    if (!u) continue;
+    u.nombre = ins.nombre;
+    u.apellidos = ins.apellidos;
+    u.correo = ins.correo;
+    u.estado = ins.estado;
+    u.contrasena = contrasenaInicial(ins.nombre, ins.numero_identificacion);
   }
 }
+// ===== [/P3] Rutinas v2: generador de la semilla =====
 
 // ===== [P3] Ejercicios: generadores de la semilla =====
 // Para no escribir los 14 campos en cada fila. Orden de los argumentos:
@@ -581,9 +801,17 @@ function ejReps(
     repeticiones_min_sugeridas: repsMin,
     repeticiones_max_sugeridas: repsMax,
     segundos_sugeridos: null,
-    recurso_url: "",
+    recurso_url: recursoSemilla(id, gimnasio_id),
     estado: "ACTIVO",
   };
+}
+
+// [P3] KAN-96: imágenes del catálogo base (free-exercise-db, dominio público). Están en
+// public/recursos/ejercicios/<id>-0.jpg y <id>-1.jpg; se guarda la "-0" y AnimacionEjercicio busca la "-1".
+// Los propios de cada gimnasio (gimnasio_id) y los base sin equivalente (38 Burpees) quedan sin imagen.
+const BASE_SIN_IMAGEN = [38];
+function recursoSemilla(id: number, gimnasio_id: string | null): string {
+  return gimnasio_id === null && !BASE_SIN_IMAGEN.includes(id) ? "/recursos/ejercicios/" + id + "-0.jpg" : "";
 }
 
 function ejTiempo(
@@ -604,7 +832,7 @@ function ejTiempo(
     repeticiones_min_sugeridas: null,
     repeticiones_max_sugeridas: null,
     segundos_sugeridos: segundos,
-    recurso_url: "",
+    recurso_url: recursoSemilla(id, gimnasio_id),
     estado: "ACTIVO",
   };
 }
@@ -837,24 +1065,18 @@ const SEED: Seed = {
   // ===== [/P3] Instructores =====
 
   // ===== [P3] Rutinas =====
-  // Fechas relativas (dia(n) = hace n días; dia(-n) = dentro de n días) para que siempre
-  // haya una rutina vigente, una por vencer, una vencida y una sin fecha fin.
-  // Cada rutina usa clientes e instructores de SU gimnasio. Titan: Ana María tiene la misma cédula
-  // que la Ana de Centro y ambas tienen rutina vigente (la regla es por gimnasio); Mariana queda
-  // libre para crearle una; la Natalia de Titan no tiene rutinas (se puede eliminar).
-  // Sin ejercicios a propósito: el catálogo todavía no tiene ejercicios y no queremos referencias falsas.
-  rutinas: [
-    { gimnasio_id:'gym-centro', id_rutina:1, id_instructor:'2000000001', id_cliente:'1000000001', nombre:'Fuerza tren superior', descripcion:'Fuerza para pecho, espalda y brazos.',     fecha_creacion:dia(35), fecha_fin:dia(-55), dias_semana:['LUNES','MIERCOLES','VIERNES'], objetivo:'Ganancia muscular' },
-    { gimnasio_id:'gym-centro', id_rutina:2, id_instructor:'2000000001', id_cliente:'1000000002', nombre:'Quema de grasa',       descripcion:'Circuitos de cardio y funcional.',         fecha_creacion:dia(50), fecha_fin:dia(-10), dias_semana:['MARTES','JUEVES','SABADO'],    objetivo:'Pérdida de peso' },
-    { gimnasio_id:'gym-centro', id_rutina:3, id_instructor:'2000000002', id_cliente:'1000000005', nombre:'Movilidad y espalda',  descripcion:'Estiramientos y fortalecimiento de core.', fecha_creacion:dia(15), fecha_fin:null,     dias_semana:['LUNES','JUEVES'],              objetivo:'Rehabilitación' },
-    { gimnasio_id:'gym-centro', id_rutina:4, id_instructor:'2000000002', id_cliente:'1000000007', nombre:'Resistencia básica',   descripcion:'Base aeróbica para principiantes.',        fecha_creacion:dia(90), fecha_fin:dia(5),  dias_semana:['LUNES','MARTES','MIERCOLES','JUEVES','VIERNES'], objetivo:'Resistencia' },
-    { gimnasio_id:'gym-titan',  id_rutina:5, id_instructor:'2000000101', id_cliente:'1000000001', nombre:'Fuerza general',       descripcion:'Básicos con barra y mancuernas.',          fecha_creacion:dia(20), fecha_fin:dia(-40), dias_semana:['LUNES','MIERCOLES','VIERNES'], objetivo:'Ganancia muscular' },
-    { gimnasio_id:'gym-titan',  id_rutina:6, id_instructor:'2000000101', id_cliente:'1000000101', nombre:'Inicio en el gimnasio', descripcion:'Adaptación para principiantes.',           fecha_creacion:dia(70), fecha_fin:dia(10),  dias_semana:['MARTES','JUEVES'],             objetivo:'Tonificación' },
-    // --- seed masivo de P1: 36 rutinas mas en gym-centro (ids 7-42) ---
-    ...RUTINAS_EXTRA,
-  ],
-  rutina_ejercicios: RUTINA_EJERCICIOS_EXTRA,
+  // v2 (KAN-55): las llena generarRutinasV2(SEED) justo después de armar el SEED
+  rutinas: [],
+  rutina_ejercicios: [],
+  registros_entrenamiento: [],
   // ===== [/P3] Rutinas =====
+
+  // ===== [P3] Clases con aforo (B7 · KAN-94) =====
+  // Las llena generarClases(SEED). Colecciones nuevas: db.read() usa esta semilla mientras la
+  // clave no exista en localStorage, así que aparecen sin subir SEED_VERSION.
+  clases: [],
+  inscripciones_clase: [],
+  // ===== [/P3] Clases =====
 
   // ===== [P2] Progreso =====
   progreso: [
@@ -876,6 +1098,9 @@ const SEED: Seed = {
   ],
   // ===== [/P2] Citas =====
 };
+
+generarRutinasV2(SEED); // [P3] KAN-55: rutinas v2, sus ejercicios y registros + cuentas de instructor sincronizadas
+generarClases(SEED); // [P3] B7 · KAN-94: 6 clases en Centro y 2 en Titan, con inscripciones de las próximas 2 semanas
 
 // Version del seed guardado en localStorage.
 //
@@ -921,7 +1146,15 @@ function contrasenaInicial(nombre:string, id:string){
   return pnombre + ult4;
 }
 
-const SEED_VERSION = "15";
+// v15 (T1, Samuel) agrega roles: superadmin, cuentas de instructor y de cliente con
+// cambio de contrasena obligatorio.
+// v16 (P3, KAN-55) estrena Rutinas v2: reemplaza las 42 rutinas v1 (dias_semana) por
+// rutinas con division A, A/B o A/B/C, ejercicios por sesion con valores segun el
+// nivel y registros de entrenamiento, con los 4 casos de la supervision (vigentes,
+// por vencer, vencidas sin renovar y clientes activos sin rutina). Solo usa
+// instructores ACTIVOS y clientes ACTIVOS (los inactivos solo tienen historial), y
+// sincroniza las cuentas de instructor (nombre, correo, estado y contrasena inicial).
+const SEED_VERSION = "16";
 const CLAVE_VERSION = "gymbrot_seed_version";
 const CLAVE_LECTOR = "gymbrot_lector_conectado";
 
@@ -1263,8 +1496,85 @@ function agruparPorMes<T>(
 
   return salida;
 }
+// ===== [P3] Instructores: cuenta de usuario (KAN-86) =====
+/* Cada instructor tiene un Usuario INSTRUCTOR con su misma cedula en el gimnasio.
+   Mismo patron que api.clientes: el estado (y aqui tambien nombre y correo) del
+   usuario siempre sigue al del instructor. Todo con readTenant/writeTenant. */
+
+// Crea (o reactiva) la cuenta al dar de alta al instructor. Devuelve la contraseña temporal.
+function crearCuentaInstructor(ins: Instructor): { cuenta: CuentaInicial | null; aviso?: string } {
+  const usuarios = db.readTenant<Usuario>("usuarios");
+  const mismo = usuarios.find((u) => u.numero_identificacion === ins.numero_identificacion);
+  // También si es cliente del gimnasio aunque aún no tenga cuenta: su código de acceso
+  // (api.usuarios.asignar) se guardaría luego sobre esta misma fila.
+  const esCliente = db.readTenant<Cliente>("clientes").some((c) => c.numero_identificacion === ins.numero_identificacion);
+  if (!mismo && esCliente)
+    return {
+      cuenta: null,
+      aviso:
+        "Esta cédula es de un cliente del gimnasio; no se creó la cuenta de instructor (hoy cada persona tiene " +
+        "un solo tipo de usuario).",
+    };
+  if (mismo && mismo.tipo_usuario !== "INSTRUCTOR")
+    return {
+      cuenta: null,
+      aviso:
+        "Esta cédula ya tiene una cuenta de " + mismo.tipo_usuario + " en el gimnasio; no se creó la cuenta de " +
+        "instructor (hoy cada persona tiene un solo tipo de usuario).",
+    };
+  // El login busca por nombre o correo: el correo no puede ser de otra persona del gimnasio
+  const correo = ins.correo.trim().toLowerCase();
+  const ocupado = usuarios.find(
+    (u) => u.numero_identificacion !== ins.numero_identificacion && u.correo.trim().toLowerCase() === correo
+  );
+  if (ocupado)
+    return { cuenta: null, aviso: "El correo ya lo usa otra cuenta del gimnasio; no se creó la cuenta de instructor." };
+
+  const contrasena = contrasenaInicial(ins.nombre, ins.numero_identificacion);
+  const datos = {
+    nombre: ins.nombre,
+    apellidos: ins.apellidos,
+    correo: ins.correo,
+    contrasena,
+    estado: ins.estado,
+    debe_cambiar_contrasena: true,
+  };
+  if (mismo) Object.assign(mismo, datos);
+  else
+    usuarios.push({
+      ...datos,
+      gimnasio_id: ins.gimnasio_id,
+      numero_identificacion: ins.numero_identificacion,
+      tipo_usuario: "INSTRUCTOR",
+      rol: "INSTRUCTOR",
+    });
+  db.writeTenant("usuarios", usuarios);
+  return { cuenta: { usuario: ins.correo, contrasena_temporal: contrasena } };
+}
+
+// Copia al usuario los datos que cambiaron en el instructor (solo si es su cuenta de INSTRUCTOR)
+function sincronizarCuentaInstructor(ins: Instructor): void {
+  const usuarios = db.readTenant<Usuario>("usuarios");
+  const u = usuarios.find((x) => x.numero_identificacion === ins.numero_identificacion && x.tipo_usuario === "INSTRUCTOR");
+  if (!u) return; // instructor sin cuenta (p. ej. creado antes de KAN-86): nada que copiar
+  u.nombre = ins.nombre;
+  u.apellidos = ins.apellidos;
+  u.correo = ins.correo;
+  u.estado = ins.estado; // INACTIVO = ya no puede iniciar sesion (auth.login exige ACTIVO)
+  db.writeTenant("usuarios", usuarios);
+}
+
+// Al eliminar al instructor (solo posible sin rutinas ni citas) se borra su cuenta
+function borrarCuentaInstructor(id: string): void {
+  const usuarios = db.readTenant<Usuario>("usuarios");
+  db.writeTenant(
+    "usuarios",
+    usuarios.filter((u) => !(u.numero_identificacion === id && u.tipo_usuario === "INSTRUCTOR"))
+  );
+}
+// ===== [/P3] Instructores: cuenta de usuario =====
+
 // ===== [P3] Rutinas: auxiliares =====
-const DIAS: DiaSemana[] = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"];
 
 // Mensaje de error si el instructor o el cliente no existen; null si ambos existen
 function validarReferencias(idInstructor: string, idCliente: string): string | null {
@@ -1292,6 +1602,107 @@ function validarUnaVigente(idCliente: string, fechaFin: string | null, idPropio:
   return otra
     ? "El cliente ya tiene la rutina vigente «" + otra.nombre + "». Solo puede tener una vigente a la vez."
     : null;
+}
+
+// ---- Rutinas v2 (KAN-54) ----
+const LETRAS: LetraSesion[] = ["A", "B", "C", "D"];
+const DIAS_AVISO_RUTINA = 15; // con menos días que esto la rutina está POR_VENCER
+
+// Días que faltan desde hoy hasta 'YYYY-MM-DD' (negativo si ya pasó). Date.UTC da días enteros exactos.
+function diasHasta(fecha: string): number {
+  const [y, m, d] = fecha.split("-").map(Number);
+  const [yh, mh, dh] = utils.isoDate().split("-").map(Number);
+  return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(yh, mh - 1, dh)) / 86400000);
+}
+
+// Estado calculado (no se guarda): FINALIZADA > VENCIDA > POR_VENCER > VIGENTE
+function estadoDe(r: Rutina): EstadoRutina {
+  if (r.finalizada_el) return "FINALIZADA";
+  if (r.fecha_fin === null) return "VIGENTE";
+  const restantes = diasHasta(r.fecha_fin);
+  if (restantes < 0) return "VENCIDA";
+  return restantes < DIAS_AVISO_RUTINA ? "POR_VENCER" : "VIGENTE";
+}
+
+// Exigido en rutinas nuevas: sesiones_planeadas entero > 0 y división de 1 a 4 letras sin repetir
+function validarPlan(sesiones: number | undefined, division: LetraSesion[] | undefined): string | null {
+  if (sesiones === undefined || !Number.isInteger(sesiones) || sesiones <= 0)
+    return "Indica cuántas sesiones se planean (número entero mayor que 0)";
+  if (!division || division.length < 1 || division.length > 4)
+    return "La división debe tener de 1 a 4 sesiones (A, B, C, D)";
+  if (division.some((l) => !LETRAS.includes(l))) return "La división solo admite las letras A, B, C y D";
+  if (new Set(division).size !== division.length) return "La división no puede repetir letras";
+  return null;
+}
+
+// Cédula de quien tiene la sesión abierta (para RegistroEntrenamiento.registrado_por)
+function cedulaEnSesion(): string {
+  const raw = localStorage.getItem(CLAVE_SESION);
+  if (!raw) return "";
+  try {
+    const s = JSON.parse(raw) as { numero_identificacion?: unknown };
+    return typeof s.numero_identificacion === "string" ? s.numero_identificacion : "";
+  } catch {
+    return "";
+  }
+}
+
+// Valida una lista de ejercicios de sesión contra la división y el catálogo que ve el gimnasio.
+// exigirTodas: cada sesión de la división necesita al menos un ejercicio (al guardar la rutina completa).
+function validarEjerciciosSesion(division: LetraSesion[], lista: SesionEjercicioNuevo[], exigirTodas: boolean): string | null {
+  const catalogo = leerCatalogo();
+  const vistos = new Set<string>();
+  for (const e of lista) {
+    if (!e.sesion || !division.includes(e.sesion)) return "Cada ejercicio debe pertenecer a una sesión de la división";
+    const ej = catalogo.find((c) => c.id_ejercicio === e.id_ejercicio);
+    if (!ej) return "El ejercicio " + e.id_ejercicio + " no existe en el catálogo";
+    const clave = e.sesion + "-" + e.id_ejercicio;
+    if (vistos.has(clave)) return "«" + ej.nombre + "» está repetido en la sesión " + e.sesion;
+    vistos.add(clave);
+    const numeros = [e.series, e.reps_min, e.reps_max, e.segundos, e.peso_kg, e.descanso_seg];
+    if (numeros.some((n) => n !== undefined && n !== null && (!Number.isFinite(n) || n < 0)))
+      return "Los valores de «" + ej.nombre + "» no pueden ser negativos";
+    if (e.series !== undefined && (!Number.isInteger(e.series) || e.series <= 0))
+      return "Las series de «" + ej.nombre + "» deben ser un entero mayor que 0";
+    if (e.reps_min != null && e.reps_max != null && e.reps_min > e.reps_max)
+      return "En «" + ej.nombre + "» las repeticiones mínimas superan a las máximas";
+  }
+  if (exigirTodas) {
+    const vacia = division.find((l) => !lista.some((e) => e.sesion === l));
+    if (vacia) return "La sesión " + vacia + " necesita al menos un ejercicio";
+  }
+  return null;
+}
+
+// Renumera "orden" 1, 2, 3… dentro de cada sesión respetando el orden en que llegaron
+function numerarPorSesion(lista: SesionEjercicioNuevo[]): SesionEjercicioNuevo[] {
+  const contador: Partial<Record<LetraSesion, number>> = {};
+  return lista.map((e) => {
+    const letra = e.sesion ?? "A";
+    const n = (contador[letra] ?? 0) + 1;
+    contador[letra] = n;
+    return { ...e, orden: n };
+  });
+}
+
+// Siguiente sesión por rotación: la que sigue a la del último registro (A→B→C→A) o la primera
+function siguienteDe(r: Rutina, registros: RegistroEntrenamiento[]): LetraSesion | null {
+  const division = r.division ?? [];
+  if (division.length === 0) return null;
+  const ultimo = registros
+    .filter((x) => x.id_rutina === r.id_rutina)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id_registro - b.id_registro)
+    .pop();
+  const pos = ultimo ? division.indexOf(ultimo.sesion) : -1;
+  return pos === -1 ? division[0] : division[(pos + 1) % division.length];
+}
+
+// Avance "12 de 19": registros de la rutina / sesiones planeadas (tope de 100 %)
+function avanceDe(r: Rutina, registros: RegistroEntrenamiento[]): AvanceRutina {
+  const completadas = registros.filter((x) => x.id_rutina === r.id_rutina).length;
+  const planeadas = r.sesiones_planeadas ?? 0;
+  const porcentaje = planeadas > 0 ? Math.min(100, Math.round((completadas / planeadas) * 100)) : 0;
+  return { completadas, planeadas, porcentaje };
 }
 // ===== [/P3] Rutinas: auxiliares =====
 
@@ -2262,11 +2673,15 @@ export const api = {
 
     // La cédula es única dentro de cada gimnasio (D3): la misma persona puede
     // trabajar en otro gimnasio sin que eso cuente como duplicado.
-    async create(data: InstructorNuevo): Promise<ApiResp<Instructor>> {
+    // KAN-86: además crea su Usuario INSTRUCTOR y devuelve la contraseña temporal
+    async create(data: InstructorNuevo): Promise<ApiResp<InstructorCreado>> {
       await api._delay();
       const arr = db.readTenant<Instructor>("instructores");
       if (arr.some((i) => i.numero_identificacion === data.numero_identificacion))
         return { ok: false, mensaje: "Ya existe un instructor con esa identificación en este gimnasio" };
+      // KAN-61: la API es la que manda; la vista valida antes solo para avisar rápido
+      const errorHorario = validarHorario(data.horario);
+      if (errorHorario) return { ok: false, mensaje: errorHorario };
       const nuevo: Instructor = {
         ...data,
         gimnasio_id: gimnasioParaEscribir(),
@@ -2275,7 +2690,8 @@ export const api = {
       };
       arr.push(nuevo);
       db.writeTenant("instructores", arr);
-      return { ok: true, mensaje: "Instructor registrado", data: nuevo };
+      const { cuenta, aviso } = crearCuentaInstructor(nuevo);
+      return { ok: true, mensaje: "Instructor registrado", data: { instructor: nuevo, cuenta, aviso } };
     },
 
     // La identificación es la llave: no se deja cambiar al editar (ni el gimnasio)
@@ -2287,8 +2703,13 @@ export const api = {
       const arr = db.readTenant<Instructor>("instructores");
       const ins = arr.find((i) => i.numero_identificacion === id);
       if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
+      if (data.horario) {
+        const errorHorario = validarHorario(data.horario);
+        if (errorHorario) return { ok: false, mensaje: errorHorario };
+      }
       Object.assign(ins, data, { numero_identificacion: id });
       db.writeTenant("instructores", arr);
+      sincronizarCuentaInstructor(ins);
       return { ok: true, mensaje: "Instructor actualizado", data: ins };
     },
 
@@ -2305,7 +2726,18 @@ export const api = {
           ok: false,
           mensaje: "No se puede eliminar: tiene " + rutinas + " rutina(s) asignada(s). Desactívalo en su lugar.",
         };
+      // RESTRICT también por citas (KAN-60): una cita es historial del instructor y del cliente.
+      // Solo se lee la colección de P2; las CANCELADAS no cuentan (no son un hecho que conservar).
+      const citas = db
+        .readTenant<Cita>("citas")
+        .filter((c) => c.id_instructor === id && c.estado !== "CANCELADA").length;
+      if (citas > 0)
+        return {
+          ok: false,
+          mensaje: "No se puede eliminar: tiene " + citas + " cita(s) registrada(s). Desactívalo en su lugar.",
+        };
       db.writeTenant("instructores", arr.filter((i) => i.numero_identificacion !== id));
+      borrarCuentaInstructor(id);
       return { ok: true, mensaje: "Instructor eliminado", data: ins };
     },
 
@@ -2316,6 +2748,7 @@ export const api = {
       if (!ins) return { ok: false, mensaje: "Instructor no encontrado" };
       ins.estado = estado;
       db.writeTenant("instructores", arr);
+      sincronizarCuentaInstructor(ins);
       return { ok: true, mensaje: "Estado actualizado", data: ins };
     },
   },
@@ -2336,18 +2769,27 @@ export const api = {
 
     // id_rutina = siguiente id de la tabla completa (global, ningún gimnasio lo repite);
     // gimnasio_id = el de la sesión; fecha_creacion = hoy
+    // v2: exige sesiones_planeadas y división; cliente e instructor deben estar ACTIVOS
     async create(data: RutinaNueva): Promise<ApiResp<Rutina>> {
       await api._delay();
       const error =
+        validarPlan(data.sesiones_planeadas, data.division) ??
         validarReferencias(data.id_instructor, data.id_cliente) ??
         validarUnaVigente(data.id_cliente, data.fecha_fin, null);
       if (error) return { ok: false, mensaje: error };
+      const cliente = db.readTenant<Cliente>("clientes").find((c) => c.numero_identificacion === data.id_cliente);
+      if (cliente && cliente.estado !== "ACTIVO")
+        return { ok: false, mensaje: "El cliente está " + cliente.estado + ": no se le puede asignar una rutina" };
+      const instructor = db.readTenant<Instructor>("instructores").find((i) => i.numero_identificacion === data.id_instructor);
+      if (instructor && instructor.estado !== "ACTIVO")
+        return { ok: false, mensaje: "El instructor está INACTIVO: elige otro" };
       const arr = db.readTenant<Rutina>("rutinas");
       const nueva: Rutina = {
         ...data,
         gimnasio_id: gimnasioParaEscribir(),
         id_rutina: db.siguienteId<Rutina>("rutinas", (r) => r.id_rutina),
         fecha_creacion: utils.isoDate(),
+        finalizada_el: null,
       };
       arr.push(nueva);
       db.writeTenant("rutinas", arr);
@@ -2362,11 +2804,15 @@ export const api = {
       if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
       // Cómo quedaría la rutina con los cambios, para validar con los valores finales
       const final = { ...r, ...data };
+      // v2: si la rutina ya tiene plan (o se le está poniendo), tiene que quedar válido
+      const esV2 = final.division !== undefined || final.sesiones_planeadas !== undefined;
       const error =
+        (esV2 ? validarPlan(final.sesiones_planeadas, final.division) : null) ??
         validarReferencias(final.id_instructor, final.id_cliente) ??
         validarUnaVigente(final.id_cliente, final.fecha_fin, id);
       if (error) return { ok: false, mensaje: error };
-      Object.assign(r, data, { id_rutina: id, fecha_creacion: r.fecha_creacion });
+      // id, fecha de creación y finalización no se cambian desde aquí
+      Object.assign(r, data, { id_rutina: id, fecha_creacion: r.fecha_creacion, finalizada_el: r.finalizada_el ?? null });
       db.writeTenant("rutinas", arr);
       return { ok: true, mensaje: "Rutina actualizada", data: r };
     },
@@ -2386,6 +2832,7 @@ export const api = {
           mensaje: "Esta rutina se creó hoy y no se puede finalizar. Si quieres cambiarla, edítala.",
         };
       r.fecha_fin = ayer;
+      r.finalizada_el = utils.isoDate(); // v2: distingue FINALIZADA de VENCIDA
       db.writeTenant("rutinas", arr);
       return { ok: true, mensaje: "Rutina «" + r.nombre + "» finalizada", data: r };
     },
@@ -2399,38 +2846,524 @@ export const api = {
       db.writeTenant("rutinas", arr.filter((x) => x.id_rutina !== id));
       const ejercicios = db.readTenant<RutinaEjercicio>("rutina_ejercicios");
       db.writeTenant("rutina_ejercicios", ejercicios.filter((e) => e.id_rutina !== id));
+      // v2: también sus registros de entrenamiento (CASCADE)
+      const registros = db.readTenant<RegistroEntrenamiento>("registros_entrenamiento");
+      db.writeTenant("registros_entrenamiento", registros.filter((x) => x.id_rutina !== id));
       return { ok: true, mensaje: "Rutina eliminada", data: r };
     },
 
-    // Ejercicios de una rutina, ordenados por día y luego por orden
-    async ejercicios(id: number): Promise<RutinaEjercicio[]> {
+    // ---------------- Rutinas v2 (KAN-54) ----------------
+
+    // Rutina vigente (VIGENTE o POR_VENCER) de un cliente, o null. La usará el portal del cliente.
+    async vigenteDeCliente(idCliente: string): Promise<Rutina | null> {
       await api._delay();
-      return db
-        .readTenant<RutinaEjercicio>("rutina_ejercicios")
-        .filter((e) => e.id_rutina === id)
-        .sort((a, b) => DIAS.indexOf(a.dia_semana) - DIAS.indexOf(b.dia_semana) || a.orden - b.orden);
+      return (
+        db
+          .readTenant<Rutina>("rutinas")
+          .find((r) => r.id_cliente === idCliente && (estadoDe(r) === "VIGENTE" || estadoDe(r) === "POR_VENCER")) ?? null
+      );
     },
 
-    // Reemplaza todos los ejercicios de la rutina por la lista recibida.
-    // Solo acepta ejercicios que existan en el catálogo que ve el gimnasio (base + propios).
-    async guardarEjercicios(
-      id: number,
-      lista: Omit<RutinaEjercicio, "id_rutina" | "gimnasio_id">[]
-    ): Promise<ApiResp<RutinaEjercicio[]>> {
+    // Historial de rutinas de un cliente, de la más reciente a la más antigua
+    async deCliente(idCliente: string): Promise<Rutina[]> {
       await api._delay();
-      if (!db.readTenant<Rutina>("rutinas").some((r) => r.id_rutina === id))
-        return { ok: false, mensaje: "Rutina no encontrada" };
-      const catalogo = leerCatalogo();
-      const faltante = lista.find((e) => !catalogo.some((c) => c.id_ejercicio === e.id_ejercicio));
-      if (faltante) return { ok: false, mensaje: "El ejercicio " + faltante.id_ejercicio + " no existe" };
+      return db
+        .readTenant<Rutina>("rutinas")
+        .filter((r) => r.id_cliente === idCliente)
+        .sort((a, b) => b.fecha_creacion.localeCompare(a.fecha_creacion) || b.id_rutina - a.id_rutina);
+    },
+
+    // Estado calculado (no se guarda). Es síncrono porque no lee datos: solo mira las fechas.
+    estado(r: Rutina): EstadoRutina {
+      return estadoDe(r);
+    },
+
+    // Ejercicios agrupados por sesión, en el orden de la división y luego por "orden"
+    async sesiones(id: number): Promise<{ sesion: LetraSesion; ejercicios: RutinaEjercicio[] }[]> {
+      await api._delay();
+      const r = db.readTenant<Rutina>("rutinas").find((x) => x.id_rutina === id);
+      if (!r) return [];
+      const todos = db.readTenant<RutinaEjercicio>("rutina_ejercicios").filter((e) => e.id_rutina === id);
+      return (r.division ?? []).map((sesion) => ({
+        sesion,
+        ejercicios: todos.filter((e) => e.sesion === sesion).sort((a, b) => a.orden - b.orden),
+      }));
+    },
+
+    // Reemplaza TODOS los ejercicios de la rutina (lo que manda el constructor). Cada sesión necesita 1 o más.
+    async guardarSesiones(id: number, lista: SesionEjercicioNuevo[]): Promise<ApiResp<RutinaEjercicio[]>> {
+      await api._delay();
+      const r = db.readTenant<Rutina>("rutinas").find((x) => x.id_rutina === id);
+      if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
+      if (!r.division || r.division.length === 0) return { ok: false, mensaje: "La rutina no tiene división de sesiones" };
+      const error = validarEjerciciosSesion(r.division, lista, true);
+      if (error) return { ok: false, mensaje: error };
       const gym = gimnasioParaEscribir();
-      const nuevos: RutinaEjercicio[] = lista.map((e) => ({ ...e, gimnasio_id: gym, id_rutina: id }));
+      const filas: RutinaEjercicio[] = numerarPorSesion(lista).map((e) => ({ ...e, gimnasio_id: gym, id_rutina: id }));
       const otros = db.readTenant<RutinaEjercicio>("rutina_ejercicios").filter((e) => e.id_rutina !== id);
-      db.writeTenant("rutina_ejercicios", otros.concat(nuevos));
-      return { ok: true, mensaje: "Ejercicios guardados", data: nuevos };
+      db.writeTenant("rutina_ejercicios", otros.concat(filas));
+      return { ok: true, mensaje: "Sesiones guardadas", data: filas };
+    },
+
+    // Sesiones registradas de la rutina, de la más reciente a la más antigua
+    async registros(id: number): Promise<RegistroEntrenamiento[]> {
+      await api._delay();
+      return db
+        .readTenant<RegistroEntrenamiento>("registros_entrenamiento")
+        .filter((x) => x.id_rutina === id)
+        .sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id_registro - a.id_registro);
+    },
+
+    // Guarda una sesión completada. Solo en rutinas vigentes y con una sesión de su división.
+    async registrarSesion(id: number, data: RegistroNuevo): Promise<ApiResp<RegistroEntrenamiento>> {
+      await api._delay();
+      const r = db.readTenant<Rutina>("rutinas").find((x) => x.id_rutina === id);
+      if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
+      const estado = estadoDe(r);
+      if (estado !== "VIGENTE" && estado !== "POR_VENCER")
+        return { ok: false, mensaje: "La rutina está " + estado + ": ya no se le registran sesiones" };
+      if (!(r.division ?? []).includes(data.sesion))
+        return { ok: false, mensaje: "La sesión " + data.sesion + " no existe en esta rutina" };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(data.fecha)) return { ok: false, mensaje: "La fecha no es válida" };
+      if (data.fecha > utils.isoDate()) return { ok: false, mensaje: "No se puede registrar una sesión en el futuro" };
+      if (data.fecha < r.fecha_creacion) return { ok: false, mensaje: "La fecha es anterior al inicio de la rutina" };
+      const catalogo = leerCatalogo();
+      const ajeno = (data.ejercicios_realizados ?? []).find((e) => !catalogo.some((c) => c.id_ejercicio === e.id_ejercicio));
+      if (ajeno) return { ok: false, mensaje: "El ejercicio " + ajeno.id_ejercicio + " no existe en el catálogo" };
+      const arr = db.readTenant<RegistroEntrenamiento>("registros_entrenamiento");
+      const nuevo: RegistroEntrenamiento = {
+        gimnasio_id: gimnasioParaEscribir(),
+        id_registro: db.siguienteId<RegistroEntrenamiento>("registros_entrenamiento", (x) => x.id_registro),
+        id_rutina: id,
+        id_cliente: r.id_cliente,
+        sesion: data.sesion,
+        fecha: data.fecha,
+        registrado_por: cedulaEnSesion(),
+        notas: data.notas.trim(),
+        ejercicios_realizados: data.ejercicios_realizados,
+      };
+      arr.push(nuevo);
+      db.writeTenant("registros_entrenamiento", arr);
+      return { ok: true, mensaje: "Sesión " + data.sesion + " registrada", data: nuevo };
+    },
+
+    // Siguiente sesión sugerida por rotación (null si la rutina no tiene división)
+    async siguienteSesion(id: number): Promise<LetraSesion | null> {
+      await api._delay();
+      const r = db.readTenant<Rutina>("rutinas").find((x) => x.id_rutina === id);
+      if (!r) return null;
+      return siguienteDe(r, db.readTenant<RegistroEntrenamiento>("registros_entrenamiento"));
+    },
+
+    // Avance "12 de 19"
+    async avance(id: number): Promise<AvanceRutina> {
+      await api._delay();
+      const r = db.readTenant<Rutina>("rutinas").find((x) => x.id_rutina === id);
+      if (!r) return { completadas: 0, planeadas: 0, porcentaje: 0 };
+      return avanceDe(r, db.readTenant<RegistroEntrenamiento>("registros_entrenamiento"));
+    },
+
+    // Copia la rutina (plan y ejercicios) para otro cliente, con la misma duración desde hoy
+    async duplicar(id: number, idClienteDestino: string): Promise<ApiResp<Rutina>> {
+      await api._delay();
+      const r = db.readTenant<Rutina>("rutinas").find((x) => x.id_rutina === id);
+      if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
+      const duracion = r.fecha_fin === null ? null : Math.max(1, -diasHasta(r.fecha_creacion) + diasHasta(r.fecha_fin));
+      const nueva: RutinaNueva = {
+        id_instructor: r.id_instructor,
+        id_cliente: idClienteDestino,
+        nombre: r.nombre,
+        descripcion: r.descripcion,
+        objetivo: r.objetivo,
+        fecha_fin: duracion === null ? null : sumarDias(utils.isoDate(), duracion),
+        sesiones_planeadas: r.sesiones_planeadas,
+        division: r.division,
+      };
+      const res = await api.rutinas.create(nueva);
+      if (!res.ok || !res.data) return res;
+      const copia = res.data;
+      // Los ejercicios se copian "limpios": sin marcas de cambios del cliente anterior
+      const gym = gimnasioParaEscribir();
+      const todos = db.readTenant<RutinaEjercicio>("rutina_ejercicios");
+      const copiados: RutinaEjercicio[] = todos
+        .filter((e) => e.id_rutina === id)
+        .map((e) => ({
+          ...e,
+          gimnasio_id: gym,
+          id_rutina: copia.id_rutina,
+          agregado_por_cliente: false,
+          revisado_por_instructor: true,
+        }));
+      db.writeTenant("rutina_ejercicios", todos.concat(copiados));
+      return { ok: true, mensaje: "Rutina duplicada para el cliente", data: copia };
+    },
+
+    // El cliente cambia o agrega un ejercicio de su rutina vigente. Queda pendiente de revisión del instructor.
+    // Con idEjercicioAnterior REEMPLAZA ese ejercicio en la misma sesión (conserva su orden); sin él lo AGREGA al final.
+    async cambioCliente(
+      id: number,
+      ejercicio: SesionEjercicioNuevo,
+      idEjercicioAnterior?: number
+    ): Promise<ApiResp<RutinaEjercicio>> {
+      await api._delay();
+      const r = db.readTenant<Rutina>("rutinas").find((x) => x.id_rutina === id);
+      if (!r) return { ok: false, mensaje: "Rutina no encontrada" };
+      const estado = estadoDe(r);
+      if (estado !== "VIGENTE" && estado !== "POR_VENCER")
+        return { ok: false, mensaje: "Solo se puede cambiar una rutina vigente" };
+      const error = validarEjerciciosSesion(r.division ?? [], [ejercicio], false);
+      if (error) return { ok: false, mensaje: error };
+      const todos = db.readTenant<RutinaEjercicio>("rutina_ejercicios");
+      const deLaSesion = todos.filter((e) => e.id_rutina === id && e.sesion === ejercicio.sesion);
+      const yaEsta = deLaSesion.some((e) => e.id_ejercicio === ejercicio.id_ejercicio && e.id_ejercicio !== idEjercicioAnterior);
+      if (yaEsta) return { ok: false, mensaje: "Ese ejercicio ya está en la sesión " + ejercicio.sesion };
+      const gym = gimnasioParaEscribir();
+      const marcas = { agregado_por_cliente: true, revisado_por_instructor: false };
+      if (idEjercicioAnterior !== undefined) {
+        const anterior = deLaSesion.find((e) => e.id_ejercicio === idEjercicioAnterior);
+        if (!anterior) return { ok: false, mensaje: "El ejercicio a reemplazar no está en la sesión " + ejercicio.sesion };
+        Object.assign(anterior, ejercicio, marcas, { gimnasio_id: gym, id_rutina: id, orden: anterior.orden });
+        db.writeTenant("rutina_ejercicios", todos);
+        return { ok: true, mensaje: "Ejercicio reemplazado; tu instructor lo revisará", data: anterior };
+      }
+      const orden = deLaSesion.reduce((max, e) => Math.max(max, e.orden), 0) + 1;
+      const nuevo: RutinaEjercicio = { ...ejercicio, ...marcas, gimnasio_id: gym, id_rutina: id, orden };
+      todos.push(nuevo);
+      db.writeTenant("rutina_ejercicios", todos);
+      return { ok: true, mensaje: "Ejercicio agregado; tu instructor lo revisará", data: nuevo };
+    },
+
+    // El instructor revisa un ejercicio que cambió el cliente
+    async marcarRevisado(id: number, sesion: LetraSesion, idEjercicio: number): Promise<ApiResp<RutinaEjercicio>> {
+      await api._delay();
+      const todos = db.readTenant<RutinaEjercicio>("rutina_ejercicios");
+      const e = todos.find((x) => x.id_rutina === id && x.sesion === sesion && x.id_ejercicio === idEjercicio);
+      if (!e) return { ok: false, mensaje: "Ejercicio no encontrado en la rutina" };
+      e.revisado_por_instructor = true;
+      db.writeTenant("rutina_ejercicios", todos);
+      return { ok: true, mensaje: "Ejercicio marcado como revisado", data: e };
+    },
+
+    // Todas las rutinas del gimnasio con su estado, avance, siguiente sesión y cambios del cliente
+    // sin revisar, en UNA sola lectura (la tabla de supervisión no tiene que pedir rutina por rutina)
+    async listaSupervision(): Promise<FilaSupervision[]> {
+      await api._delay();
+      const registros = db.readTenant<RegistroEntrenamiento>("registros_entrenamiento");
+      const filas = db.readTenant<RutinaEjercicio>("rutina_ejercicios");
+      return db.readTenant<Rutina>("rutinas").map((r) => ({
+        rutina: r,
+        estado: estadoDe(r),
+        avance: avanceDe(r, registros),
+        siguiente: siguienteDe(r, registros),
+        cambios_sin_revisar: filas.filter(
+          (f) => f.id_rutina === r.id_rutina && f.agregado_por_cliente === true && f.revisado_por_instructor === false
+        ).length,
+        // Fechas 'YYYY-MM-DD' se comparan como texto: la mayor es la más reciente
+        ultima_sesion: registros
+          .filter((g) => g.id_rutina === r.id_rutina)
+          .reduce<string | null>((max, g) => (max === null || g.fecha > max ? g.fecha : max), null),
+      }));
+    },
+
+    // Indicadores de la supervisión del admin (los 4 grupos son disjuntos) + carga por instructor
+    async resumenSupervision(): Promise<ResumenSupervision> {
+      await api._delay();
+      const rutinas = db.readTenant<Rutina>("rutinas");
+      const clientesActivos = db.readTenant<Cliente>("clientes").filter((c) => c.estado === "ACTIVO");
+      const estados = new Map(rutinas.map((r) => [r.id_rutina, estadoDe(r)] as const));
+      const vigente = (r: Rutina) => estados.get(r.id_rutina) === "VIGENTE" || estados.get(r.id_rutina) === "POR_VENCER";
+
+      const vencidas_sin_renovar: number[] = [];
+      const sin_rutina: string[] = [];
+      for (const c of clientesActivos) {
+        const suyas = rutinas
+          .filter((r) => r.id_cliente === c.numero_identificacion)
+          .sort((a, b) => b.fecha_creacion.localeCompare(a.fecha_creacion) || b.id_rutina - a.id_rutina);
+        if (suyas.some(vigente)) continue;
+        const ultima = suyas[0];
+        if (ultima && estados.get(ultima.id_rutina) === "VENCIDA") vencidas_sin_renovar.push(ultima.id_rutina);
+        else sin_rutina.push(c.numero_identificacion);
+      }
+
+      const carga = db
+        .readTenant<Instructor>("instructores")
+        .filter((i) => i.estado === "ACTIVO")
+        .map((i) => ({
+          id_instructor: i.numero_identificacion,
+          nombre: i.nombre + " " + i.apellidos,
+          vigentes: rutinas.filter((r) => r.id_instructor === i.numero_identificacion && vigente(r)).length,
+        }))
+        .sort((a, b) => b.vigentes - a.vigentes || a.nombre.localeCompare(b.nombre));
+
+      return {
+        vigentes: rutinas.filter((r) => estados.get(r.id_rutina) === "VIGENTE").length,
+        por_vencer: rutinas.filter((r) => estados.get(r.id_rutina) === "POR_VENCER").length,
+        vencidas_sin_renovar,
+        sin_rutina,
+        carga,
+      };
     },
   },
   // ===== [/P3] Rutinas =====
+
+  // ===== [P3] Clases con aforo (B7 · KAN-94) =====
+  /* Contrato para el instructor (T3) y el cliente (T4). Se re-exporta como `apiClases`
+     desde data/apiClases.ts. Una Clase = UN día de la semana a una hora (una rumba de lunes,
+     miércoles y viernes son 3 clases). El cliente se inscribe a una SESIÓN: la clase en una
+     fecha concreta, entre hoy y hoy + DIAS_MAX_INSCRIPCION. */
+  clases: {
+    // Valida los datos de una clase nueva o editada (excluirId = la propia clase al editar)
+    _validar(data: ClaseNueva, excluirId?: number): string | null {
+      if (!data.nombre.trim()) return "El nombre es obligatorio";
+      if (!TIPOS_CLASE.includes(data.tipo_clase)) return "Tipo de clase no válido";
+      if (!/^\d{2}:\d{2}$/.test(data.hora)) return "La hora debe tener el formato HH:MM";
+      if (!Number.isInteger(data.duracion_min) || data.duracion_min < 15 || data.duracion_min > 180)
+        return "La duración debe estar entre 15 y 180 minutos";
+      if (!Number.isInteger(data.aforo_max) || data.aforo_max < 1 || data.aforo_max > 100)
+        return "El aforo debe estar entre 1 y 100 personas";
+      const ins = db.readTenant<Instructor>("instructores").find((i) => i.numero_identificacion === data.id_instructor);
+      if (!ins) return "El instructor no existe";
+      if (ins.estado !== "ACTIVO") return ins.nombre + " " + ins.apellidos + " está inactivo";
+      // La clase completa (inicio y fin) debe caber en uno de sus intervalos de ese día
+      const inicio = aMinutos(data.hora);
+      const fin = inicio + data.duracion_min;
+      const cabe = (ins.horario?.[data.dia_semana] ?? []).some((iv) => aMinutos(iv.desde) <= inicio && fin <= aMinutos(iv.hasta));
+      if (!cabe) return ins.nombre + " " + ins.apellidos + " no atiende de " + data.hora + " a " + horaFin(data) + " ese día";
+      const otra = db
+        .readTenant<Clase>("clases")
+        .find((c) => c.id_clase !== excluirId && c.estado === "ACTIVA" && c.id_instructor === data.id_instructor && c.dia_semana === data.dia_semana && seCruzan(c, data));
+      if (otra) return "Se cruza con «" + otra.nombre + "» (" + otra.hora + "–" + horaFin(otra) + ") del mismo instructor";
+      return null;
+    },
+
+    // Inscripciones INSCRITA de una clase en una fecha
+    _ocupacion(idClase: number, fecha: string): InscripcionClase[] {
+      return db
+        .readTenant<InscripcionClase>("inscripciones_clase")
+        .filter((x) => x.id_clase === idClase && x.fecha === fecha && x.estado === "INSCRITA");
+    },
+
+    // Todas las clases del gimnasio (activas y canceladas), por día y hora
+    async list(): Promise<Clase[]> {
+      await api._delay();
+      const orden = (c: Clase) => DIAS_ORDEN_CLASE.indexOf(c.dia_semana) * 1440 + aMinutos(c.hora);
+      return db.readTenant<Clase>("clases").sort((a, b) => orden(a) - orden(b));
+    },
+
+    async deInstructor(idInstructor: string): Promise<Clase[]> {
+      return (await api.clases.list()).filter((c) => c.id_instructor === idInstructor);
+    },
+
+    async get(id: number): Promise<Clase | null> {
+      await api._delay();
+      return db.readTenant<Clase>("clases").find((c) => c.id_clase === id) ?? null;
+    },
+
+    async create(data: ClaseNueva): Promise<ApiResp<Clase>> {
+      await api._delay();
+      const error = api.clases._validar(data);
+      if (error) return { ok: false, mensaje: error };
+      const arr = db.readTenant<Clase>("clases");
+      const nueva: Clase = {
+        ...data,
+        nombre: data.nombre.trim(),
+        gimnasio_id: gimnasioParaEscribir(),
+        id_clase: db.siguienteId<Clase>("clases", (c) => c.id_clase),
+        inscritos: [],
+        estado: "ACTIVA",
+        fechas_canceladas: [],
+      };
+      arr.push(nueva);
+      db.writeTenant("clases", arr);
+      return { ok: true, mensaje: "Clase creada", data: nueva };
+    },
+
+    /* Con inscripciones futuras no se puede cambiar el día ni la hora (los inscritos reservaron
+       esa franja: mejor cancelar y crear otra), y el aforo no puede quedar por debajo de los
+       inscritos de ninguna sesión futura. */
+    async update(id: number, data: Partial<ClaseNueva>): Promise<ApiResp<Clase>> {
+      await api._delay();
+      const arr = db.readTenant<Clase>("clases");
+      const clase = arr.find((c) => c.id_clase === id);
+      if (!clase) return { ok: false, mensaje: "Clase no encontrada" };
+      if (clase.estado === "CANCELADA") return { ok: false, mensaje: "La clase está cancelada" };
+      const final: ClaseNueva = { ...clase, ...data };
+      const error = api.clases._validar(final, id);
+      if (error) return { ok: false, mensaje: error };
+      const hoy = utils.isoDate();
+      const futuras = db
+        .readTenant<InscripcionClase>("inscripciones_clase")
+        .filter((x) => x.id_clase === id && x.estado === "INSCRITA" && x.fecha >= hoy);
+      if (futuras.length > 0 && (final.dia_semana !== clase.dia_semana || final.hora !== clase.hora))
+        return { ok: false, mensaje: "Tiene inscritos en próximas sesiones: no se puede cambiar el día ni la hora. Cancela la clase y crea otra." };
+      const maxInscritos = Math.max(0, ...futuras.map((x) => api.clases._ocupacion(id, x.fecha).length));
+      if (final.aforo_max < maxInscritos)
+        return { ok: false, mensaje: "Una próxima sesión ya tiene " + maxInscritos + " inscritos: el aforo no puede ser menor" };
+      Object.assign(clase, data, { id_clase: id, nombre: final.nombre.trim() });
+      db.writeTenant("clases", arr);
+      return { ok: true, mensaje: "Clase actualizada", data: clase };
+    },
+
+    // Cancela la clase entera: deja de ofrecerse y sus inscripciones futuras pasan a CANCELADA
+    async cancelar(id: number): Promise<ApiResp<Clase>> {
+      await api._delay();
+      const arr = db.readTenant<Clase>("clases");
+      const clase = arr.find((c) => c.id_clase === id);
+      if (!clase) return { ok: false, mensaje: "Clase no encontrada" };
+      if (clase.estado === "CANCELADA") return { ok: false, mensaje: "La clase ya estaba cancelada" };
+      clase.estado = "CANCELADA";
+      db.writeTenant("clases", arr);
+      const hoy = utils.isoDate();
+      const ins = db.readTenant<InscripcionClase>("inscripciones_clase");
+      ins.forEach((x) => {
+        if (x.id_clase === id && x.estado === "INSCRITA" && x.fecha >= hoy) x.estado = "CANCELADA";
+      });
+      db.writeTenant("inscripciones_clase", ins);
+      return { ok: true, mensaje: "Clase cancelada", data: clase };
+    },
+
+    // Cancela una sola sesión (fecha) y sus inscripciones; las demás fechas siguen igual
+    async cancelarSesion(id: number, fecha: string): Promise<ApiResp<Clase>> {
+      await api._delay();
+      const arr = db.readTenant<Clase>("clases");
+      const clase = arr.find((c) => c.id_clase === id);
+      if (!clase) return { ok: false, mensaje: "Clase no encontrada" };
+      if (clase.estado === "CANCELADA") return { ok: false, mensaje: "La clase ya estaba cancelada" };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || diaSemanaDe(fecha) !== clase.dia_semana)
+        return { ok: false, mensaje: "Esa fecha no es un " + clase.dia_semana.toLowerCase() };
+      if (fecha < utils.isoDate()) return { ok: false, mensaje: "No se puede cancelar una sesión pasada" };
+      if ((clase.fechas_canceladas ?? []).includes(fecha)) return { ok: false, mensaje: "Esa sesión ya estaba cancelada" };
+      clase.fechas_canceladas = [...(clase.fechas_canceladas ?? []), fecha].sort();
+      db.writeTenant("clases", arr);
+      const ins = db.readTenant<InscripcionClase>("inscripciones_clase");
+      ins.forEach((x) => {
+        if (x.id_clase === id && x.fecha === fecha && x.estado === "INSCRITA") x.estado = "CANCELADA";
+      });
+      db.writeTenant("inscripciones_clase", ins);
+      return { ok: true, mensaje: "Sesión del " + utils.fecha(fecha) + " cancelada", data: clase };
+    },
+
+    /* Sesiones de las clases ACTIVAS entre `desde` y `hasta` (incluidas), recortadas a
+       [hoy, hoy + DIAS_MAX_INSCRIPCION]. Las de hoy que ya empezaron no salen. Las sesiones
+       canceladas salen con cancelada = true. Orden: fecha y hora. */
+    async sesiones(desde: string, hasta: string): Promise<SesionClase[]> {
+      await api._delay();
+      const hoy = utils.isoDate();
+      const inicio = desde > hoy ? desde : hoy;
+      const tope = sumarDias(hoy, DIAS_MAX_INSCRIPCION);
+      const fin = hasta < tope ? hasta : tope;
+      const ahora = horaLocal();
+      const ins = db.readTenant<InscripcionClase>("inscripciones_clase").filter((x) => x.estado === "INSCRITA");
+      const lista: SesionClase[] = [];
+      for (const clase of db.readTenant<Clase>("clases").filter((c) => c.estado === "ACTIVA")) {
+        for (const fecha of fechasDeClase(clase, inicio, fin)) {
+          if (fecha === hoy && clase.hora <= ahora) continue;
+          const inscritos = ins.filter((x) => x.id_clase === clase.id_clase && x.fecha === fecha).length;
+          lista.push({
+            clase,
+            fecha,
+            inscritos,
+            cupos_libres: Math.max(0, clase.aforo_max - inscritos),
+            cancelada: (clase.fechas_canceladas ?? []).includes(fecha),
+          });
+        }
+      }
+      return lista.sort((a, b) => (a.fecha + a.clase.hora).localeCompare(b.fecha + b.clase.hora));
+    },
+
+    // Inscripciones INSCRITA de una sesión (para la lista de asistentes del instructor)
+    async inscritosDeSesion(idClase: number, fecha: string): Promise<InscripcionClase[]> {
+      await api._delay();
+      return api.clases._ocupacion(idClase, fecha);
+    },
+
+    /* El cliente reserva un cupo en una sesión. Reglas: clase ACTIVA; la fecha cae en su día,
+       entre hoy y hoy + DIAS_MAX_INSCRIPCION y, si es hoy, antes de que empiece; sesión no
+       cancelada; cliente ACTIVO con membresía vigente (cualquier plan); hay cupo; no está ya
+       inscrito; y no tiene otra inscripción INSCRITA que se cruce en fecha y hora. */
+    async inscribir(idClase: number, idCliente: string, fecha: string): Promise<ApiResp<InscripcionClase>> {
+      await api._delay();
+      const clases = db.readTenant<Clase>("clases");
+      const clase = clases.find((c) => c.id_clase === idClase);
+      if (!clase) return { ok: false, mensaje: "Clase no encontrada" };
+      if (clase.estado !== "ACTIVA") return { ok: false, mensaje: "La clase está cancelada" };
+      const hoy = utils.isoDate();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || diaSemanaDe(fecha) !== clase.dia_semana)
+        return { ok: false, mensaje: "«" + clase.nombre + "» no tiene sesión ese día" };
+      if (fecha < hoy || fecha > sumarDias(hoy, DIAS_MAX_INSCRIPCION))
+        return { ok: false, mensaje: "Solo se reserva desde hoy hasta " + DIAS_MAX_INSCRIPCION + " días adelante" };
+      if (fecha === hoy && clase.hora <= horaLocal()) return { ok: false, mensaje: "La sesión de hoy ya empezó" };
+      if ((clase.fechas_canceladas ?? []).includes(fecha)) return { ok: false, mensaje: "Esa sesión fue cancelada" };
+
+      const cliente = db.readTenant<Cliente>("clientes").find((c) => c.numero_identificacion === idCliente);
+      if (!cliente) return { ok: false, mensaje: "El cliente no existe" };
+      if (cliente.estado !== "ACTIVO") return { ok: false, mensaje: "El cliente no está activo" };
+      const vigente = db.readTenant<Membresia>("membresias").some((m) => m.id_cliente === idCliente && membresiaVigente(m, hoy, cliente));
+      if (!vigente) return { ok: false, mensaje: "Se necesita una membresía vigente para reservar clases" };
+
+      const ins = db.readTenant<InscripcionClase>("inscripciones_clase");
+      const activas = ins.filter((x) => x.estado === "INSCRITA");
+      if (activas.some((x) => x.id_clase === idClase && x.fecha === fecha && x.id_cliente === idCliente))
+        return { ok: false, mensaje: "Ya estás inscrito en esta sesión" };
+      if (activas.filter((x) => x.id_clase === idClase && x.fecha === fecha).length >= clase.aforo_max)
+        return { ok: false, mensaje: "No quedan cupos para esta sesión" };
+      const choqueCon = activas
+        .filter((x) => x.id_cliente === idCliente && x.fecha === fecha && x.id_clase !== idClase)
+        .map((x) => clases.find((c) => c.id_clase === x.id_clase))
+        .find((c) => c !== undefined && seCruzan(c, clase));
+      if (choqueCon)
+        return { ok: false, mensaje: "Se cruza con «" + choqueCon.nombre + "» (" + choqueCon.hora + "–" + horaFin(choqueCon) + ") ese mismo día" };
+
+      const nueva: InscripcionClase = {
+        gimnasio_id: gimnasioParaEscribir(),
+        id_inscripcion: db.siguienteId<InscripcionClase>("inscripciones_clase", (x) => x.id_inscripcion),
+        id_clase: idClase,
+        id_cliente: idCliente,
+        fecha,
+        estado: "INSCRITA",
+        creada_el: hoy,
+      };
+      ins.push(nueva);
+      db.writeTenant("inscripciones_clase", ins);
+      return { ok: true, mensaje: "Inscripción confirmada: " + clase.nombre + " el " + utils.fecha(fecha) + " a las " + clase.hora, data: nueva };
+    },
+
+    // El cliente se retira de SU inscripción antes de que empiece la sesión (libera el cupo)
+    async retirar(idInscripcion: number, idCliente: string): Promise<ApiResp<InscripcionClase>> {
+      await api._delay();
+      const ins = db.readTenant<InscripcionClase>("inscripciones_clase");
+      const x = ins.find((i) => i.id_inscripcion === idInscripcion);
+      if (!x || x.id_cliente !== idCliente) return { ok: false, mensaje: "Inscripción no encontrada" };
+      if (x.estado !== "INSCRITA") return { ok: false, mensaje: "La inscripción ya no está activa" };
+      const clase = db.readTenant<Clase>("clases").find((c) => c.id_clase === x.id_clase);
+      const hoy = utils.isoDate();
+      if (x.fecha < hoy || (x.fecha === hoy && clase !== undefined && clase.hora <= horaLocal()))
+        return { ok: false, mensaje: "La sesión ya empezó o pasó: no se puede retirar" };
+      x.estado = "RETIRADA";
+      db.writeTenant("inscripciones_clase", ins);
+      return { ok: true, mensaje: "Te retiraste de la sesión", data: x };
+    },
+
+    /* "Mis clases" del cliente: cada inscripción con su clase. Primero las próximas (la más
+       cercana primero) y después las pasadas (la más reciente primero). */
+    async deCliente(idCliente: string): Promise<{ inscripcion: InscripcionClase; clase: Clase }[]> {
+      await api._delay();
+      const clases = db.readTenant<Clase>("clases");
+      const ahora = utils.isoDate() + " " + horaLocal();
+      const filas = db
+        .readTenant<InscripcionClase>("inscripciones_clase")
+        .filter((x) => x.id_cliente === idCliente)
+        .flatMap((inscripcion) => {
+          const clase = clases.find((c) => c.id_clase === inscripcion.id_clase);
+          return clase ? [{ inscripcion, clase }] : [];
+        });
+      const clave = (f: { inscripcion: InscripcionClase; clase: Clase }) => f.inscripcion.fecha + " " + f.clase.hora;
+      const proximas = filas.filter((f) => clave(f) >= ahora).sort((a, b) => clave(a).localeCompare(clave(b)));
+      const pasadas = filas.filter((f) => clave(f) < ahora).sort((a, b) => clave(b).localeCompare(clave(a)));
+      return [...proximas, ...pasadas];
+    },
+  },
+  // ===== [/P3] Clases =====
 
   // ===== [P2] Progreso =====
   progreso: {

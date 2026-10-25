@@ -3,6 +3,10 @@ import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
 import { disponibilidadTexto, diaDisponible, horaDisponible, slotsPara, choque } from "../lib/horarios";
+import { instructorEnSesion } from "../lib/sesionInstructor"; // [P3] B4 · KAN-91
+import { PanelClases } from "../components/clases/PanelClases"; // [P3] B7 · KAN-94
+import { PestanasCitas } from "../components/clases/PestanasCitas"; // [P3] B7 · KAN-94
+import type { PestanaCitas } from "../components/clases/PestanasCitas"; // [P3] B7
 import type { Cliente, Instructor, Cita, TipoCita } from "../types";
 
 type FormCita = {
@@ -13,6 +17,11 @@ type FormCita = {
   tipo_cita: TipoCita;
   notas: string;
 };
+
+// [P3] B4 · KAN-91: con instructor en sesión, solo sus citas; sin él (admin), todas
+function citasDe(lista: Cita[], cedulaInstructor: string | null): Cita[] {
+  return cedulaInstructor ? lista.filter((c) => c.id_instructor === cedulaInstructor) : lista;
+}
 
 const VACIO: FormCita = {
   id_cliente: "",
@@ -75,16 +84,21 @@ export function Citas() {
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
 
+  // [P3] B4 · KAN-91: si entra un INSTRUCTOR solo ve y agenda sus propias citas
+  const [miCedula] = useState(instructorEnSesion);
+  const soloMias = (lista: Cita[]) => citasDe(lista, miCedula);
+  const [pestana, setPestana] = useState<PestanaCitas>("citas"); // [P3] B7 · KAN-94
+
   useEffect(() => {
     Promise.all([api.citas.list(), api.clientes.list(), api.instructores.list()]).then(
       ([ci, cl, ins]) => {
-        setCitas(ci);
+        setCitas(citasDe(ci, miCedula)); // [P3] B4
         setClientes(cl);
         setInstructores(ins);
         setCargando(false);
       }
     );
-  }, []);
+  }, [miCedula]);
 
   useEffect(() => {
     if (!alerta) return;
@@ -138,6 +152,7 @@ export function Citas() {
 
   // --- Instructores / horas disponibles en el modal -----------------------
   const instructoresElegibles = instructores.filter((i) => {
+    if (miCedula && i.numero_identificacion !== miCedula) return false; // [P3] B4: el instructor solo se elige a sí mismo
     if (i.numero_identificacion === form.id_instructor) return true; // no perder el actual al editar
     if (!diaDisponible(i.horario, form.fecha)) return false;
     if (form.hora && !horaDisponible(i.horario, form.fecha, form.hora)) return false;
@@ -155,7 +170,7 @@ export function Citas() {
   // --- Abrir modal --------------------------------------------------------
   function abrirNuevo(fecha?: string, hora?: string) {
     setEditandoId(null);
-    setForm({ ...VACIO, fecha: fecha ?? diaSel ?? hoyISO, hora: hora ?? "" });
+    setForm({ ...VACIO, id_instructor: miCedula ?? "", fecha: fecha ?? diaSel ?? hoyISO, hora: hora ?? "" }); // [P3] B4
     setError("");
     setShow(true);
   }
@@ -209,18 +224,23 @@ export function Citas() {
     }
     setShow(false);
     setAlerta({ tipo: "ok", mensaje: res.mensaje });
-    setCitas(await api.citas.list());
+    setCitas(soloMias(await api.citas.list())); // [P3] B4
   }
 
   async function cambiarEstado(c: Cita, estado: Cita["estado"]) {
     const res = await api.citas.setEstado(c.id_cita, estado);
     setAlerta(res.ok ? { tipo: "ok", mensaje: res.mensaje } : { tipo: "error", mensaje: res.mensaje });
-    setCitas(await api.citas.list());
+    setCitas(soloMias(await api.citas.list())); // [P3] B4
   }
 
   const mesNombre = MESES[mes.mes] + " " + mes.anio;
 
+  // [P3] B7 · KAN-94: pestaña "Clases" (clases grupales con aforo); la de citas sigue igual
+  if (pestana === "clases") return <><PestanasCitas activa={pestana} onCambiar={setPestana} /><PanelClases /></>;
+
   return (
+    <>
+    <PestanasCitas activa={pestana} onCambiar={setPestana} /> {/* [P3] B7 */}
     <div className="card-g">
       <div className="card-head">
         <div>
@@ -430,5 +450,6 @@ export function Citas() {
         </Modal.Footer>
       </Modal>
     </div>
+    </> /* [P3] B7 */
   );
 }

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { utils } from "../lib/utils";
+import { instructorEnSesion } from "../lib/sesionInstructor"; // [P3] B4 · KAN-91
+import { alumnosDeInstructor } from "../lib/rutinas"; // [P3] B4 · KAN-91
 import type { Cliente, Progreso as ProgresoRow } from "../types";
 import { Line } from "react-chartjs-2";
 import {
@@ -39,10 +41,21 @@ export function Progreso() {
   const [clienteSel, setClienteSel] = useState<string>("");
   const [pagina, setPagina] = useState(1);
   const POR_PAGINA = 8;
+  // [P3] B4 · KAN-91: si entra un INSTRUCTOR solo ve el progreso de sus alumnos (misma regla que la vista Alumnos)
+  const [miCedula] = useState(instructorEnSesion);
 
   useEffect(() => {
     (async () => {
-      const [p, c] = await Promise.all([api.progreso.list(), api.clientes.list()]);
+      const [p, todos, filas] = await Promise.all([
+        api.progreso.list(),
+        api.clientes.list(),
+        miCedula ? api.rutinas.listaSupervision() : Promise.resolve([]),
+      ]);
+      const c = miCedula
+        ? alumnosDeInstructor(filas, todos, miCedula)
+            .map((a) => a.cliente)
+            .filter((x): x is Cliente => x !== undefined)
+        : todos;
       setProgreso(p);
       setClientes(c);
       setCargando(false);
@@ -50,7 +63,7 @@ export function Progreso() {
         setClienteSel((sel) => sel || c[0].numero_identificacion);
       }
     })();
-  }, []);
+  }, [miCedula]);
 
   const setCampo = (campo: keyof FormProgreso, valor: string) =>
     setForm((f) => ({ ...f, [campo]: valor }));

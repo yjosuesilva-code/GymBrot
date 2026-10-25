@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { Paginador } from "../components/Paginador";
+import { VistaPreviaRecurso } from "../components/ejercicios/VistaPreviaRecurso";
+import { SelectorImagenEjercicio } from "../components/ejercicios/SelectorImagenEjercicio";
+import { cargarIndice } from "../lib/indiceImagenes";
+import type { EntradaIndice } from "../lib/indiceImagenes";
 import type {
   Ejercicio,
   EjercicioNuevo,
@@ -84,7 +88,21 @@ export function Ejercicios() {
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState("");
 
-  // Paginación: 10 ejercicios por página (100 en el seed); al buscar se vuelve a la 1
+  // [KAN-97] Índice de imágenes sugeridas: se pide la primera vez que se abre el modal (no va en el bundle)
+  const [indice, setIndice] = useState<EntradaIndice[] | null>(null);
+  const [errorIndice, setErrorIndice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!show || indice !== null) return;
+    let activo = true;
+    cargarIndice()
+      .then((datos) => activo && setIndice(datos))
+      .catch(() => activo && setErrorIndice("No se pudieron cargar las imágenes sugeridas. Puedes subir una foto o pegar un enlace."));
+    return () => {
+      activo = false;
+    };
+  }, [show, indice]);
+
+  // Paginación: 10 ejercicios por página; cada cambio de búsqueda o filtro vuelve a la página 1 (KAN-43)
   const POR_PAGINA = 10;
   const [pagina, setPagina] = useState(1);
 
@@ -256,6 +274,7 @@ export function Ejercicios() {
     setFiltroNivel("");
     setFiltroEquipo("");
     setFiltroOrigen("");
+    setPagina(1);
   }
 
   const normalizar = (texto: string) => texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -298,14 +317,14 @@ export function Ejercicios() {
 
       <div className="toolbar mb-3">
         <div className="search-box">
-          <span className="search-ico" aria-hidden="true">{"\u{1F50D}"}</span>
+          <span className="search-ico" aria-hidden="true"><i className="bi bi-search" /></span>
           <input
             type="search"
             className="form-control-dark"
             aria-label="Buscar ejercicios por nombre, grupo muscular, nivel o equipo"
             placeholder="Buscar por nombre, grupo muscular, nivel o equipo..."
             value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
+            onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }}
           />
         </div>
         <select
@@ -313,7 +332,7 @@ export function Ejercicios() {
           style={{ width: "auto" }}
           aria-label="Filtrar por grupo muscular"
           value={filtroGrupo}
-          onChange={(e) => setFiltroGrupo(e.target.value as GrupoMuscular | "")}
+          onChange={(e) => { setFiltroGrupo(e.target.value as GrupoMuscular | ""); setPagina(1); }}
         >
           <option value="">Todos los grupos</option>
           {GRUPOS.map((g) => <option key={g} value={g}>{g}</option>)}
@@ -323,7 +342,7 @@ export function Ejercicios() {
           style={{ width: "auto" }}
           aria-label="Filtrar por nivel"
           value={filtroNivel}
-          onChange={(e) => setFiltroNivel(e.target.value as NivelEjercicio | "")}
+          onChange={(e) => { setFiltroNivel(e.target.value as NivelEjercicio | ""); setPagina(1); }}
         >
           <option value="">Todos los niveles</option>
           {NIVELES.map((n) => <option key={n} value={n}>{n}</option>)}
@@ -333,7 +352,7 @@ export function Ejercicios() {
           style={{ width: "auto" }}
           aria-label="Filtrar por equipo"
           value={filtroEquipo}
-          onChange={(e) => setFiltroEquipo(e.target.value as EquipoEjercicio | "")}
+          onChange={(e) => { setFiltroEquipo(e.target.value as EquipoEjercicio | ""); setPagina(1); }}
         >
           <option value="">Todo el equipo</option>
           {EQUIPOS.map((q) => <option key={q} value={q}>{q}</option>)}
@@ -343,7 +362,7 @@ export function Ejercicios() {
           style={{ width: "auto" }}
           aria-label="Filtrar por origen"
           value={filtroOrigen}
-          onChange={(e) => setFiltroOrigen(e.target.value as "" | "BASE" | "PROPIO")}
+          onChange={(e) => { setFiltroOrigen(e.target.value as "" | "BASE" | "PROPIO"); setPagina(1); }}
         >
           <option value="">Base y propios</option>
           <option value="BASE">Solo catálogo base</option>
@@ -388,15 +407,22 @@ export function Ejercicios() {
               paginados.map((e) => (
                 <tr key={e.id_ejercicio}>
                   <td>
-                    <strong>{e.nombre}</strong>
-                    {e.gimnasio_id === null && <span className="badge-g badge-confirmada ms-2">Base</span>}
-                    {e.estado === "INACTIVO" && <span className="badge-g badge-inactivo ms-2">Inactivo</span>}
-                    {e.descripcion && <p className="card-sub mb-1">{e.descripcion}</p>}
-                    {e.recurso_url && (
-                      /^https?:\/\//i.test(e.recurso_url.trim())
-                        ? <a href={e.recurso_url.trim()} target="_blank" rel="noopener noreferrer">{e.recurso_url}</a>
-                        : <span className="d-block">Recurso: {e.recurso_url}</span>
-                    )}
+                    <div className="inst-ej-fila">
+                      {/* Miniatura: si hay un enlace, al hacer clic se abre en otra pestaña (una foto subida en base64 no) */}
+                      {e.recurso_url.trim() && !e.recurso_url.startsWith("data:") ? (
+                        <a href={e.recurso_url.trim()} target="_blank" rel="noopener noreferrer" title="Abrir recurso">
+                          <VistaPreviaRecurso key={e.recurso_url} url={e.recurso_url} tamano="mini" alt={e.nombre} grupo={e.grupo_muscular} />
+                        </a>
+                      ) : (
+                        <VistaPreviaRecurso key={e.recurso_url} url={e.recurso_url} tamano="mini" alt={e.nombre} grupo={e.grupo_muscular} />
+                      )}
+                      <div>
+                        <strong>{e.nombre}</strong>
+                        {e.gimnasio_id === null && <span className="badge-g badge-confirmada ms-2">Base</span>}
+                        {e.estado === "INACTIVO" && <span className="badge-g badge-inactivo ms-2">Inactivo</span>}
+                        {e.descripcion && <p className="card-sub mb-1">{e.descripcion}</p>}
+                      </div>
+                    </div>
                   </td>
                   <td>{e.grupo_muscular}</td>
                   <td>{e.nivel}</td>
@@ -590,11 +616,14 @@ export function Ejercicios() {
             </div>
 
             <div className="col-12">
-              <label className="form-label-g">Recurso URL</label>
-              <input
-                className="form-control-dark"
-                value={form.recurso_url}
-                onChange={(e) => setCampo("recurso_url", e.target.value)}
+              <SelectorImagenEjercicio
+                nombre={form.nombre}
+                grupo={form.grupo_muscular}
+                equipo={form.equipo}
+                valor={form.recurso_url}
+                indice={indice}
+                errorIndice={errorIndice}
+                onCambiar={(url) => setCampo("recurso_url", url)}
               />
             </div>
           </div>
@@ -634,6 +663,9 @@ export function Ejercicios() {
             Ejercicio del catálogo base: lo comparten todos los gimnasios y no se puede modificar. Si quieres
             ajustarlo, personalízalo para crear tu propia copia.
           </p>
+          {verEjercicio && (
+            <VistaPreviaRecurso key={verEjercicio.recurso_url} url={verEjercicio.recurso_url} tamano="grande" alt={verEjercicio.nombre} grupo={verEjercicio.grupo_muscular} />
+          )}
           {verEjercicio && (
             <div className="table-wrap">
               <table className="table-g">

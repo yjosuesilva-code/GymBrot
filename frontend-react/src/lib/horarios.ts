@@ -211,3 +211,33 @@ export function choque(
     return true
   })
 }
+
+/* [P3] KAN-61 — Validacion del horario para la API (api.instructores.create/update).
+   Devuelve el primer error en texto o null si el horario es valido:
+   - solo dias de DIAS_ORDEN (LUNES..DOMINGO),
+   - horas con formato HH:MM (00:00 a 23:59),
+   - fin > inicio en cada intervalo,
+   - sin solapes entre intervalos del mismo dia (tocarse, 08:00-10:00 y 10:00-12:00, si vale). */
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
+
+export function validarHorario(h: HorarioInstructor): string | null {
+  for (const clave of Object.keys(h)) {
+    if (!DIAS_ORDEN.includes(clave as DiaSemana)) return `Día no válido en el horario: ${clave}`
+  }
+  for (const dia of DIAS_ORDEN) {
+    const intervalos = h[dia] ?? []
+    for (const iv of intervalos) {
+      if (!HHMM.test(iv.desde) || !HHMM.test(iv.hasta))
+        return `Hora con formato inválido en ${dia} (usa HH:MM)`
+      if (toMinutes(iv.hasta) <= toMinutes(iv.desde))
+        return `En ${dia} la hora de fin debe ser posterior a la de inicio (${iv.desde}–${iv.hasta})`
+    }
+    // Ordenados por inicio, cada intervalo debe empezar cuando el anterior ya termino
+    const ordenados = [...intervalos].sort((a, b) => toMinutes(a.desde) - toMinutes(b.desde))
+    for (let i = 1; i < ordenados.length; i++) {
+      if (toMinutes(ordenados[i].desde) < toMinutes(ordenados[i - 1].hasta))
+        return `En ${dia} se cruzan los intervalos ${ordenados[i - 1].desde}–${ordenados[i - 1].hasta} y ${ordenados[i].desde}–${ordenados[i].hasta}`
+    }
+  }
+  return null
+}

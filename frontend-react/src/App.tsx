@@ -10,7 +10,9 @@ import { Login } from "./pages/Login";
 import { Instructores } from "./pages/Instructores";          // [P3]
 import { InstructorDetalle } from "./pages/InstructorDetalle"; // [P3]
 import { Rutinas } from "./pages/Rutinas";                    // [P3]
-import { Ejercicios } from "./pages/Ejercicios";              // [P4]
+import { RutinaDetalle } from "./pages/RutinaDetalle";        // [P3] KAN-57
+import { RutinaEditor } from "./pages/RutinaEditor";          // [P3] KAN-56
+import { Ejercicios } from "./pages/Ejercicios";              // [P3]
 import { Membresias } from "./pages/Membresias";              // [P4]
 import { Progreso } from "./pages/Progreso";                  // [P2]
 import { Citas } from "./pages/Citas";                        // [P2]
@@ -48,6 +50,9 @@ const RUTAS_PORTAL: { path: string; element: ReactNode }[] = [
   { path: "membresias", element: <Membresias /> },              // [P4]
   { path: "finanzas", element: <Finanzas /> },                  // [P1]
   { path: "rutinas", element: <Rutinas /> },                    // [P3]
+  { path: "rutinas/nueva", element: <RutinaEditor /> },         // [P3] KAN-56 constructor
+  { path: "rutinas/:id", element: <RutinaDetalle /> },          // [P3] KAN-57 detalle
+  { path: "rutinas/:id/editar", element: <RutinaEditor /> },    // [P3] KAN-56 constructor
   { path: "instructores", element: <Instructores /> },          // [P3]
   { path: "instructores/:id", element: <InstructorDetalle /> }, // [P3]
   { path: "citas", element: <Citas /> },                        // [P2]
@@ -55,7 +60,7 @@ const RUTAS_PORTAL: { path: string; element: ReactNode }[] = [
   // [P1] El control de acceso vive dentro de Clientes; /acceso queda como
   // alias para no romper enlaces o marcadores viejos.
   { path: "acceso", element: <Navigate to="../clientes" relative="path" replace /> },
-  { path: "ejercicios", element: <Ejercicios /> },              // [P4]
+  { path: "ejercicios", element: <Ejercicios /> },              // [P3]
   { path: "gymbrot-ai", element: <GymbrotAI /> },               // [P1]
   // TODO(T3): estas rutas se filtran por rol en el sidebar/guard; las vistas son placeholders
   { path: "instructor-dashboard", element: <DashboardInstructor /> },

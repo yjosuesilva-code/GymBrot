@@ -63,6 +63,63 @@ solo para la URL. El login pasa a ser por gimnasio (`/g/:slug/login`).
 
 ---
 
+## D5 — Catálogo de ejercicios mixto: base global + propios por gimnasio
+
+**Decidido.** La tabla `ejercicios` es compartida y tiene dos tipos de filas:
+
+- **Ejercicios base:** `gimnasio_id = NULL`. Los ven todos los gimnasios y son de
+  **solo lectura** para ellos. Los mantendrá el superadministrador de plataforma
+  (mientras tanto vienen en el seed).
+- **Ejercicios propios:** llevan el `gimnasio_id` del gimnasio que los creó. Solo ese
+  gimnasio los ve, los edita, los desactiva o los elimina.
+
+Reglas (implementadas en `api.ejercicios`):
+- `list()` devuelve **base + propios del gimnasio activo**.
+- Un gimnasio no puede editar, desactivar ni borrar un ejercicio base: puede
+  **personalizarlo**, que crea una copia propia ("<nombre> (personalizado)") con id nuevo.
+- El nombre de un ejercicio propio no puede repetirse dentro del gimnasio ni coincidir
+  con uno base (sin importar mayúsculas, tildes ni espacios).
+- Eliminar un ejercicio propio aplica **RESTRICT** si lo usa alguna rutina del gimnasio
+  (se sugiere desactivarlo). *Difiere del esquema de `main`, que proponía CASCADE en
+  `RUTINA_EJERCICIOS.id_ejercicio`: borrar el ejercicio cambiaría rutinas ya asignadas.*
+- `id_ejercicio` es global (como un `SERIAL`), así una rutina puede referenciar un base
+  o un propio sin ambigüedad.
+
+En producción (RLS): lectura con `gimnasio_id IS NULL OR gimnasio_id = <gimnasio de la
+sesión>`; escritura solo con `gimnasio_id = <gimnasio de la sesión>` (las filas base
+las escribe únicamente el superadmin).
+
+*Nota técnica del mock:* `db.readTenant` filtra por igualdad y no devuelve las filas
+base, así que `api.ejercicios` las combina a mano (`leerCatalogo()`); las escrituras de
+propios usan `writeTenant`, que conserva intactas las filas base.
+
+**Rechazado:** catálogo solo global (los gimnasios no podrían agregar los suyos) y solo
+por gimnasio (cada gimnasio arrancaría vacío y se duplicaría el mismo ejercicio en todos).
+
+**Imágenes del catálogo base (KAN-96).** Vienen de
+[free-exercise-db](https://github.com/yuhonas/free-exercise-db) (yuhonas), publicado
+bajo **The Unlicense** (dominio público: se pueden copiar, modificar y redistribuir sin
+atribución obligatoria; la dejamos por cortesía). Son 2 JPG por ejercicio (posición
+inicial y final), reducidos a 400 px de ancho, en
+`frontend-react/public/recursos/ejercicios/<id>-0.jpg` y `<id>-1.jpg`. El seed guarda la
+ruta de la `-0` en `recurso_url` y la vista alterna las dos (`AnimacionEjercicio`).
+39 de los 40 base tienen imagen (33 equivalentes exactos y 6 aproximados); *Burpees*
+no tiene equivalente y muestra el ícono de respaldo. Los propios de cada gimnasio usan
+la URL que les pongan (una imagen o GIF externo se muestra tal cual).
+
+**Imágenes sugeridas para ejercicios propios (KAN-97).** `frontend-react/public/recursos/indice-imagenes.json`
+(185 KB) es un índice derivado de la misma fuente, free-exercise-db (**The Unlicense**, dominio
+público): los 873 ejercicios que traen dos imágenes, con nombre en inglés, nombre en español
+(traducción propia con un glosario fijo), palabras clave en español (sinónimos usados en gimnasios de
+Colombia), grupo muscular y equipo convertidos a nuestras listas, y categoría (fuerza, cardio,
+estiramiento). Al crear o editar un ejercicio propio se sugieren hasta 6 imágenes según el nombre; las
+imágenes **no se copian al proyecto**: `recurso_url` queda con el enlace a
+`raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/<id>/0.jpg`. La imagen nunca es
+obligatoria: sin imagen se muestra un pictograma por grupo muscular, y también se puede subir una foto
+(reducida a ~400 px y ~20 KB en base64) o pegar un enlace.
+
+---
+
 ## Decisiones pendientes (por cerrar en equipo)
 
 - [ ] Cómo identifica el login a qué gimnasio pertenece alguien: por usuario /
@@ -74,7 +131,7 @@ solo para la URL. El login pasa a ser por gimnasio (`/g/:slug/login`).
       **D4 propone cerrarlo por slug** (`/g/:slug/login`): el usuario se busca solo
       dentro del gimnasio de la URL.
 - [ ] Qué catálogos son globales (compartidos) y cuáles por gimnasio:
-      especialidades, ejercicios base.
+      especialidades. *(Ejercicios: resuelto en D5, catálogo mixto.)*
 - [ ] Roles definitivos (superadmin, administrador, instructor, cliente) —
       validar contra las historias de usuario.
 - [ ] Si el superadmin de plataforma entra en esta entrega o después.

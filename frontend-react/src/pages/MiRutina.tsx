@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
+import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { current } from "../lib/auth";
-import { idealAHoy, resumenSesion } from "../lib/rutinas";
+import { formatoPrescripcion, idealAHoy, resumenSesion } from "../lib/rutinas";
 import { utils } from "../lib/utils";
 import { AvanceRutina } from "../components/rutinas/AvanceRutina";
 import { BadgeEstadoRutina } from "../components/rutinas/BadgeEstadoRutina";
 import { FilaEjercicio } from "../components/rutinas/FilaEjercicio";
 import { PestanasSesion } from "../components/rutinas/PestanasSesion";
-import type { LetraSesion, Rutina } from "../types";
+import { VistaPreviaRecurso } from "../components/ejercicios/VistaPreviaRecurso";
+import type { Ejercicio, LetraSesion, Rutina, RutinaEjercicio } from "../types";
+
+type EjercicioSeleccionado = { fila: RutinaEjercicio; ejercicio: Ejercicio };
 
 type DatosRutina = {
   rutina: Rutina;
@@ -29,6 +33,12 @@ export function MiRutina() {
   const cedula = sesion?.numero_identificacion;
   const [consulta, setConsulta] = useState<Consulta>({ estado: "cargando" });
   const [activa, setActiva] = useState<LetraSesion>("A");
+  const [detalle, setDetalle] = useState<EjercicioSeleccionado | null>(null);
+
+  function cambiarSesion(letra: LetraSesion) {
+    setDetalle(null);
+    setActiva(letra);
+  }
 
   useEffect(() => {
     let cancelado = false;
@@ -113,7 +123,7 @@ export function MiRutina() {
         : null;
 
   return (
-    <div className="d-flex flex-column gap-3">
+    <div className="cli-mi-rutina d-flex flex-column gap-3">
       <section className="card-g" aria-labelledby="mi-rutina-titulo">
         <div className="card-head">
           <div>
@@ -171,26 +181,116 @@ export function MiRutina() {
             <PestanasSesion
               pestanas={sesiones.map((s) => ({ sesion: s.sesion, resumen: resumenSesion(s.ejercicios, catalogo) }))}
               activa={activa}
-              onCambiar={setActiva}
+              onCambiar={cambiarSesion}
             />
             <div role="tabpanel" aria-label={`Ejercicios de la sesión ${activa}`}>
               {!sesionActiva?.ejercicios.length ? (
                 <p className="empty-state mb-0">Esta sesión aún no tiene ejercicios asignados. Consulta con tu instructor.</p>
               ) : (
                 <div className="inst-lista-ej">
-                  {sesionActiva.ejercicios.map((fila) => (
-                    <FilaEjercicio
-                      key={fila.id_ejercicio}
-                      fila={fila}
-                      ejercicio={catalogo.find((e) => e.id_ejercicio === fila.id_ejercicio)}
-                    />
-                  ))}
+                  {sesionActiva.ejercicios.map((fila) => {
+                    const ejercicio = catalogo.find((e) => e.id_ejercicio === fila.id_ejercicio);
+                    return (
+                      <FilaEjercicio
+                        key={fila.id_ejercicio}
+                        fila={fila}
+                        ejercicio={ejercicio}
+                        acciones={ejercicio && (
+                          <button
+                            type="button"
+                            className="btn-dark cli-ej-accion"
+                            aria-label={`Ver detalle de ${ejercicio.nombre}`}
+                            title={`Ver detalle de ${ejercicio.nombre}`}
+                            onClick={() => setDetalle({ fila, ejercicio })}
+                          >
+                            <i className="bi bi-info-circle" aria-hidden="true" />
+                            <span>Ver detalle</span>
+                          </button>
+                        )}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </div>
           </>
         )}
       </section>
+      {detalle && <DetalleEjercicio detalle={detalle} onCerrar={() => setDetalle(null)} />}
     </div>
+  );
+}
+
+// Ficha local de T4: combina el catálogo con la indicación de esta rutina, sin consultar ni guardar datos.
+function DetalleEjercicio({ detalle, onCerrar }: { detalle: EjercicioSeleccionado; onCerrar: () => void }) {
+  const { fila, ejercicio } = detalle;
+  const porTiempo = ejercicio.tipo_medicion === "TIEMPO";
+  const tieneReps = fila.reps_min != null || fila.reps_max != null;
+  const repeticiones = tieneReps
+    ? formatoPrescripcion({ reps_min: fila.reps_min, reps_max: fila.reps_max })
+    : "Sin indicación";
+  const duracion = fila.segundos != null ? `${fila.segundos} s` : "Sin indicación";
+  const pendiente = fila.agregado_por_cliente === true && fila.revisado_por_instructor !== true;
+  const indicaciones = [
+    { etiqueta: "Series", valor: fila.series ?? "Sin indicación" },
+    { etiqueta: porTiempo ? "Duración" : "Repeticiones", valor: porTiempo ? duracion : repeticiones },
+    ...(!porTiempo && fila.segundos != null ? [{ etiqueta: "Duración", valor: duracion }] : []),
+    ...(porTiempo && tieneReps ? [{ etiqueta: "Repeticiones", valor: repeticiones }] : []),
+    ...(fila.peso_kg != null ? [{ etiqueta: "Peso asignado", valor: `${fila.peso_kg} kg` }] : []),
+    ...(fila.descanso_seg != null ? [{ etiqueta: "Descanso", valor: `${fila.descanso_seg} s entre series` }] : []),
+  ];
+
+  return (
+    <Modal show onHide={onCerrar} centered scrollable fullscreen="sm-down" contentClassName="cli-ej-detalle" aria-labelledby="cli-ej-titulo">
+      <Modal.Header className="cli-ej-cabecera">
+        <div className="cli-ej-identidad">
+          <Modal.Title as="h2" id="cli-ej-titulo">{ejercicio.nombre}</Modal.Title>
+          <div className="cli-ej-meta">
+            <span className="badge-g cli-ej-etiqueta">{ejercicio.grupo_muscular}</span>
+            <span className="badge-g cli-ej-etiqueta">{ejercicio.nivel}</span>
+            <span className="badge-g cli-ej-etiqueta">{ejercicio.equipo}</span>
+          </div>
+        </div>
+        <button type="button" className="btn-dark cli-ej-cerrar-icono" onClick={onCerrar} aria-label="Cerrar detalle del ejercicio" title="Cerrar detalle del ejercicio">
+          <i className="bi bi-x-lg" aria-hidden="true" />
+        </button>
+      </Modal.Header>
+      <Modal.Body className="cli-ej-cuerpo">
+        <div className="cli-ej-visual">
+          <VistaPreviaRecurso key={ejercicio.recurso_url} url={ejercicio.recurso_url} tamano="grande" alt={ejercicio.nombre} grupo={ejercicio.grupo_muscular} />
+        </div>
+        <section aria-labelledby="cli-ej-indicacion">
+          <h3 className="cli-ej-seccion" id="cli-ej-indicacion">Tu indicación</h3>
+          <dl className="cli-ej-prescripcion">
+            {indicaciones.map(({ etiqueta, valor }) => (
+              <div className="cli-ej-dato" key={etiqueta}>
+                <dt>{etiqueta}</dt>
+                <dd>{valor}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+        <section aria-labelledby="cli-ej-ejecucion">
+          <h3 className="cli-ej-seccion" id="cli-ej-ejecucion">Cómo realizarlo</h3>
+          <p className="cli-ej-texto">{ejercicio.descripcion.trim() ? ejercicio.descripcion : "No hay instrucciones adicionales para este ejercicio."}</p>
+        </section>
+        {fila.notas_instructor.trim() && (
+          <section className="cli-ej-nota" aria-labelledby="cli-ej-nota-titulo">
+            <h3 className="cli-ej-seccion" id="cli-ej-nota-titulo">
+              <i className="bi bi-chat-left-text me-2" aria-hidden="true" />Nota de tu instructor
+            </h3>
+            <p className="cli-ej-texto">{fila.notas_instructor}</p>
+          </section>
+        )}
+        {pendiente && (
+          <p className="cli-ej-pendiente" role="status">
+            <i className="bi bi-clock-history me-2" aria-hidden="true" />Pendiente de revisión por tu instructor
+          </p>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <button type="button" className="btn-neon cli-ej-cerrar" onClick={onCerrar}>Cerrar</button>
+      </Modal.Footer>
+    </Modal>
   );
 }

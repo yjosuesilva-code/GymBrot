@@ -4,6 +4,9 @@ import { api } from "../data/api";
 import { utils } from "../lib/utils";
 import { disponibilidadTexto, diaDisponible, horaDisponible, slotsPara, choque } from "../lib/horarios";
 import { instructorEnSesion } from "../lib/sesionInstructor"; // [P3] B4 · KAN-91
+import { PanelClases } from "../components/clases/PanelClases"; // [P3] B7 · KAN-94
+import { PestanasCitas } from "../components/clases/PestanasCitas"; // [P3] B7 · KAN-94
+import type { PestanaCitas } from "../components/clases/PestanasCitas"; // [P3] B7
 import type { Cliente, Instructor, Cita, TipoCita } from "../types";
 
 type FormCita = {
@@ -84,6 +87,7 @@ export function Citas() {
   // [P3] B4 · KAN-91: si entra un INSTRUCTOR solo ve y agenda sus propias citas
   const [miCedula] = useState(instructorEnSesion);
   const soloMias = (lista: Cita[]) => citasDe(lista, miCedula);
+  const [pestana, setPestana] = useState<PestanaCitas>("citas"); // [P3] B7 · KAN-94
 
   useEffect(() => {
     Promise.all([api.citas.list(), api.clientes.list(), api.instructores.list()]).then(
@@ -231,7 +235,12 @@ export function Citas() {
 
   const mesNombre = MESES[mes.mes] + " " + mes.anio;
 
+  // [P3] B7 · KAN-94: pestaña "Clases" (clases grupales con aforo); la de citas sigue igual
+  if (pestana === "clases") return <><PestanasCitas activa={pestana} onCambiar={setPestana} /><PanelClases /></>;
+
   return (
+    <>
+    <PestanasCitas activa={pestana} onCambiar={setPestana} /> {/* [P3] B7 */}
     <div className="card-g">
       <div className="card-head">
         <div>
@@ -441,5 +450,6 @@ export function Citas() {
         </Modal.Footer>
       </Modal>
     </div>
+    </> /* [P3] B7 */
   );
 }

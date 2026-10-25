@@ -484,20 +484,47 @@ export type CitaNueva = Omit<Cita, 'gimnasio_id' | 'id_cita' | 'estado'>;
    instructor; los clientes se agendan mientras haya cupo. */
 export type TipoClase = 'RUMBA' | 'ZUMBA' | 'CORE' | 'FUNCIONAL' | 'YOGA' | 'OTRA';
 
+/* [P3] B7 · KAN-94: una Clase es UN horario semanal fijo (un solo día de la semana).
+   Una rumba de lunes, miércoles y viernes son 3 clases. El cliente no se inscribe "a la
+   clase" sino a una SESIÓN concreta (la clase en una fecha): ver InscripcionClase. */
 export interface Clase {
   gimnasio_id: Gimnasio['gimnasio_id'];
-  id_clase: number;             // autoincremental global (lo pone apiClases)
+  id_clase: number;             // autoincremental global (lo pone api.clases)
   id_instructor: string;        // Instructor.numero_identificacion
   nombre: string;
   tipo_clase: TipoClase;
   dia_semana: DiaSemana;
-  hora: string;                 // 'HH:MM'
-  duracion_min: number;         // ej. 60
-  aforo_max: number;            // cupos máximos
-  inscritos: string[];          // Cliente.numero_identificacion de los agendados
-  estado: 'ACTIVA' | 'CANCELADA';
+  hora: string;                 // 'HH:MM' de inicio
+  duracion_min: number;         // ej. 60 (15–180)
+  aforo_max: number;            // cupos por sesión (1–100)
+  /** @deprecated [P3] B7: la inscripción es por fecha de sesión (InscripcionClase). Siempre []. */
+  inscritos: string[];
+  estado: 'ACTIVA' | 'CANCELADA'; // CANCELADA = se canceló la clase entera
+  fechas_canceladas?: string[];   // [P3] B7: sesiones sueltas canceladas ('YYYY-MM-DD')
 }
 
-// Lo que manda la vista al crear: gimnasio_id, id_clase, inscritos y estado los pone apiClases
-export type ClaseNueva = Omit<Clase, 'gimnasio_id' | 'id_clase' | 'inscritos' | 'estado'>;
+// Lo que manda la vista al crear: gimnasio_id, id_clase, inscritos, estado y fechas_canceladas los pone api.clases
+export type ClaseNueva = Omit<Clase, 'gimnasio_id' | 'id_clase' | 'inscritos' | 'estado' | 'fechas_canceladas'>;
+
+// [P3] B7 · Un cliente inscrito en UNA sesión (fecha concreta) de una clase
+export type EstadoInscripcion = 'INSCRITA' | 'RETIRADA' | 'CANCELADA'; // CANCELADA = la canceló el gimnasio
+
+export interface InscripcionClase {
+  gimnasio_id: Gimnasio['gimnasio_id'];
+  id_inscripcion: number;       // global (db.siguienteId)
+  id_clase: number;             // Clase.id_clase
+  id_cliente: string;           // Cliente.numero_identificacion
+  fecha: string;                // 'YYYY-MM-DD' de la sesión (cae en clase.dia_semana)
+  estado: EstadoInscripcion;
+  creada_el: string;            // 'YYYY-MM-DD'
+}
+
+// [P3] B7 · Una sesión concreta con su ocupación. Se CALCULA (api.clases.sesiones); no se guarda.
+export interface SesionClase {
+  clase: Clase;
+  fecha: string;                // 'YYYY-MM-DD'
+  inscritos: number;            // inscripciones INSCRITA de esa fecha
+  cupos_libres: number;         // aforo_max - inscritos (mínimo 0)
+  cancelada: boolean;           // la fecha está en clase.fechas_canceladas
+}
 // ===== [/roles] Clases generales =====

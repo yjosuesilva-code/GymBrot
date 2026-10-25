@@ -2,6 +2,7 @@ import { utils } from "../lib/utils";
 import { membresiaVigente } from "../lib/membresias";
 import { notificarCambioDeDatos } from "../lib/datos";
 import { OBJETIVOS_RUTINA } from "../lib/rutinas"; // [P3] única lista de objetivos
+import { DIAS_MAX_INSCRIPCION, TIPOS_CLASE, aMinutos, diaSemanaDe, fechasDeClase, horaFin, seCruzan } from "../lib/clases"; // [P3] B7
 import { slugUnico, slugify, validarSlug, normalizarSlugDeUrl } from "../lib/slug"; // [multitenant-slug]
 import { gimnasioFijado } from "../tenant/tenantActivo"; // [multitenant-slug]
 import { migrarDisponibilidadTexto, diaDisponible, horaDisponible, choque, validarHorario } from "../lib/horarios"; // [P3] horario de instructores y citas
@@ -38,6 +39,10 @@ import type {
   RutinaEjercicio, // [P3]
   LetraSesion, // [P3] Rutinas v2
   EstadoRutina, // [P3]
+  Clase, // [P3] B7
+  ClaseNueva, // [P3] B7
+  InscripcionClase, // [P3] B7
+  SesionClase, // [P3] B7
   SesionEjercicioNuevo, // [P3]
   RegistroEntrenamiento, // [P3]
   RegistroNuevo, // [P3]
@@ -62,6 +67,8 @@ interface Seed {
   rutinas: Rutina[]; // [P3]
   rutina_ejercicios: RutinaEjercicio[]; // [P3]
   registros_entrenamiento: RegistroEntrenamiento[]; // [P3] Rutinas v2
+  clases: Clase[]; // [P3] B7 · KAN-94
+  inscripciones_clase: InscripcionClase[]; // [P3] B7 · KAN-94
   progreso: Progreso[]; // [P2]
   citas: Cita[]; // [P2]
 }
@@ -554,6 +561,66 @@ const GRUPOS_POR_DIVISION: Record<number, Ejercicio["grupo_muscular"][][]> = {
   3: [["Pecho", "Tríceps", "Hombros"], ["Espalda", "Bíceps", "Abdomen"], ["Piernas", "Glúteos", "Cardio"]],
 };
 
+// [P3] B7: orden de los días para listar clases, y hora local actual 'HH:MM'
+const DIAS_ORDEN_CLASE: Clase["dia_semana"][] = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"];
+function horaLocal(): string {
+  const d = new Date();
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+
+/* [P3] B7 · KAN-94 — Semilla de clases con aforo. Cada clase cae dentro del horario de su
+   instructor. Inscripciones: solo clientes ACTIVOS con membresía vigente del mismo gimnasio, en
+   las sesiones de hoy a hoy + 14 días. La primera sesión de Yoga de Centro queda llena (para ver
+   "sin cupo") y cada gimnasio tiene una inscripción RETIRADA (el cliente se retiró). */
+function generarClases(seed: Seed): void {
+  const hoy = utils.isoDate();
+  const base = (id: number, gym: string, ins: string, nombre: string, tipo: Clase["tipo_clase"], dia: Clase["dia_semana"], hora: string, dur: number, aforo: number): Clase => ({
+    gimnasio_id: gym, id_clase: id, id_instructor: ins, nombre, tipo_clase: tipo, dia_semana: dia,
+    hora, duracion_min: dur, aforo_max: aforo, inscritos: [], estado: "ACTIVA", fechas_canceladas: [],
+  });
+  seed.clases = [
+    // Centro: Natalia atiende Lun-Mié-Vie 16–21; Camilo Lun-Vie 6–14
+    base(1, "gym-centro", "2000000002", "Yoga al atardecer", "YOGA", "LUNES", "17:00", 60, 12),
+    base(2, "gym-centro", "2000000002", "Rumba terapia", "RUMBA", "MIERCOLES", "18:00", 60, 20),
+    base(3, "gym-centro", "2000000002", "Zumba", "ZUMBA", "VIERNES", "19:00", 60, 25),
+    base(4, "gym-centro", "2000000001", "Core express", "CORE", "LUNES", "12:00", 30, 8),
+    base(5, "gym-centro", "2000000001", "Core", "CORE", "MARTES", "07:00", 45, 10),
+    base(6, "gym-centro", "2000000001", "Funcional", "FUNCIONAL", "JUEVES", "08:00", 50, 15),
+    // Titan: Natalia atiende Sáb 8–12; Jorge Lun-Sáb 5–11
+    base(7, "gym-titan", "2000000002", "Yoga sabatino", "YOGA", "SABADO", "09:00", 60, 10),
+    base(8, "gym-titan", "2000000101", "Funcional al amanecer", "FUNCIONAL", "MIERCOLES", "06:00", 60, 12),
+  ];
+
+  const elegibles = (gym: string) =>
+    seed.clientes
+      .filter((c) => c.gimnasio_id === gym)
+      .filter((c) => seed.membresias.some((m) => m.gimnasio_id === gym && m.id_cliente === c.numero_identificacion && membresiaVigente(m, hoy, c)))
+      .map((c) => c.numero_identificacion);
+
+  const inscripciones: InscripcionClase[] = [];
+  let id = 1;
+  for (const clase of seed.clases) {
+    const clientes = elegibles(clase.gimnasio_id);
+    if (clientes.length === 0) continue;
+    fechasDeClase(clase, hoy, sumarDias(hoy, DIAS_MAX_INSCRIPCION)).forEach((fecha, n) => {
+      // Ocupación entre ~40 % y ~80 %; la primera sesión de Yoga de Centro, llena
+      const lleno = clase.id_clase === 1 && n === 0;
+      const cuantos = Math.min(clientes.length, lleno ? clase.aforo_max : Math.round(clase.aforo_max * (0.4 + ((clase.id_clase + n) % 5) * 0.1)));
+      for (let k = 0; k < cuantos; k++) {
+        const cliente = clientes[(clase.id_clase * 7 + n * 3 + k) % clientes.length];
+        if (inscripciones.some((x) => x.id_clase === clase.id_clase && x.fecha === fecha && x.id_cliente === cliente)) continue;
+        inscripciones.push({ gimnasio_id: clase.gimnasio_id, id_inscripcion: id++, id_clase: clase.id_clase, id_cliente: cliente, fecha, estado: "INSCRITA", creada_el: sumarDias(hoy, -1) });
+      }
+    });
+  }
+  // Una inscripción RETIRADA por gimnasio (la última de cada uno), para que el historial no esté vacío
+  for (const gym of ["gym-centro", "gym-titan"]) {
+    const ultima = [...inscripciones].reverse().find((x) => x.gimnasio_id === gym);
+    if (ultima) ultima.estado = "RETIRADA";
+  }
+  seed.inscripciones_clase = inscripciones;
+}
+
 function generarRutinasV2(seed: Seed): void {
   const base = seed.ejercicios.filter((e) => e.gimnasio_id === null && e.estado === "ACTIVO");
   const rutinas: Rutina[] = [];
@@ -1004,6 +1071,13 @@ const SEED: Seed = {
   registros_entrenamiento: [],
   // ===== [/P3] Rutinas =====
 
+  // ===== [P3] Clases con aforo (B7 · KAN-94) =====
+  // Las llena generarClases(SEED). Colecciones nuevas: db.read() usa esta semilla mientras la
+  // clave no exista en localStorage, así que aparecen sin subir SEED_VERSION.
+  clases: [],
+  inscripciones_clase: [],
+  // ===== [/P3] Clases =====
+
   // ===== [P2] Progreso =====
   progreso: [
     { gimnasio_id:'gym-centro', id_progreso:1, id_cliente:'1000000001', fecha:'2026-07-10', peso:62,   altura:1.65, porcentaje_grasa: 24, masa_muscular: 26.5, notas:'Medición inicial' },
@@ -1026,6 +1100,7 @@ const SEED: Seed = {
 };
 
 generarRutinasV2(SEED); // [P3] KAN-55: rutinas v2, sus ejercicios y registros + cuentas de instructor sincronizadas
+generarClases(SEED); // [P3] B7 · KAN-94: 6 clases en Centro y 2 en Titan, con inscripciones de las próximas 2 semanas
 
 // Version del seed guardado en localStorage.
 //
@@ -3030,6 +3105,265 @@ export const api = {
     },
   },
   // ===== [/P3] Rutinas =====
+
+  // ===== [P3] Clases con aforo (B7 · KAN-94) =====
+  /* Contrato para el instructor (T3) y el cliente (T4). Se re-exporta como `apiClases`
+     desde data/apiClases.ts. Una Clase = UN día de la semana a una hora (una rumba de lunes,
+     miércoles y viernes son 3 clases). El cliente se inscribe a una SESIÓN: la clase en una
+     fecha concreta, entre hoy y hoy + DIAS_MAX_INSCRIPCION. */
+  clases: {
+    // Valida los datos de una clase nueva o editada (excluirId = la propia clase al editar)
+    _validar(data: ClaseNueva, excluirId?: number): string | null {
+      if (!data.nombre.trim()) return "El nombre es obligatorio";
+      if (!TIPOS_CLASE.includes(data.tipo_clase)) return "Tipo de clase no válido";
+      if (!/^\d{2}:\d{2}$/.test(data.hora)) return "La hora debe tener el formato HH:MM";
+      if (!Number.isInteger(data.duracion_min) || data.duracion_min < 15 || data.duracion_min > 180)
+        return "La duración debe estar entre 15 y 180 minutos";
+      if (!Number.isInteger(data.aforo_max) || data.aforo_max < 1 || data.aforo_max > 100)
+        return "El aforo debe estar entre 1 y 100 personas";
+      const ins = db.readTenant<Instructor>("instructores").find((i) => i.numero_identificacion === data.id_instructor);
+      if (!ins) return "El instructor no existe";
+      if (ins.estado !== "ACTIVO") return ins.nombre + " " + ins.apellidos + " está inactivo";
+      // La clase completa (inicio y fin) debe caber en uno de sus intervalos de ese día
+      const inicio = aMinutos(data.hora);
+      const fin = inicio + data.duracion_min;
+      const cabe = (ins.horario?.[data.dia_semana] ?? []).some((iv) => aMinutos(iv.desde) <= inicio && fin <= aMinutos(iv.hasta));
+      if (!cabe) return ins.nombre + " " + ins.apellidos + " no atiende de " + data.hora + " a " + horaFin(data) + " ese día";
+      const otra = db
+        .readTenant<Clase>("clases")
+        .find((c) => c.id_clase !== excluirId && c.estado === "ACTIVA" && c.id_instructor === data.id_instructor && c.dia_semana === data.dia_semana && seCruzan(c, data));
+      if (otra) return "Se cruza con «" + otra.nombre + "» (" + otra.hora + "–" + horaFin(otra) + ") del mismo instructor";
+      return null;
+    },
+
+    // Inscripciones INSCRITA de una clase en una fecha
+    _ocupacion(idClase: number, fecha: string): InscripcionClase[] {
+      return db
+        .readTenant<InscripcionClase>("inscripciones_clase")
+        .filter((x) => x.id_clase === idClase && x.fecha === fecha && x.estado === "INSCRITA");
+    },
+
+    // Todas las clases del gimnasio (activas y canceladas), por día y hora
+    async list(): Promise<Clase[]> {
+      await api._delay();
+      const orden = (c: Clase) => DIAS_ORDEN_CLASE.indexOf(c.dia_semana) * 1440 + aMinutos(c.hora);
+      return db.readTenant<Clase>("clases").sort((a, b) => orden(a) - orden(b));
+    },
+
+    async deInstructor(idInstructor: string): Promise<Clase[]> {
+      return (await api.clases.list()).filter((c) => c.id_instructor === idInstructor);
+    },
+
+    async get(id: number): Promise<Clase | null> {
+      await api._delay();
+      return db.readTenant<Clase>("clases").find((c) => c.id_clase === id) ?? null;
+    },
+
+    async create(data: ClaseNueva): Promise<ApiResp<Clase>> {
+      await api._delay();
+      const error = api.clases._validar(data);
+      if (error) return { ok: false, mensaje: error };
+      const arr = db.readTenant<Clase>("clases");
+      const nueva: Clase = {
+        ...data,
+        nombre: data.nombre.trim(),
+        gimnasio_id: gimnasioParaEscribir(),
+        id_clase: db.siguienteId<Clase>("clases", (c) => c.id_clase),
+        inscritos: [],
+        estado: "ACTIVA",
+        fechas_canceladas: [],
+      };
+      arr.push(nueva);
+      db.writeTenant("clases", arr);
+      return { ok: true, mensaje: "Clase creada", data: nueva };
+    },
+
+    /* Con inscripciones futuras no se puede cambiar el día ni la hora (los inscritos reservaron
+       esa franja: mejor cancelar y crear otra), y el aforo no puede quedar por debajo de los
+       inscritos de ninguna sesión futura. */
+    async update(id: number, data: Partial<ClaseNueva>): Promise<ApiResp<Clase>> {
+      await api._delay();
+      const arr = db.readTenant<Clase>("clases");
+      const clase = arr.find((c) => c.id_clase === id);
+      if (!clase) return { ok: false, mensaje: "Clase no encontrada" };
+      if (clase.estado === "CANCELADA") return { ok: false, mensaje: "La clase está cancelada" };
+      const final: ClaseNueva = { ...clase, ...data };
+      const error = api.clases._validar(final, id);
+      if (error) return { ok: false, mensaje: error };
+      const hoy = utils.isoDate();
+      const futuras = db
+        .readTenant<InscripcionClase>("inscripciones_clase")
+        .filter((x) => x.id_clase === id && x.estado === "INSCRITA" && x.fecha >= hoy);
+      if (futuras.length > 0 && (final.dia_semana !== clase.dia_semana || final.hora !== clase.hora))
+        return { ok: false, mensaje: "Tiene inscritos en próximas sesiones: no se puede cambiar el día ni la hora. Cancela la clase y crea otra." };
+      const maxInscritos = Math.max(0, ...futuras.map((x) => api.clases._ocupacion(id, x.fecha).length));
+      if (final.aforo_max < maxInscritos)
+        return { ok: false, mensaje: "Una próxima sesión ya tiene " + maxInscritos + " inscritos: el aforo no puede ser menor" };
+      Object.assign(clase, data, { id_clase: id, nombre: final.nombre.trim() });
+      db.writeTenant("clases", arr);
+      return { ok: true, mensaje: "Clase actualizada", data: clase };
+    },
+
+    // Cancela la clase entera: deja de ofrecerse y sus inscripciones futuras pasan a CANCELADA
+    async cancelar(id: number): Promise<ApiResp<Clase>> {
+      await api._delay();
+      const arr = db.readTenant<Clase>("clases");
+      const clase = arr.find((c) => c.id_clase === id);
+      if (!clase) return { ok: false, mensaje: "Clase no encontrada" };
+      if (clase.estado === "CANCELADA") return { ok: false, mensaje: "La clase ya estaba cancelada" };
+      clase.estado = "CANCELADA";
+      db.writeTenant("clases", arr);
+      const hoy = utils.isoDate();
+      const ins = db.readTenant<InscripcionClase>("inscripciones_clase");
+      ins.forEach((x) => {
+        if (x.id_clase === id && x.estado === "INSCRITA" && x.fecha >= hoy) x.estado = "CANCELADA";
+      });
+      db.writeTenant("inscripciones_clase", ins);
+      return { ok: true, mensaje: "Clase cancelada", data: clase };
+    },
+
+    // Cancela una sola sesión (fecha) y sus inscripciones; las demás fechas siguen igual
+    async cancelarSesion(id: number, fecha: string): Promise<ApiResp<Clase>> {
+      await api._delay();
+      const arr = db.readTenant<Clase>("clases");
+      const clase = arr.find((c) => c.id_clase === id);
+      if (!clase) return { ok: false, mensaje: "Clase no encontrada" };
+      if (clase.estado === "CANCELADA") return { ok: false, mensaje: "La clase ya estaba cancelada" };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || diaSemanaDe(fecha) !== clase.dia_semana)
+        return { ok: false, mensaje: "Esa fecha no es un " + clase.dia_semana.toLowerCase() };
+      if (fecha < utils.isoDate()) return { ok: false, mensaje: "No se puede cancelar una sesión pasada" };
+      if ((clase.fechas_canceladas ?? []).includes(fecha)) return { ok: false, mensaje: "Esa sesión ya estaba cancelada" };
+      clase.fechas_canceladas = [...(clase.fechas_canceladas ?? []), fecha].sort();
+      db.writeTenant("clases", arr);
+      const ins = db.readTenant<InscripcionClase>("inscripciones_clase");
+      ins.forEach((x) => {
+        if (x.id_clase === id && x.fecha === fecha && x.estado === "INSCRITA") x.estado = "CANCELADA";
+      });
+      db.writeTenant("inscripciones_clase", ins);
+      return { ok: true, mensaje: "Sesión del " + utils.fecha(fecha) + " cancelada", data: clase };
+    },
+
+    /* Sesiones de las clases ACTIVAS entre `desde` y `hasta` (incluidas), recortadas a
+       [hoy, hoy + DIAS_MAX_INSCRIPCION]. Las de hoy que ya empezaron no salen. Las sesiones
+       canceladas salen con cancelada = true. Orden: fecha y hora. */
+    async sesiones(desde: string, hasta: string): Promise<SesionClase[]> {
+      await api._delay();
+      const hoy = utils.isoDate();
+      const inicio = desde > hoy ? desde : hoy;
+      const tope = sumarDias(hoy, DIAS_MAX_INSCRIPCION);
+      const fin = hasta < tope ? hasta : tope;
+      const ahora = horaLocal();
+      const ins = db.readTenant<InscripcionClase>("inscripciones_clase").filter((x) => x.estado === "INSCRITA");
+      const lista: SesionClase[] = [];
+      for (const clase of db.readTenant<Clase>("clases").filter((c) => c.estado === "ACTIVA")) {
+        for (const fecha of fechasDeClase(clase, inicio, fin)) {
+          if (fecha === hoy && clase.hora <= ahora) continue;
+          const inscritos = ins.filter((x) => x.id_clase === clase.id_clase && x.fecha === fecha).length;
+          lista.push({
+            clase,
+            fecha,
+            inscritos,
+            cupos_libres: Math.max(0, clase.aforo_max - inscritos),
+            cancelada: (clase.fechas_canceladas ?? []).includes(fecha),
+          });
+        }
+      }
+      return lista.sort((a, b) => (a.fecha + a.clase.hora).localeCompare(b.fecha + b.clase.hora));
+    },
+
+    // Inscripciones INSCRITA de una sesión (para la lista de asistentes del instructor)
+    async inscritosDeSesion(idClase: number, fecha: string): Promise<InscripcionClase[]> {
+      await api._delay();
+      return api.clases._ocupacion(idClase, fecha);
+    },
+
+    /* El cliente reserva un cupo en una sesión. Reglas: clase ACTIVA; la fecha cae en su día,
+       entre hoy y hoy + DIAS_MAX_INSCRIPCION y, si es hoy, antes de que empiece; sesión no
+       cancelada; cliente ACTIVO con membresía vigente (cualquier plan); hay cupo; no está ya
+       inscrito; y no tiene otra inscripción INSCRITA que se cruce en fecha y hora. */
+    async inscribir(idClase: number, idCliente: string, fecha: string): Promise<ApiResp<InscripcionClase>> {
+      await api._delay();
+      const clases = db.readTenant<Clase>("clases");
+      const clase = clases.find((c) => c.id_clase === idClase);
+      if (!clase) return { ok: false, mensaje: "Clase no encontrada" };
+      if (clase.estado !== "ACTIVA") return { ok: false, mensaje: "La clase está cancelada" };
+      const hoy = utils.isoDate();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || diaSemanaDe(fecha) !== clase.dia_semana)
+        return { ok: false, mensaje: "«" + clase.nombre + "» no tiene sesión ese día" };
+      if (fecha < hoy || fecha > sumarDias(hoy, DIAS_MAX_INSCRIPCION))
+        return { ok: false, mensaje: "Solo se reserva desde hoy hasta " + DIAS_MAX_INSCRIPCION + " días adelante" };
+      if (fecha === hoy && clase.hora <= horaLocal()) return { ok: false, mensaje: "La sesión de hoy ya empezó" };
+      if ((clase.fechas_canceladas ?? []).includes(fecha)) return { ok: false, mensaje: "Esa sesión fue cancelada" };
+
+      const cliente = db.readTenant<Cliente>("clientes").find((c) => c.numero_identificacion === idCliente);
+      if (!cliente) return { ok: false, mensaje: "El cliente no existe" };
+      if (cliente.estado !== "ACTIVO") return { ok: false, mensaje: "El cliente no está activo" };
+      const vigente = db.readTenant<Membresia>("membresias").some((m) => m.id_cliente === idCliente && membresiaVigente(m, hoy, cliente));
+      if (!vigente) return { ok: false, mensaje: "Se necesita una membresía vigente para reservar clases" };
+
+      const ins = db.readTenant<InscripcionClase>("inscripciones_clase");
+      const activas = ins.filter((x) => x.estado === "INSCRITA");
+      if (activas.some((x) => x.id_clase === idClase && x.fecha === fecha && x.id_cliente === idCliente))
+        return { ok: false, mensaje: "Ya estás inscrito en esta sesión" };
+      if (activas.filter((x) => x.id_clase === idClase && x.fecha === fecha).length >= clase.aforo_max)
+        return { ok: false, mensaje: "No quedan cupos para esta sesión" };
+      const choqueCon = activas
+        .filter((x) => x.id_cliente === idCliente && x.fecha === fecha && x.id_clase !== idClase)
+        .map((x) => clases.find((c) => c.id_clase === x.id_clase))
+        .find((c) => c !== undefined && seCruzan(c, clase));
+      if (choqueCon)
+        return { ok: false, mensaje: "Se cruza con «" + choqueCon.nombre + "» (" + choqueCon.hora + "–" + horaFin(choqueCon) + ") ese mismo día" };
+
+      const nueva: InscripcionClase = {
+        gimnasio_id: gimnasioParaEscribir(),
+        id_inscripcion: db.siguienteId<InscripcionClase>("inscripciones_clase", (x) => x.id_inscripcion),
+        id_clase: idClase,
+        id_cliente: idCliente,
+        fecha,
+        estado: "INSCRITA",
+        creada_el: hoy,
+      };
+      ins.push(nueva);
+      db.writeTenant("inscripciones_clase", ins);
+      return { ok: true, mensaje: "Inscripción confirmada: " + clase.nombre + " el " + utils.fecha(fecha) + " a las " + clase.hora, data: nueva };
+    },
+
+    // El cliente se retira de SU inscripción antes de que empiece la sesión (libera el cupo)
+    async retirar(idInscripcion: number, idCliente: string): Promise<ApiResp<InscripcionClase>> {
+      await api._delay();
+      const ins = db.readTenant<InscripcionClase>("inscripciones_clase");
+      const x = ins.find((i) => i.id_inscripcion === idInscripcion);
+      if (!x || x.id_cliente !== idCliente) return { ok: false, mensaje: "Inscripción no encontrada" };
+      if (x.estado !== "INSCRITA") return { ok: false, mensaje: "La inscripción ya no está activa" };
+      const clase = db.readTenant<Clase>("clases").find((c) => c.id_clase === x.id_clase);
+      const hoy = utils.isoDate();
+      if (x.fecha < hoy || (x.fecha === hoy && clase !== undefined && clase.hora <= horaLocal()))
+        return { ok: false, mensaje: "La sesión ya empezó o pasó: no se puede retirar" };
+      x.estado = "RETIRADA";
+      db.writeTenant("inscripciones_clase", ins);
+      return { ok: true, mensaje: "Te retiraste de la sesión", data: x };
+    },
+
+    /* "Mis clases" del cliente: cada inscripción con su clase. Primero las próximas (la más
+       cercana primero) y después las pasadas (la más reciente primero). */
+    async deCliente(idCliente: string): Promise<{ inscripcion: InscripcionClase; clase: Clase }[]> {
+      await api._delay();
+      const clases = db.readTenant<Clase>("clases");
+      const ahora = utils.isoDate() + " " + horaLocal();
+      const filas = db
+        .readTenant<InscripcionClase>("inscripciones_clase")
+        .filter((x) => x.id_cliente === idCliente)
+        .flatMap((inscripcion) => {
+          const clase = clases.find((c) => c.id_clase === inscripcion.id_clase);
+          return clase ? [{ inscripcion, clase }] : [];
+        });
+      const clave = (f: { inscripcion: InscripcionClase; clase: Clase }) => f.inscripcion.fecha + " " + f.clase.hora;
+      const proximas = filas.filter((f) => clave(f) >= ahora).sort((a, b) => clave(a).localeCompare(clave(b)));
+      const pasadas = filas.filter((f) => clave(f) < ahora).sort((a, b) => clave(b).localeCompare(clave(a)));
+      return [...proximas, ...pasadas];
+    },
+  },
+  // ===== [/P3] Clases =====
 
   // ===== [P2] Progreso =====
   progreso: {

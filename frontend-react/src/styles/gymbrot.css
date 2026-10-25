@@ -1533,3 +1533,16 @@ body {
 @media (max-width: 768px) {
   .inst-avance-compacto .inst-avance { flex-direction: row; text-align: left; }
 }
+
+/* [P3] .inst-* · Clases grupales con aforo (B7 · KAN-94) */
+.inst-subtitulo { font-family: var(--f-title); font-size: 16px; font-weight: 700; color: #fff; margin: 20px 0 10px; }
+.inst-dia-sesiones { margin-bottom: 14px; }
+.inst-dia-titulo { font-family: var(--f-label); font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+.inst-sesion { width: 100%; background: none; text-align: left; font: inherit; cursor: pointer; }
+.inst-ocupacion { display: flex; align-items: center; gap: 8px; min-width: 150px; font-family: var(--f-label); font-size: 12px; }
+.inst-ocupacion .kpi-bar { flex: 1; margin-top: 0; min-width: 60px; }
+.inst-lista-inscritos { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+@media (max-width: 640px) {
+  .inst-sesion { flex-wrap: wrap; }
+  .inst-ocupacion { min-width: 0; width: 100%; }
+}

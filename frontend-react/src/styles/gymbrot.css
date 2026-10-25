@@ -1512,3 +1512,6 @@ body {
 @media (max-width: 576px) {
   .inst-sug-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* [P3] .inst-* · Rutinas del instructor (B3 · KAN-92) */
+.inst-alerta-info { background: rgba(189,244,255,.06); border-color: rgba(189,244,255,.3); color: var(--accent); }

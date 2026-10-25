@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { instructorEnSesion } from "../lib/sesionInstructor";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
@@ -65,6 +66,8 @@ export function RutinaDetalle() {
   const [eliminar, setEliminar] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [errorModal, setErrorModal] = useState("");
+  // B3 · KAN-92: un instructor solo modifica sus rutinas; las de otros las ve en solo lectura
+  const [miCedula] = useState(instructorEnSesion);
 
   useEffect(() => {
     let activo = true;
@@ -143,6 +146,7 @@ export function RutinaDetalle() {
   const { fila, cliente, membresia, instructor, sesiones, registros, anteriores, candidatos, instructores, catalogo } = datos;
   const r = fila.rutina;
   const vigente = fila.estado === "VIGENTE" || fila.estado === "POR_VENCER";
+  const soloLectura = miCedula !== null && r.id_instructor !== miCedula;
   const sesionActiva = sesiones.find((s) => s.sesion === activa);
   const nombreDe = (cedula: string) => {
     if (cliente && cedula === cliente.numero_identificacion) return "Cliente";
@@ -217,25 +221,32 @@ export function RutinaDetalle() {
           <div className="card-sub">Rutinas</div>
           <h1 className="card-title mb-0">{r.nombre}</h1>
         </div>
-        <div className="inst-acciones">
-          <button className="btn-dark" onClick={() => navigate(ruta("/rutinas/" + idRutina + "/editar"))}>
-            <i className="bi bi-pencil me-1" aria-hidden /> Editar
-          </button>
-          <button className="btn-dark" onClick={() => { setErrorModal(""); setDuplicar(true); }}>
-            <i className="bi bi-copy me-1" aria-hidden /> Duplicar
-          </button>
-          {vigente && (
-            <button className="btn-dark" onClick={() => { setErrorModal(""); setFinalizar(true); }}>
-              <i className="bi bi-flag me-1" aria-hidden /> Finalizar
+        {!soloLectura && (
+          <div className="inst-acciones">
+            <button className="btn-dark" onClick={() => navigate(ruta("/rutinas/" + idRutina + "/editar"))}>
+              <i className="bi bi-pencil me-1" aria-hidden /> Editar
             </button>
-          )}
-          <button className="btn-icon" title="Eliminar rutina" onClick={() => { setErrorModal(""); setEliminar(true); }}>
-            <i className="bi bi-trash" aria-hidden />
-          </button>
-        </div>
+            <button className="btn-dark" onClick={() => { setErrorModal(""); setDuplicar(true); }}>
+              <i className="bi bi-copy me-1" aria-hidden /> Duplicar
+            </button>
+            {vigente && (
+              <button className="btn-dark" onClick={() => { setErrorModal(""); setFinalizar(true); }}>
+                <i className="bi bi-flag me-1" aria-hidden /> Finalizar
+              </button>
+            )}
+            <button className="btn-icon" title="Eliminar rutina" onClick={() => { setErrorModal(""); setEliminar(true); }}>
+              <i className="bi bi-trash" aria-hidden />
+            </button>
+          </div>
+        )}
       </div>
 
       {alerta && <div className={"alert-g show alert-" + alerta.tipo}>{alerta.mensaje}</div>}
+      {soloLectura && (
+        <div className="alert-g show inst-alerta-info">
+          <i className="bi bi-eye me-1" aria-hidden /> Rutina de {instructor ? instructor.nombre + " " + instructor.apellidos : "otro instructor"}: solo lectura.
+        </div>
+      )}
 
       {/* Cliente y datos de la rutina */}
       <section className="card-g">
@@ -252,7 +263,7 @@ export function RutinaDetalle() {
           ) : (
             <span className="badge-g badge-vencida">Sin membresía vigente</span>
           )}
-          {cliente && (
+          {cliente && miCedula === null && (
             <Link to={ruta("/clientes/" + cliente.numero_identificacion)} className="inst-link">
               Ver ficha del cliente
             </Link>
@@ -271,7 +282,7 @@ export function RutinaDetalle() {
       {/* Avance */}
       <section className="card-g inst-bloque-avance">
         <AvanceRutina avance={fila.avance} ideal={vigente ? idealAHoy(r) : null} siguiente={vigente ? fila.siguiente : null} />
-        {vigente ? (
+        {vigente && soloLectura ? null : vigente ? (
           <button className="btn-neon" onClick={() => { setErrorModal(""); setRegistrar(true); }}>
             <i className="bi bi-check2-circle me-1" aria-hidden /> Registrar sesión completada
           </button>
@@ -299,7 +310,7 @@ export function RutinaDetalle() {
                   fila={e}
                   ejercicio={catalogo.find((c) => c.id_ejercicio === e.id_ejercicio)}
                   acciones={
-                    e.agregado_por_cliente && e.revisado_por_instructor === false ? (
+                    e.agregado_por_cliente && e.revisado_por_instructor === false && !soloLectura ? (
                       <button className="btn-dark" onClick={() => revisar(e)}>
                         <i className="bi bi-check2 me-1" aria-hidden /> Marcar revisado
                       </button>

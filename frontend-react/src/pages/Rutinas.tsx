@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { useTenant } from "../tenant/TenantContext";
-import { OBJETIVOS_RUTINA, diasRestantes, normalizar, textoVigencia } from "../lib/rutinas";
+import { OBJETIVOS_RUTINA, diasRestantes, normalizar } from "../lib/rutinas";
+import { instructorEnSesion } from "../lib/sesionInstructor";
 import { Paginador } from "../components/Paginador";
-import { BadgeEstadoRutina } from "../components/rutinas/BadgeEstadoRutina";
 import { ModalDuplicar } from "../components/rutinas/ModalDuplicar";
 import { PersonaCliente } from "../components/rutinas/PersonaCliente";
+import { FilaTablaRutina } from "../components/rutinas/FilaTablaRutina";
+import { RutinasInstructor } from "./RutinasInstructor";
 import type { Cliente, EstadoRutina, FilaSupervision, Instructor, ObjetivoRutina, ResumenSupervision } from "../types";
 
 /* [P3] Supervisión de rutinas del admin (KAN-58): /g/:slug/rutinas.
@@ -32,7 +34,15 @@ const INDICADORES: { clave: Exclude<Indicador, "">; titulo: string; icono: strin
   { clave: "VENCIDAS", titulo: "Vencidas sin renovar", icono: "bi-x-circle", ayuda: "Clientes activos con la rutina vencida" },
 ];
 
+/* /g/:slug/rutinas la comparten dos roles (no hay guard por rol, KAN-85):
+   el instructor ve "Mis rutinas" (B3 · KAN-92) y el resto, la supervisión del admin.
+   La decisión va en un componente aparte para no llamar hooks dentro de un if. */
 export function Rutinas() {
+  const [miCedula] = useState(instructorEnSesion);
+  return miCedula !== null ? <RutinasInstructor miCedula={miCedula} /> : <SupervisionRutinas />;
+}
+
+function SupervisionRutinas() {
   const { ruta } = useTenant();
   const navigate = useNavigate();
 
@@ -302,57 +312,16 @@ export function Rutinas() {
                         </td>
                       </tr>
                     ) : (
-                      <tr key={x.f.rutina.id_rutina}>
-                        <td data-label="Cliente">
-                          <PersonaCliente cliente={x.cliente} cedula={x.f.rutina.id_cliente} />
-                        </td>
-                        <td data-label="Rutina">
-                          <div className="person-name">
-                            {x.f.rutina.nombre}
-                            {x.f.cambios_sin_revisar > 0 && (
-                              <i
-                                className="bi bi-person-exclamation inst-icono-aviso ms-2"
-                                title={x.f.cambios_sin_revisar + " cambio(s) del cliente por revisar"}
-                                aria-label="Cambios del cliente por revisar"
-                              />
-                            )}
-                          </div>
-                          <div className="person-sub">{x.f.rutina.objetivo}</div>
-                        </td>
-                        <td data-label="Instructor">{x.instructor ? x.instructor.nombre + " " + x.instructor.apellidos : x.f.rutina.id_instructor}</td>
-                        <td data-label="Sesiones">
-                          <span className="inst-letras">
-                            {(x.f.rutina.division ?? []).map((l) => (
-                              <span key={l} className={"inst-letra inst-letra-sm" + (l === x.f.siguiente ? " siguiente" : "")} title={l === x.f.siguiente ? "Siguiente sesión" : undefined}>{l}</span>
-                            ))}
-                          </span>
-                        </td>
-                        <td data-label="Vigencia">
-                          <BadgeEstadoRutina estado={x.f.estado} />
-                          <div className="person-sub">{textoVigencia(x.f.rutina, x.f.estado)}</div>
-                        </td>
-                        <td data-label="Avance">
-                          <div className="inst-avance-mini">
-                            <div className="kpi-bar"><span style={{ width: x.f.avance.porcentaje + "%" }}></span></div>
-                            <span>{x.f.avance.completadas}/{x.f.avance.planeadas}</span>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="cell-actions">
-                            <Link className="btn-icon" title="Ver detalle" to={ruta("/rutinas/" + x.f.rutina.id_rutina)}><i className="bi bi-eye" aria-hidden /></Link>
-                            <Link className="btn-icon" title="Editar" to={ruta("/rutinas/" + x.f.rutina.id_rutina + "/editar")}><i className="bi bi-pencil" aria-hidden /></Link>
-                            {(x.f.estado === "VIGENTE" || x.f.estado === "POR_VENCER") && (
-                              <button className="btn-icon" title="Finalizar" onClick={() => { setErrorModal(""); setAFinalizar(x.f); }}><i className="bi bi-flag" aria-hidden /></button>
-                            )}
-                            {vencidas.has(x.f.rutina.id_rutina) && (
-                              <button className="btn-icon" title="Renovar: nueva rutina para el cliente" onClick={() => navigate(ruta("/rutinas/nueva?cliente=" + x.f.rutina.id_cliente))}>
-                                <i className="bi bi-arrow-repeat" aria-hidden />
-                              </button>
-                            )}
-                            <button className="btn-icon" title="Duplicar para otro cliente" onClick={() => { setErrorModal(""); setADuplicar(x.f); }}><i className="bi bi-copy" aria-hidden /></button>
-                          </div>
-                        </td>
-                      </tr>
+                      <FilaTablaRutina
+                        key={x.f.rutina.id_rutina}
+                        f={x.f}
+                        cliente={x.cliente}
+                        instructor={x.instructor}
+                        renovable={vencidas.has(x.f.rutina.id_rutina)}
+                        onFinalizar={() => { setErrorModal(""); setAFinalizar(x.f); }}
+                        onRenovar={() => navigate(ruta("/rutinas/nueva?cliente=" + x.f.rutina.id_cliente))}
+                        onDuplicar={() => { setErrorModal(""); setADuplicar(x.f); }}
+                      />
                     )
                   )
                 )}

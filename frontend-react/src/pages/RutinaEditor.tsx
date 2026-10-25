@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../data/api";
 import { useTenant } from "../tenant/TenantContext";
+import { instructorEnSesion } from "../lib/sesionInstructor";
 import { ConstructorRutina } from "../components/rutinas/ConstructorRutina";
 import type { DatosRutina, RutinaInicial } from "../components/rutinas/ConstructorRutina";
 import type { Cliente, Ejercicio, Instructor, SesionEjercicioNuevo } from "../types";
@@ -9,7 +10,9 @@ import type { Cliente, Ejercicio, Instructor, SesionEjercicioNuevo } from "../ty
 /* [P3] Página del constructor (KAN-56): /rutinas/nueva y /rutinas/:id/editar.
    Carga los datos, se los pasa a <ConstructorRutina> y guarda con la API:
    crear/actualizar la rutina y después guardar sus sesiones.
-   ?cliente=<cédula> preselecciona el cliente (botón "Asignar rutina" de la supervisión). */
+   ?cliente=<cédula> preselecciona el cliente (botón "Asignar rutina" de la supervisión).
+   B3 · KAN-92: si entra un instructor, queda fijo como instructor de la rutina y solo puede
+   editar las suyas. */
 export function RutinaEditor() {
   const { ruta } = useTenant();
   const navigate = useNavigate();
@@ -20,6 +23,8 @@ export function RutinaEditor() {
 
   const [cargando, setCargando] = useState(true);
   const [noEncontrada, setNoEncontrada] = useState(false);
+  const [ajena, setAjena] = useState(false); // la rutina es de otro instructor
+  const [miCedula] = useState(instructorEnSesion);
   const [candidatos, setCandidatos] = useState<Cliente[]>([]);
   const [clienteFijo, setClienteFijo] = useState<Cliente | null>(null);
   const [instructores, setInstructores] = useState<Instructor[]>([]);
@@ -52,6 +57,13 @@ export function RutinaEditor() {
         if (!rutina) {
           if (activo) {
             setNoEncontrada(true);
+            setCargando(false);
+          }
+          return;
+        }
+        if (miCedula !== null && rutina.id_instructor !== miCedula) {
+          if (activo) {
+            setAjena(true);
             setCargando(false);
           }
           return;
@@ -90,7 +102,7 @@ export function RutinaEditor() {
     return () => {
       activo = false;
     };
-  }, [idRutina, cedulaInicial]);
+  }, [idRutina, cedulaInicial, miCedula]);
 
   async function guardar(datos: DatosRutina, ejercicios: SesionEjercicioNuevo[]) {
     setGuardando(true);
@@ -141,11 +153,11 @@ export function RutinaEditor() {
       </div>
     );
   }
-  if (noEncontrada) {
+  if (noEncontrada || ajena) {
     return (
       <div className="card-g">
         <Link to={ruta("/rutinas")} className="btn-dark" style={{ textDecoration: "none" }}><i className="bi bi-arrow-left me-1" aria-hidden /> Rutinas</Link>
-        <p className="empty-state">Rutina no encontrada</p>
+        <p className="empty-state">{ajena ? "Esta rutina es de otro instructor: no puedes editarla." : "Rutina no encontrada"}</p>
       </div>
     );
   }
@@ -163,6 +175,7 @@ export function RutinaEditor() {
         clientes={candidatos}
         clienteFijo={clienteFijo}
         instructores={instructores}
+        instructorFijo={miCedula ?? undefined}
         catalogo={catalogo}
         inicial={inicial}
         guardando={guardando}

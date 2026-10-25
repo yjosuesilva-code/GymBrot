@@ -7,25 +7,14 @@ import { utils } from "../lib/utils";
 import { DIAS_ORDEN } from "../lib/horarios";
 import { MOTIVO_ATENCION, alumnosDeInstructor } from "../lib/rutinas";
 import { useTenant } from "../tenant/TenantContext";
-import type { Cita, Cliente, FilaSupervision, Instructor, TipoCita } from "../types";
-
-const NOMBRE_TIPO: Record<TipoCita, string> = {
-  EVALUACION: "Evaluación",
-  SEGUIMIENTO: "Seguimiento",
-  NUTRICION: "Nutrición",
-  CONSULTA: "Consulta",
-};
+import { NOMBRE_TIPO_CITA, proximasCitas } from "../lib/citas";
+import type { Cita, Cliente, FilaSupervision, Instructor } from "../types";
 
 const MAX_ATENCION = 8; // filas de "Requieren atención" que se muestran
 
 // Día de hoy como DiaSemana: getDay() da 0 = domingo, y DIAS_ORDEN empieza en lunes
 function diaDeHoy() {
   return DIAS_ORDEN[(new Date().getDay() + 6) % 7];
-}
-
-function horaActual(): string {
-  const d = new Date();
-  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
 }
 
 export function DashboardInstructor() {
@@ -63,7 +52,6 @@ export function DashboardInstructor() {
     );
 
   const hoy = utils.isoDate();
-  const ahora = horaActual();
   const nombreCliente = (id: string) => {
     const c = clientes.find((x) => x.numero_identificacion === id);
     return c ? c.nombre + " " + c.apellidos : id;
@@ -74,9 +62,7 @@ export function DashboardInstructor() {
     .filter((c) => c.id_instructor === yo.numero_identificacion && c.estado !== "CANCELADA")
     .sort((a, b) => (a.fecha + a.hora).localeCompare(b.fecha + b.hora));
   const citasHoy = misCitas.filter((c) => c.fecha === hoy);
-  const proxima = misCitas.find(
-    (c) => (c.estado === "PENDIENTE" || c.estado === "CONFIRMADA") && (c.fecha > hoy || (c.fecha === hoy && c.hora >= ahora))
-  );
+  const proxima = proximasCitas(misCitas, yo.numero_identificacion)[0]; // la más cercana (lib/citas.ts)
 
   // ---- Alumnos: la misma regla que la vista Alumnos (lib/rutinas.ts) ----
   const alumnos = alumnosDeInstructor(filas, clientes, yo.numero_identificacion);
@@ -133,7 +119,7 @@ export function DashboardInstructor() {
                     <span className="inst-agenda-hora">{c.hora}</span>
                     <div className="inst-agenda-info">
                       <strong>{nombreCliente(c.id_cliente)}</strong>
-                      <span className="card-sub">{NOMBRE_TIPO[c.tipo_cita]}{c.notas ? " · " + c.notas : ""}</span>
+                      <span className="card-sub">{NOMBRE_TIPO_CITA[c.tipo_cita]}{c.notas ? " · " + c.notas : ""}</span>
                     </div>
                     <span className={"badge-g badge-" + c.estado.toLowerCase()}>{c.estado.toLowerCase()}</span>
                   </div>

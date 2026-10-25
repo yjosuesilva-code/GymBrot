@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { EquipoEjercicio, GrupoMuscular } from "../../types";
 import type { EntradaIndice } from "../../lib/indiceImagenes";
-import { MIN_LETRAS, buscarSugerencias, esDelIndice, reducirFoto, urlImagen } from "../../lib/indiceImagenes";
+import { MIN_LETRAS, buscarSugerencias, esDelIndice, urlImagen } from "../../lib/indiceImagenes";
+import { reducirFoto } from "../../lib/imagenes";
 import { AnimacionEjercicio } from "./AnimacionEjercicio";
 import { VistaPreviaRecurso } from "./VistaPreviaRecurso";
 

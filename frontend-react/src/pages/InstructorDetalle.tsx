@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { api } from "../data/api";
 import { useTenant } from "../tenant/TenantContext"; // [multitenant-slug]
 import { utils } from "../lib/utils";
+import { AvatarInstructor } from "../components/instructores/AvatarInstructor"; // [P3] B5 · KAN-93
 import { disponibilidadTexto, DIAS_ORDEN } from "../lib/horarios";
 import type { Instructor, DiaSemana } from "../types";
 
@@ -66,7 +67,7 @@ export function InstructorDetalle() {
       <div className="card-g">
         <Link to={ruta("/instructores")} className="btn-dark" style={{ textDecoration: "none" }}><i className="bi bi-arrow-left me-1" aria-hidden /> Volver</Link>
         <div className="person" style={{ marginTop: 16 }}>
-          <div className="person-avatar">{utils.iniciales(instructor.nombre, instructor.apellidos)}</div>
+          <AvatarInstructor key={instructor.foto ?? ""} nombre={instructor.nombre} apellidos={instructor.apellidos} foto={instructor.foto} grande />
           <div>
             <div className="person-name">{instructor.nombre} {instructor.apellidos}</div>
             <div className="person-sub">{instructor.especialidad} · {disponibilidadTexto(instructor.horario) || "Sin disponibilidad"}</div>

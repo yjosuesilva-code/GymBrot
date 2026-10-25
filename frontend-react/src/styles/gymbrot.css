@@ -1520,3 +1520,16 @@ body {
 .inst-avatar-foto { object-fit: cover; padding: 0; }
 .inst-avatar-grande { width: 64px; height: 64px; font-size: 22px; }
 .inst-foto-campo { display: flex; align-items: center; gap: 16px; }
+
+/* [P3] .inst-* · Agenda y rutinas en el perfil del instructor (B6 · KAN-62) */
+.inst-agenda-fecha { display: flex; flex-direction: column; min-width: 92px; }
+.inst-rutinas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.inst-rutina-tarjeta { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.inst-rutina-tarjeta-cabeza { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.inst-avance-compacto .inst-avance { gap: 14px; }
+.inst-avance-compacto .inst-anillo-num { font-size: 22px; }
+.inst-avance-compacto .inst-anillo-sub { font-size: 10px; }
+.inst-avance-compacto .inst-avance-titulo { font-size: 14px; }
+@media (max-width: 768px) {
+  .inst-avance-compacto .inst-avance { flex-direction: row; text-align: left; }
+}

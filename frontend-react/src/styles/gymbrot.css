@@ -1546,3 +1546,30 @@ body {
   .inst-sesion { flex-wrap: wrap; }
   .inst-ocupacion { min-width: 0; width: 100%; }
 }
+
+/* [T4] Ficha de ejercicio del cliente */
+.cli-ej-accion { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.cli-ej-detalle { overflow-wrap: anywhere; }
+.cli-ej-cabecera { align-items: flex-start; gap: 12px; }
+.cli-ej-identidad { min-width: 0; flex: 1; }
+.cli-ej-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.cli-ej-etiqueta { white-space: normal; }
+.cli-ej-cerrar-icono { width: 44px; height: 44px; padding: 0; flex-shrink: 0; }
+.cli-ej-cuerpo { display: flex; flex-direction: column; gap: 24px; }
+.cli-ej-visual { width: 100%; min-width: 0; }
+.cli-ej-seccion { margin: 0 0 12px; color: var(--text); font-family: var(--f-title); font-size: 16px; font-weight: 600; }
+.cli-ej-prescripcion { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.cli-ej-dato { padding: 14px; background: var(--bg-input); border: 1px solid var(--border-btn); border-radius: var(--radius-sm); }
+.cli-ej-dato dt { color: var(--text-table); font-family: var(--f-label); font-size: 12px; font-weight: 500; }
+.cli-ej-dato dd { margin: 6px 0 0; color: var(--neon); font-family: var(--f-title); font-size: 20px; font-weight: 700; line-height: 1.35; }
+.cli-ej-texto { margin: 0; color: var(--text-table); font-size: 14px; line-height: 1.65; white-space: pre-wrap; }
+.cli-ej-nota { padding: 16px; background: var(--bg-input); border-left: 3px solid var(--neon); border-radius: var(--radius-sm); }
+.cli-ej-pendiente { margin: 0; color: var(--accent); font-size: 13px; line-height: 1.5; }
+.cli-ej-cerrar { min-height: 44px; min-width: 100px; width: 100%; }
+.cli-ej-accion:focus-visible, .cli-ej-cerrar-icono:focus-visible, .cli-ej-cerrar:focus-visible { outline: 2px solid var(--neon); outline-offset: 3px; }
+@media (min-width: 576px) {
+  .cli-ej-cerrar { width: auto; }
+}
+
+/* [T4] La prescripción del cliente se consulta en la ficha de detalle. */
+.cli-mi-rutina .inst-presc { display: none; }

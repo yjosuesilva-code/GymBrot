@@ -6,6 +6,8 @@ import { useTenant } from "../tenant/TenantContext"; // [multitenant-slug]
 import { utils } from "../lib/utils";
 import { disponibilidadTexto, DIAS_ORDEN } from "../lib/horarios";
 import { Paginador } from "../components/Paginador";
+import { AvatarInstructor } from "../components/instructores/AvatarInstructor"; // [P3] B5 · KAN-93
+import { reducirFoto } from "../lib/imagenes"; // [P3] B5 · KAN-93
 import type { Instructor, Especialidad, EstadoInstructor, TipoIdentificacion, DiaSemana, HorarioInstructor, IntervaloHorario } from "../types";
 
 // El formulario tiene todos los campos del instructor menos el estado (se cambia con activar/desactivar)
@@ -96,6 +98,11 @@ export function Instructores() {
 
   const [alerta, setAlerta] = useState<Alerta | null>(null);
 
+  // KAN-86: cuenta recién creada (se muestra una sola vez para entregársela al instructor)
+  const [cuentaCreada, setCuentaCreada] = useState<{ nombre: string; usuario: string; contrasena: string } | null>(null);
+  const [aviso, setAviso] = useState("");
+  const [copiado, setCopiado] = useState(false);
+
   // Estado del modal: show lo abre/cierra; editandoId es null al crear y la cédula al editar
   const [show, setShow] = useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -154,10 +161,27 @@ export function Instructores() {
     setForm((f) => ({ ...f, [campo]: valor }));
   }
 
+  // [P3] B5 · KAN-93: foto del instructor, recortada al centro y reducida a ~240 px y ~20 KB en base64
+  const [procesandoFoto, setProcesandoFoto] = useState(false);
+  const [errorFoto, setErrorFoto] = useState("");
+  async function alElegirFoto(archivo: File | undefined) {
+    if (!archivo) return;
+    setProcesandoFoto(true);
+    setErrorFoto("");
+    try {
+      setCampo("foto", await reducirFoto(archivo, 240, true));
+    } catch (e: unknown) {
+      setErrorFoto(e instanceof Error ? e.message : "No se pudo procesar la foto");
+    } finally {
+      setProcesandoFoto(false);
+    }
+  }
+
   function abrirNuevo() {
     setEditandoId(null);
     setForm(VACIO);
     setError("");
+    setErrorFoto("");
     setShow(true);
   }
 
@@ -173,8 +197,10 @@ export function Instructores() {
       especialidad: i.especialidad,
       horario: JSON.parse(JSON.stringify(i.horario ?? {})),
       fecha_contratacion: i.fecha_contratacion,
+      foto: i.foto, // [P3] B5
     });
     setError("");
+    setErrorFoto("");
     setShow(true);
   }
 
@@ -238,21 +264,37 @@ export function Instructores() {
       correo: limpio.correo,
       especialidad: limpio.especialidad,
       horario: limpio.horario,
+      foto: form.foto ?? "", // [P3] B5 · "" = sin foto
     };
 
     setGuardando(true);
     // Al editar no se envía la cédula (es la llave); al crear, estado y fecha los pone la api
-    const res = editandoId
-      ? await api.instructores.update(editandoId, { ...datos, fecha_contratacion: limpio.fecha_contratacion })
-      : await api.instructores.create({ ...datos, numero_identificacion: limpio.numero_identificacion });
-    setGuardando(false);
-
-    if (!res.ok) {
-      setError(res.mensaje);
-      return;
+    if (editandoId) {
+      const res = await api.instructores.update(editandoId, { ...datos, fecha_contratacion: limpio.fecha_contratacion });
+      setGuardando(false);
+      if (!res.ok) {
+        setError(res.mensaje);
+        return;
+      }
+      setShow(false);
+      setAlerta({ tipo: "ok", mensaje: res.mensaje });
+    } else {
+      const res = await api.instructores.create({ ...datos, numero_identificacion: limpio.numero_identificacion });
+      setGuardando(false);
+      if (!res.ok || !res.data) {
+        setError(res.mensaje);
+        return;
+      }
+      setShow(false);
+      setAlerta({ tipo: "ok", mensaje: res.mensaje });
+      // La API devuelve la cuenta creada (o un aviso si no se pudo crear)
+      const { instructor, cuenta } = res.data;
+      setCopiado(false);
+      setAviso(res.data.aviso ?? "");
+      setCuentaCreada(
+        cuenta ? { nombre: instructor.nombre + " " + instructor.apellidos, usuario: cuenta.usuario, contrasena: cuenta.contrasena_temporal } : null
+      );
     }
-    setShow(false);
-    setAlerta({ tipo: "ok", mensaje: res.mensaje });
     setInstructores(await api.instructores.list());
   }
 
@@ -296,6 +338,38 @@ export function Instructores() {
       </div>
 
       {alerta && <div className={"alert-g show alert-" + alerta.tipo}>{alerta.mensaje}</div>}
+
+      {/* KAN-86: datos de acceso del instructor recién creado, para copiarlos y entregárselos */}
+      {cuentaCreada && (
+        <div className="inst-cuenta" role="status">
+          <div>
+            <strong><i className="bi bi-person-check me-1" aria-hidden /> Cuenta creada para {cuentaCreada.nombre}</strong>
+            <div>Usuario: <code>{cuentaCreada.usuario}</code> · Contraseña temporal: <code>{cuentaCreada.contrasena}</code></div>
+            <div className="card-sub">Se le pedirá cambiarla al primer ingreso.</div>
+          </div>
+          <div className="inst-cuenta-acciones">
+            <button
+              className="btn-dark"
+              onClick={() => {
+                const texto = "Usuario: " + cuentaCreada.usuario + " · Contraseña temporal: " + cuentaCreada.contrasena;
+                void navigator.clipboard.writeText(texto).then(() => setCopiado(true));
+              }}
+            >
+              <i className={"bi " + (copiado ? "bi-check2" : "bi-clipboard") + " me-1"} aria-hidden />
+              {copiado ? "Copiado" : "Copiar"}
+            </button>
+            <button className="btn-icon" title="Cerrar" onClick={() => setCuentaCreada(null)}>
+              <i className="bi bi-x-lg" aria-hidden />
+            </button>
+          </div>
+        </div>
+      )}
+      {aviso && (
+        <div className="alert-g show alert-error">
+          {aviso}{" "}
+          <button className="btn-icon ms-2" title="Cerrar" onClick={() => setAviso("")}><i className="bi bi-x-lg" aria-hidden /></button>
+        </div>
+      )}
 
       <div className="toolbar" style={{ marginBottom: 20 }}>
         <div className="search-box">
@@ -353,7 +427,7 @@ export function Instructores() {
                 <tr key={i.numero_identificacion}>
                   <td data-label="Instructor">
                     <div className="person">
-                      <div className="person-avatar">{utils.iniciales(i.nombre, i.apellidos)}</div>
+                      <AvatarInstructor key={i.foto ?? ""} nombre={i.nombre} apellidos={i.apellidos} foto={i.foto} />
                       <div>
                         <div className="person-name">{i.nombre} {i.apellidos}</div>
                         <div className="person-sub">{i.correo}</div>
@@ -391,6 +465,24 @@ export function Instructores() {
         <Modal.Body>
           {error && <div className="alert-g alert-error show">{error}</div>}
           <div className="row g-3">
+            {/* [P3] B5 · KAN-93: foto opcional; sin foto se muestran las iniciales */}
+            <div className="col-12">
+              <label className="form-label-g">Foto (opcional)</label>
+              <div className="inst-foto-campo">
+                <AvatarInstructor key={form.foto ?? ""} nombre={form.nombre || "?"} apellidos={form.apellidos} foto={form.foto} grande />
+                <div>
+                  <input type="file" accept="image/*" className="form-control-dark" disabled={procesandoFoto} onChange={(e) => alElegirFoto(e.target.files?.[0])} />
+                  <small className="card-sub">Se recorta al centro y se reduce a unos 20 KB.</small>
+                  {form.foto && (
+                    <button type="button" className="inst-link d-block mt-1" onClick={() => setCampo("foto", "")}>
+                      <i className="bi bi-x-circle me-1" aria-hidden />Quitar foto
+                    </button>
+                  )}
+                  {procesandoFoto && <p className="card-sub mb-0">Procesando foto…</p>}
+                  {errorFoto && <p className="inst-error-fila mb-0">{errorFoto}</p>}
+                </div>
+              </div>
+            </div>
             <div className="col-md-4">
               <label className="form-label-g">Tipo</label>
               <select

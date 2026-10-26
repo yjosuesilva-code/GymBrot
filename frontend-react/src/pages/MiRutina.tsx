@@ -1,19 +1,32 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { current } from "../lib/auth";
-import { formatoPrescripcion, idealAHoy, resumenSesion, textoVigencia } from "../lib/rutinas";
+import { formatoPrescripcion, idealAHoy, normalizar, resumenSesion, textoVigencia } from "../lib/rutinas";
 import { utils } from "../lib/utils";
+import { useTenantOpcional } from "../tenant/TenantContext";
 import { AvanceCliente } from "../components/cliente/AvanceCliente";
+import {
+  buscarBorradorRutina,
+  eliminarBorradorPorClave,
+  formatearTiempoRelativo,
+} from "../components/cliente/borradorEntrenamiento";
+import type { AmbitoBorrador } from "../components/cliente/borradorEntrenamiento";
 import { BadgeEstadoRutina } from "../components/rutinas/BadgeEstadoRutina";
 import { FilaEjercicio } from "../components/rutinas/FilaEjercicio";
 import { PestanasSesion } from "../components/rutinas/PestanasSesion";
 import { VistaPreviaRecurso } from "../components/ejercicios/VistaPreviaRecurso";
 import { EntrenamientoCliente } from "../components/cliente/EntrenamientoCliente";
+import type { EstadoEntrenamiento } from "../components/cliente/entrenamiento";
 import { obtenerNotaEntrenador, obtenerPasosTecnicos } from "../components/cliente/guiaTecnica";
 import type { Ejercicio, LetraSesion, Rutina, RutinaEjercicio } from "../types";
 
 type EjercicioSeleccionado = { fila: RutinaEjercicio; ejercicio: Ejercicio };
+
+type SesionEnEntrenamiento = {
+  sesion: LetraSesion;
+  borradorInicial: { estado: EstadoEntrenamiento; notas: string } | null;
+};
 
 type DatosRutina = {
   rutina: Rutina;
@@ -38,21 +51,49 @@ async function consultarAvance(idRutina: number) {
   return { avance, siguiente };
 }
 
+function limpiarDescripcionRutina(rutina: Rutina): string {
+  const desc = (rutina.descripcion ?? "").trim();
+  if (!desc) return "";
+  const descNorm = normalizar(desc);
+  const objNorm = normalizar(rutina.objetivo);
+  const nomNorm = normalizar(rutina.nombre);
+  if (descNorm === objNorm || descNorm === nomNorm) return "";
+
+  const prefijoPlan = `plan de ${objNorm}`;
+  if (objNorm && descNorm.startsWith(prefijoPlan)) {
+    const resto = desc.slice(prefijoPlan.length).replace(/^[\s·.,:-]+/, "").trim();
+    if (!resto) return "";
+    return resto.charAt(0).toUpperCase() + resto.slice(1);
+  }
+  return desc;
+}
+
 export function MiRutina() {
   const [sesion] = useState(current);
+  const tenant = useTenantOpcional();
   const cedula = sesion?.numero_identificacion;
+  const gimnasioId = tenant?.gimnasio.gimnasio_id ?? sesion?.gimnasio_id;
   const [consulta, setConsulta] = useState<Consulta>({ estado: "cargando" });
   const [activa, setActiva] = useState<LetraSesion>("A");
   const [detalle, setDetalle] = useState<EjercicioSeleccionado | null>(null);
-  const [entrenando, setEntrenando] = useState<LetraSesion | null>(null);
+  const [entrenando, setEntrenando] = useState<SesionEnEntrenamiento | null>(null);
   const [sesionRegistrada, setSesionRegistrada] = useState<LetraSesion | null>(null);
   const [actualizacion, setActualizacion] = useState<"lista" | "cargando" | "error">("lista");
+  const [, refrescarBorrador] = useReducer((n: number) => n + 1, 0);
+  const [modalDescartar, setModalDescartar] = useState(false);
+  const [sesionPendienteInicio, setSesionPendienteInicio] = useState<LetraSesion | null>(null);
   const confirmacion = useRef<HTMLDivElement>(null);
   const tituloSesiones = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     if (sesionRegistrada && entrenando === null) confirmacion.current?.focus();
   }, [sesionRegistrada, entrenando]);
+
+  useEffect(() => {
+    if (entrenando !== null) return;
+    const intervalo = window.setInterval(() => refrescarBorrador(), 60000);
+    return () => window.clearInterval(intervalo);
+  }, [entrenando]);
 
   function cambiarSesion(letra: LetraSesion) {
     setDetalle(null);
@@ -64,7 +105,9 @@ export function MiRutina() {
 
     async function cargar() {
       try {
-        if (!cedula) throw new Error("No hay una sesión activa. Vuelve a iniciar sesión para consultar tu rutina.");
+        if (!cedula || !gimnasioId) {
+          throw new Error("No hay una sesión activa. Vuelve a iniciar sesión para consultar tu rutina.");
+        }
 
         const vigente = await api.rutinas.vigenteDeCliente(cedula);
         if (cancelado) return;
@@ -74,6 +117,9 @@ export function MiRutina() {
         if (!rutina) {
           setConsulta({ estado: "sin-rutina" });
           return;
+        }
+        if (rutina.id_cliente !== cedula || rutina.gimnasio_id !== gimnasioId) {
+          throw new Error("La rutina consultada no corresponde a tu cuenta o gimnasio actual.");
         }
 
         const [sesiones, progreso, catalogo, instructor] = await Promise.all([
@@ -104,7 +150,7 @@ export function MiRutina() {
     return () => {
       cancelado = true;
     };
-  }, [cedula]);
+  }, [cedula, gimnasioId]);
 
   async function actualizarAvance(idRutina: number) {
     setActualizacion("cargando");
@@ -148,21 +194,33 @@ export function MiRutina() {
   const estado = api.rutinas.estado(rutina);
   const vigente = estado === "VIGENTE" || estado === "POR_VENCER";
   const sesionActiva = sesiones.find((s) => s.sesion === activa);
-  const sesionEntrenada = sesiones.find((s) => s.sesion === entrenando);
-  if (sesionEntrenada) {
+  const sesionEntrenada = entrenando ? sesiones.find((s) => s.sesion === entrenando.sesion) : undefined;
+  const ambitoBorrador: AmbitoBorrador | null =
+    gimnasioId && cedula && rutina.id_cliente === cedula && rutina.gimnasio_id === gimnasioId
+      ? { gimnasioId, idCliente: cedula, idRutina: rutina.id_rutina }
+      : null;
+
+  if (sesionEntrenada && entrenando) {
     return (
       <EntrenamientoCliente
         key={sesionEntrenada.sesion}
+        ambitoBorrador={ambitoBorrador}
+        borradorInicial={entrenando.borradorInicial}
         nombreRutina={rutina.nombre}
         sesion={sesionEntrenada.sesion}
         filas={sesionEntrenada.ejercicios}
         catalogo={catalogo}
-        onSalir={() => { setDetalle(null); setEntrenando(null); }}
+        onSalir={() => {
+          setDetalle(null);
+          setEntrenando(null);
+          refrescarBorrador();
+        }}
         onRegistrar={(registro) => {
           const autenticado = current();
+          const gymActual = tenant?.gimnasio.gimnasio_id ?? autenticado?.gimnasio_id;
           if (!autenticado || autenticado.rol !== "CLIENTE"
             || autenticado.numero_identificacion !== rutina.id_cliente
-            || autenticado.gimnasio_id !== rutina.gimnasio_id
+            || gymActual !== rutina.gimnasio_id
             || registro.sesion !== sesionEntrenada.sesion) {
             return Promise.resolve({ ok: false, mensaje: "La sesión activa no corresponde a este entrenamiento. Vuelve a iniciar sesión con tu cuenta." });
           }
@@ -172,20 +230,84 @@ export function MiRutina() {
           setSesionRegistrada(sesionEntrenada.sesion);
           setDetalle(null);
           setEntrenando(null);
+          refrescarBorrador();
           void actualizarAvance(rutina.id_rutina);
         }}
       />
     );
   }
 
+  const resultadoBorrador = ambitoBorrador
+    ? buscarBorradorRutina({
+        ambito: ambitoBorrador,
+        rutina,
+        vigente,
+        sesiones,
+        catalogo,
+      })
+    : { estado: "ninguno" as const };
+
+  const borradorRestaurable = resultadoBorrador.estado === "restaurable" ? resultadoBorrador : null;
+  const borradorObsoleto = resultadoBorrador.estado === "obsoleto" ? resultadoBorrador : null;
+
+  function abrirSesionDesdeCero(letra: LetraSesion) {
+    const objetivo = sesiones.find((s) => s.sesion === letra);
+    if (!objetivo || objetivo.ejercicios.length === 0) return;
+    setDetalle(null);
+    setSesionRegistrada(null);
+    setActiva(letra);
+    setEntrenando({ sesion: letra, borradorInicial: null });
+  }
+
+  function continuarBorrador() {
+    if (!borradorRestaurable) return;
+    setModalDescartar(false);
+    setSesionPendienteInicio(null);
+    setDetalle(null);
+    setSesionRegistrada(null);
+    setActiva(borradorRestaurable.sesion);
+    setEntrenando({
+      sesion: borradorRestaurable.sesion,
+      borradorInicial: {
+        estado: borradorRestaurable.entrenamiento,
+        notas: borradorRestaurable.notas,
+      },
+    });
+  }
+
+  function descartarBorradorActual() {
+    const clave = borradorRestaurable?.clave ?? borradorObsoleto?.clave;
+    if (clave) eliminarBorradorPorClave(clave);
+    setModalDescartar(false);
+    setSesionPendienteInicio(null);
+    refrescarBorrador();
+  }
+
+  function descartarYEmpezarNuevo() {
+    const destino = sesionPendienteInicio ?? sesionActiva?.sesion;
+    if (borradorRestaurable) eliminarBorradorPorClave(borradorRestaurable.clave);
+    if (borradorObsoleto) eliminarBorradorPorClave(borradorObsoleto.clave);
+    setSesionPendienteInicio(null);
+    setModalDescartar(false);
+    refrescarBorrador();
+    if (destino) abrirSesionDesdeCero(destino);
+  }
+
   function iniciarEntrenamiento() {
     const actual = api.rutinas.estado(rutina);
-    if (actualizacion === "lista" && (actual === "VIGENTE" || actual === "POR_VENCER") && sesionActiva && sesionActiva.ejercicios.length > 0) {
-      setDetalle(null);
-      setSesionRegistrada(null);
-      setEntrenando(sesionActiva.sesion);
+    if (actualizacion !== "lista" || (actual !== "VIGENTE" && actual !== "POR_VENCER") || !sesionActiva || sesionActiva.ejercicios.length === 0) {
+      return;
     }
+    if (borradorRestaurable) {
+      setSesionPendienteInicio(sesionActiva.sesion);
+      return;
+    }
+    if (borradorObsoleto) {
+      eliminarBorradorPorClave(borradorObsoleto.clave);
+    }
+    abrirSesionDesdeCero(sesionActiva.sesion);
   }
+
   const aviso = estado === "VENCIDA"
     ? "Tu última rutina está vencida. Puedes consultarla aquí; acércate a un instructor para renovarla."
     : estado === "FINALIZADA"
@@ -193,6 +315,11 @@ export function MiRutina() {
       : estado === "POR_VENCER"
         ? "Tu rutina está por vencer. Consulta con tu instructor su próxima renovación."
         : null;
+  const mostrarObjetivo = Boolean(rutina.objetivo) && !normalizar(rutina.nombre).includes(normalizar(rutina.objetivo));
+  const descripcionRutina = limpiarDescripcionRutina(rutina);
+  const detalleVigencia = rutina.fecha_fin !== null && estado !== "FINALIZADA"
+    ? textoVigencia(rutina, estado)
+    : undefined;
 
   return (
     <div className="cli-mi-rutina d-flex flex-column gap-3">
@@ -205,20 +332,72 @@ export function MiRutina() {
           </div>
         </div>
       )}
+
+      {borradorRestaurable && (
+        <section className="card-g cli-borrador-aviso" aria-labelledby="cli-borrador-titulo">
+          <div className="cli-borrador-cuerpo">
+            <div className="cli-borrador-info">
+              <span className="badge-g badge-activo">Sesión {borradorRestaurable.sesion} · Borrador guardado</span>
+              <h2 className="card-title mb-0" id="cli-borrador-titulo">Tienes un entrenamiento en curso</h2>
+              <p className="cli-borrador-resumen">
+                <span>
+                  {borradorRestaurable.resumen.ejerciciosCompletados} de {borradorRestaurable.resumen.totalEjercicios}{" "}
+                  {borradorRestaurable.resumen.totalEjercicios === 1 ? "ejercicio completado" : "ejercicios completados"}
+                </span>
+                {" · "}
+                <span>
+                  {borradorRestaurable.resumen.seriesCompletadas} de {borradorRestaurable.resumen.totalSeries}{" "}
+                  {borradorRestaurable.resumen.totalSeries === 1 ? "serie realizada" : "series realizadas"}
+                </span>
+              </p>
+              <p className="cli-ent-secundario">
+                Última actualización: {formatearTiempoRelativo(borradorRestaurable.updatedAt)}
+              </p>
+            </div>
+            <div className="cli-borrador-acciones">
+              <button type="button" className="btn-neon cli-ent-boton" onClick={continuarBorrador}>
+                <i className="bi bi-play-fill me-2" aria-hidden="true" />Continuar entrenamiento
+              </button>
+              <button type="button" className="btn-dark cli-ent-boton cli-ent-boton-peligro" onClick={() => setModalDescartar(true)}>
+                <i className="bi bi-trash3 me-2" aria-hidden="true" />Descartar borrador
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {borradorObsoleto && (
+        <section className="card-g cli-borrador-obsoleto" aria-labelledby="cli-borrador-obsoleto-titulo" role="status">
+          <div className="cli-borrador-cuerpo">
+            <div className="cli-borrador-info">
+              <h2 className="cli-ej-seccion mb-1" id="cli-borrador-obsoleto-titulo">
+                <i className="bi bi-info-circle me-2" aria-hidden="true" />Borrador anterior no disponible
+              </h2>
+              <p className="cli-ent-secundario">{borradorObsoleto.motivo}</p>
+            </div>
+            <div className="cli-borrador-acciones">
+              <button type="button" className="btn-dark cli-ent-boton" onClick={descartarBorradorActual}>
+                Descartar borrador
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="card-g" aria-labelledby="mi-rutina-titulo">
         <div className="card-head">
           <div>
-            <p className="card-sub">{rutina.objetivo}</p>
+            {mostrarObjetivo && <p className="card-sub">{rutina.objetivo}</p>}
             <h1 className="card-title mb-0" id="mi-rutina-titulo">{rutina.nombre}</h1>
           </div>
-          <BadgeEstadoRutina estado={estado} detalle={textoVigencia(rutina, estado)} />
+          <BadgeEstadoRutina estado={estado} detalle={detalleVigencia} />
         </div>
         {aviso && (
           <div className="alert-g show inst-alerta-info" role="status">
             <i className="bi bi-info-circle me-1" aria-hidden="true" />{aviso}
           </div>
         )}
-        {rutina.descripcion && <p>{rutina.descripcion}</p>}
+        {descripcionRutina && <p>{descripcionRutina}</p>}
         <dl className="cli-rutina-meta">
           <div className="cli-rutina-dato">
             <dt>Instructor</dt>
@@ -250,7 +429,13 @@ export function MiRutina() {
           ) : <AvanceCliente
           avance={avance}
           siguiente={vigente ? siguiente : null}
+          sesionActiva={activa}
           ideal={vigente && (rutina.sesiones_planeadas ?? 0) > 0 ? idealAHoy(rutina) : null}
+          borradorEnCurso={borradorRestaurable ? {
+            sesion: borradorRestaurable.sesion,
+            ejerciciosCompletados: borradorRestaurable.resumen.ejerciciosCompletados,
+            totalEjercicios: borradorRestaurable.resumen.totalEjercicios,
+          } : null}
           onVerSesion={(letra) => {
             cambiarSesion(letra);
             tituloSesiones.current?.focus();
@@ -319,6 +504,71 @@ export function MiRutina() {
         )}
       </section>
       {detalle && <DetalleEjercicio detalle={detalle} onCerrar={() => setDetalle(null)} />}
+
+      <Modal
+        show={modalDescartar && borradorRestaurable !== null}
+        onHide={() => setModalDescartar(false)}
+        centered
+        aria-labelledby="cli-modal-descartar-titulo"
+        aria-describedby="cli-modal-descartar-desc"
+      >
+        <Modal.Header>
+          <Modal.Title as="h2" id="cli-modal-descartar-titulo">
+            ¿Descartar borrador de la sesión {borradorRestaurable?.sesion}?
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body id="cli-modal-descartar-desc">
+          Este entrenamiento todavía no se ha registrado. Si descartas el borrador, perderás las series y valores guardados.
+        </Modal.Body>
+        <Modal.Footer className="cli-borrador-modal-acciones">
+          <button type="button" className="btn-dark cli-ent-boton" onClick={() => setModalDescartar(false)}>
+            Cancelar
+          </button>
+          <button type="button" className="btn-dark cli-ent-boton cli-ent-boton-peligro" onClick={descartarBorradorActual}>
+            Descartar borrador
+          </button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal
+        show={sesionPendienteInicio !== null && borradorRestaurable !== null}
+        onHide={() => setSesionPendienteInicio(null)}
+        centered
+        aria-labelledby="cli-modal-conflicto-titulo"
+        aria-describedby="cli-modal-conflicto-desc"
+      >
+        <Modal.Header>
+          <Modal.Title as="h2" id="cli-modal-conflicto-titulo">
+            Tienes un entrenamiento en curso
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body id="cli-modal-conflicto-desc">
+          {borradorRestaurable?.sesion === sesionPendienteInicio ? (
+            <p className="mb-0">
+              Este entrenamiento todavía no se ha registrado. Ya tienes un borrador guardado para la{" "}
+              <strong>Sesión {borradorRestaurable?.sesion}</strong> ({borradorRestaurable?.resumen.ejerciciosCompletados} de{" "}
+              {borradorRestaurable?.resumen.totalEjercicios} ejercicios completados). Si descartas el borrador para empezar de nuevo, perderás las series y valores guardados.
+            </p>
+          ) : (
+            <p className="mb-0">
+              Tienes un borrador sin registrar en la <strong>Sesión {borradorRestaurable?.sesion}</strong> (
+              {borradorRestaurable?.resumen.ejerciciosCompletados} de {borradorRestaurable?.resumen.totalEjercicios} ejercicios completados).
+              Solo puedes mantener un entrenamiento en curso a la vez. Si inicias la <strong>Sesión {sesionPendienteInicio}</strong>, se descartará el borrador de la Sesión {borradorRestaurable?.sesion}.
+            </p>
+          )}
+        </Modal.Body>
+        <Modal.Footer className="cli-borrador-modal-acciones">
+          <button type="button" className="btn-dark cli-ent-boton" onClick={() => setSesionPendienteInicio(null)}>
+            Cancelar
+          </button>
+          <button type="button" className="btn-dark cli-ent-boton cli-ent-boton-peligro" onClick={descartarYEmpezarNuevo}>
+            Descartar y empezar de nuevo
+          </button>
+          <button type="button" className="btn-neon cli-ent-boton" autoFocus onClick={continuarBorrador}>
+            Continuar entrenamiento
+          </button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }

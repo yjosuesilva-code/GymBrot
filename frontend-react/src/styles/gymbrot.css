@@ -1700,14 +1700,28 @@ body {
 .cli-avance-conteos dd { margin: 6px 0 0; font-family: var(--f-title); font-size: 28px; line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; }
 .cli-avance-ritmo { margin: 0; display: flex; align-items: flex-start; gap: 10px; color: var(--text-table); line-height: 1.6; }
 .cli-avance-ritmo > i { color: var(--accent); }
+.cli-avance-en-curso { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; padding: 14px 16px; border: 1px solid rgba(212, 255, 0, 0.35); border-radius: var(--radius-sm); background: rgba(212, 255, 0, 0.04); }
 .cli-avance-siguiente { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; border-top: 1px solid var(--border-btn); padding-top: 18px; }
 .cli-avance-siguiente strong { display: block; color: var(--text); font-family: var(--f-title); font-size: 20px; margin-top: 3px; }
+
+/* --- T4 · ETAPA 5: Borrador persistente y recuperación del entrenamiento --- */
+.cli-borrador-aviso { border-color: var(--neon); background: rgba(212, 255, 0, 0.04); box-shadow: inset 0 0 0 1px rgba(212, 255, 0, 0.16); }
+.cli-borrador-obsoleto { border-color: var(--border-btn); background: var(--bg-side); }
+.cli-borrador-cuerpo { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.cli-borrador-info { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; flex: 1 1 260px; }
+.cli-borrador-resumen { margin: 0; color: var(--text); font-size: 14px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.cli-borrador-resumen strong { color: var(--neon); font-family: var(--f-title); font-weight: 700; }
+.cli-borrador-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.cli-borrador-modal-acciones { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+
 @media (min-width: 576px) {
   .cli-avance-cifras { grid-template-columns: minmax(160px, 1fr) minmax(0, 2fr); align-items: center; }
 }
 @media (max-width: 575px) {
-  .cli-avance-panel { padding: 16px; }
-  .cli-avance-siguiente .cli-ent-boton { width: 100%; }
+  .cli-avance-panel, .cli-borrador-aviso, .cli-borrador-obsoleto { padding: 16px; }
+  .cli-avance-siguiente .cli-ent-boton, .cli-avance-en-curso .cli-ent-boton { width: 100%; }
+  .cli-borrador-acciones, .cli-borrador-acciones > .cli-ent-boton { width: 100%; }
+  .cli-borrador-modal-acciones > .cli-ent-boton { width: 100%; }
   .cli-registro-exito { padding: 16px; gap: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {

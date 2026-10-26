@@ -17,6 +17,17 @@ registerHooks({
 });
 
 const { crearEntrenamiento, ejerciciosRealizados, reducirEntrenamiento, serieValida, errorSerie } = await import("./entrenamiento.ts");
+const {
+  CADUCIDAD_BORRADOR_MS,
+  buscarBorradorRutina,
+  claveBorradorEntrenamiento,
+  eliminarBorradorEntrenamiento,
+  eliminarBorradorPorClave,
+  formatearTiempoRelativo,
+  guardarBorradorEntrenamiento,
+  huellaAutoguardado,
+  tieneProgresoEntrenamiento,
+} = await import("./borradorEntrenamiento.ts");
 const { MAX_REPS, MAX_SEGUNDOS, MAX_PESO_KG, resumirSeries, validarSeries } = await import("../../lib/rutinas.ts");
 
 function ejercicio(tipo = "REPETICIONES", equipo = "Mancuernas", peso = 7.5) {
@@ -129,4 +140,269 @@ test("revisar, desmarcar, corregir y completar conserva las otras series y vuelv
   actuar({ tipo: "completar", serie: 0, ahora: 7000 });
   assert.equal(estado.vista, "resumen");
   assert.deepEqual(convertir(...estado.ejercicios)[0].detalle_series.map(s => s.reps), [8, 10]);
+});
+
+function crearStorageMemoria() {
+  const mapa = new Map();
+  return {
+    mapa,
+    getItem(k) { return mapa.has(k) ? mapa.get(k) : null; },
+    setItem(k, v) { mapa.set(k, String(v)); },
+    removeItem(k) { mapa.delete(k); },
+  };
+}
+
+function fixtureBorrador() {
+  const ambito = { gimnasioId: "gym-1", idCliente: "1001", idRutina: 42 };
+  const rutina = { id_rutina: 42, id_cliente: "1001", gimnasio_id: "gym-1" };
+  const catalogo = [
+    { id_ejercicio: 1, nombre: "Press banca", tipo_medicion: "REPETICIONES", equipo: "Mancuerna" },
+    { id_ejercicio: 2, nombre: "Plancha abdominal", tipo_medicion: "TIEMPO", equipo: "Peso corporal" },
+  ];
+  const filasB = [
+    { id_ejercicio: 1, orden: 1, series: 2, reps_min: 10, reps_max: 12, peso_kg: 12.5, descanso_seg: 60 },
+    { id_ejercicio: 2, orden: 2, series: 2, segundos: 45, peso_kg: null, descanso_seg: 30 },
+  ];
+  const sesiones = [
+    { sesion: "A", ejercicios: [{ id_ejercicio: 1, orden: 1, series: 3, reps_min: 8, reps_max: 10, peso_kg: 15, descanso_seg: 60 }] },
+    { sesion: "B", ejercicios: filasB },
+  ];
+  return { ambito, rutina, catalogo, filasB, sesiones };
+}
+
+test("ETAPA 5: autoguardado, recarga, detección y continuación conservando reps, peso decimal, segundos, series e índice", () => {
+  const storage = crearStorageMemoria();
+  const { ambito, rutina, catalogo, filasB, sesiones } = fixtureBorrador();
+  let estado = crearEntrenamiento({ sesion: "B", filas: filasB, catalogo });
+
+  assert.equal(tieneProgresoEntrenamiento(estado, ""), false);
+  assert.equal(guardarBorradorEntrenamiento(ambito, estado, "", { ahora: 10_000, storage }), null);
+
+  // Completa las 2 series del ejercicio 1 con peso decimal 12.5 y 15.5 kg
+  estado = reducirEntrenamiento(estado, { tipo: "editar", serie: 0, campo: "cantidad", valor: "12" });
+  estado = reducirEntrenamiento(estado, { tipo: "editar", serie: 0, campo: "peso", valor: "12.5" });
+  estado = reducirEntrenamiento(estado, { tipo: "completar", serie: 0, ahora: 10_000 });
+  estado = reducirEntrenamiento(estado, { tipo: "editar", serie: 1, campo: "cantidad", valor: "10" });
+  estado = reducirEntrenamiento(estado, { tipo: "editar", serie: 1, campo: "peso", valor: "15.5" });
+  estado = reducirEntrenamiento(estado, { tipo: "completar", serie: 1, ahora: 15_000 });
+
+  // Avanza al ejercicio 2 (TIEMPO) y completa la primera serie con 45.5 segundos
+  estado = reducirEntrenamiento(estado, { tipo: "ir", indice: 1 });
+  estado = reducirEntrenamiento(estado, { tipo: "editar", serie: 0, campo: "cantidad", valor: "45.5" });
+  estado = reducirEntrenamiento(estado, { tipo: "completar", serie: 0, ahora: 20_000 });
+  // Deja la segunda serie parcialmente escrita antes de recargar
+  estado = reducirEntrenamiento(estado, { tipo: "editar", serie: 1, campo: "cantidad", valor: "30" });
+
+  // Verifica que el tick del descanso no cambia la huella de autoguardado
+  const huellaAntesTick = huellaAutoguardado(estado, "Buena energía");
+  const estadoTrasTick = reducirEntrenamiento(estado, { tipo: "tick", ahora: 25_000 });
+  assert.equal(huellaAutoguardado(estadoTrasTick, "Buena energía"), huellaAntesTick);
+
+  const clave = guardarBorradorEntrenamiento(ambito, estadoTrasTick, "Buena energía", { ahora: 25_000, storage });
+  assert.equal(clave, "gymbrot:cliente:entrenamiento:gym-1:1001:42:B");
+
+  // Simula recarga de página 10 segundos después (ahora = 30_000)
+  const detectado = buscarBorradorRutina({
+    ambito,
+    rutina,
+    vigente: true,
+    sesiones,
+    catalogo,
+    ahora: 30_000,
+    storage,
+  });
+
+  assert.equal(detectado.estado, "restaurable");
+  assert.equal(detectado.sesion, "B");
+  assert.equal(detectado.notas, "Buena energía");
+  assert.deepEqual(detectado.resumen, {
+    ejerciciosCompletados: 1,
+    totalEjercicios: 2,
+    seriesCompletadas: 3,
+    totalSeries: 4,
+  });
+
+  // Verifica reconstrucción exacta de índice, series, reps, peso decimal, segundos y cronómetro de descanso
+  const restaurado = detectado.entrenamiento;
+  assert.equal(restaurado.indice, 1);
+  assert.equal(restaurado.vista, "ejercicio");
+  assert.deepEqual(restaurado.ejercicios[0].series, [
+    { cantidad: "12", peso: "12.5", completada: true },
+    { cantidad: "10", peso: "15.5", completada: true },
+  ]);
+  assert.deepEqual(restaurado.ejercicios[1].series, [
+    { cantidad: "45.5", peso: "", completada: true },
+    { cantidad: "30", peso: "", completada: false },
+  ]);
+  assert.equal(restaurado.descanso.estado, "activo");
+  assert.equal(restaurado.descanso.segundosRestantes, 20);
+  assert.equal(formatearTiempoRelativo(detectado.updatedAt, 30_000), "hace menos de 1 minuto");
+});
+
+test("ETAPA 5: descarte manual, borrado en ok=true y preservación en ok=false o excepción", () => {
+  const storage = crearStorageMemoria();
+  const { ambito, rutina, catalogo, filasB, sesiones } = fixtureBorrador();
+  let estado = crearEntrenamiento({ sesion: "B", filas: filasB, catalogo });
+  estado = reducirEntrenamiento(estado, { tipo: "editar", serie: 0, campo: "cantidad", valor: "12" });
+  estado = reducirEntrenamiento(estado, { tipo: "completar", serie: 0, ahora: 1_000 });
+
+  const clave = guardarBorradorEntrenamiento(ambito, estado, "", { ahora: 1_000, storage });
+  assert.ok(storage.getItem(clave));
+
+  // Si registrarSesion() devuelve ok=false o lanza excepción, NO se elimina el borrador
+  const trasFallo = buscarBorradorRutina({ ambito, rutina, vigente: true, sesiones, catalogo, ahora: 2_000, storage });
+  assert.equal(trasFallo.estado, "restaurable");
+
+  // Al descartar el borrador o tras ok=true, se elimina únicamente esa clave
+  eliminarBorradorPorClave(clave, storage);
+  assert.equal(storage.getItem(clave), null);
+  assert.equal(
+    buscarBorradorRutina({ ambito, rutina, vigente: true, sesiones, catalogo, ahora: 2_000, storage }).estado,
+    "ninguno",
+  );
+
+  // Guardado y limpieza por ámbito al registrar con éxito (ok=true)
+  guardarBorradorEntrenamiento(ambito, estado, "", { ahora: 3_000, storage });
+  eliminarBorradorEntrenamiento(ambito, "B", storage);
+  assert.equal(
+    buscarBorradorRutina({ ambito, rutina, vigente: true, sesiones, catalogo, ahora: 4_000, storage }).estado,
+    "ninguno",
+  );
+});
+
+test("ETAPA 5: aislamiento por cliente, gimnasio (tenant) y rutina", () => {
+  const storage = crearStorageMemoria();
+  const { ambito, rutina, catalogo, filasB, sesiones } = fixtureBorrador();
+  let estado = crearEntrenamiento({ sesion: "B", filas: filasB, catalogo });
+  estado = reducirEntrenamiento(estado, { tipo: "editar", serie: 0, campo: "cantidad", valor: "12" });
+  estado = reducirEntrenamiento(estado, { tipo: "completar", serie: 0, ahora: 10_000 });
+  guardarBorradorEntrenamiento(ambito, estado, "", { ahora: 10_000, storage });
+
+  // Otro cliente del mismo gimnasio no ve el borrador
+  assert.equal(
+    buscarBorradorRutina({
+      ambito: { ...ambito, idCliente: "2002" },
+      rutina: { ...rutina, id_cliente: "2002" },
+      vigente: true,
+      sesiones,
+      catalogo,
+      ahora: 11_000,
+      storage,
+    }).estado,
+    "ninguno",
+  );
+
+  // Otro tenant (gimnasio) con la misma cédula no ve el borrador
+  assert.equal(
+    buscarBorradorRutina({
+      ambito: { ...ambito, gimnasioId: "gym-2" },
+      rutina: { ...rutina, gimnasio_id: "gym-2" },
+      vigente: true,
+      sesiones,
+      catalogo,
+      ahora: 11_000,
+      storage,
+    }).estado,
+    "ninguno",
+  );
+
+  // Otra rutina del mismo cliente no reutiliza el borrador
+  assert.equal(
+    buscarBorradorRutina({
+      ambito: { ...ambito, idRutina: 99 },
+      rutina: { ...rutina, id_rutina: 99 },
+      vigente: true,
+      sesiones,
+      catalogo,
+      ahora: 11_000,
+      storage,
+    }).estado,
+    "ninguno",
+  );
+});
+
+test("ETAPA 5: ignora y limpia JSON corrupto, versión inválida, datos manipulados y borrador expirado", () => {
+  const storage = crearStorageMemoria();
+  const { ambito, rutina, catalogo, filasB, sesiones } = fixtureBorrador();
+  const clave = claveBorradorEntrenamiento(ambito, "B");
+
+  // 14. JSON corrupto
+  storage.setItem(clave, "{corrupto");
+  assert.equal(
+    buscarBorradorRutina({ ambito, rutina, vigente: true, sesiones, catalogo, ahora: 10_000, storage }).estado,
+    "ninguno",
+  );
+  assert.equal(storage.getItem(clave), null);
+
+  // 15. Versión inválida
+  let estado = crearEntrenamiento({ sesion: "B", filas: filasB, catalogo });
+  estado = reducirEntrenamiento(estado, { tipo: "editar", serie: 0, campo: "cantidad", valor: "12" });
+  estado = reducirEntrenamiento(estado, { tipo: "completar", serie: 0, ahora: 10_000 });
+  guardarBorradorEntrenamiento(ambito, estado, "", { ahora: 10_000, storage });
+  const invalido = JSON.parse(storage.getItem(clave));
+  invalido.version = 99;
+  storage.setItem(clave, JSON.stringify(invalido));
+  assert.equal(
+    buscarBorradorRutina({ ambito, rutina, vigente: true, sesiones, catalogo, ahora: 11_000, storage }).estado,
+    "ninguno",
+  );
+  assert.equal(storage.getItem(clave), null);
+
+  // 16. Borrador expirado (> 48 h)
+  guardarBorradorEntrenamiento(ambito, estado, "", { ahora: 10_000, storage });
+  assert.equal(
+    buscarBorradorRutina({
+      ambito,
+      rutina,
+      vigente: true,
+      sesiones,
+      catalogo,
+      ahora: 10_000 + CADUCIDAD_BORRADOR_MS + 1,
+      storage,
+    }).estado,
+    "ninguno",
+  );
+  assert.equal(storage.getItem(clave), null);
+
+  // Serie completada manipulada fuera de rango (ej. 999 reps)
+  guardarBorradorEntrenamiento(ambito, estado, "", { ahora: 20_000, storage });
+  const manipulado = JSON.parse(storage.getItem(clave));
+  manipulado.ejercicios[0].series[0].cantidad = "999";
+  storage.setItem(clave, JSON.stringify(manipulado));
+  assert.equal(
+    buscarBorradorRutina({ ambito, rutina, vigente: true, sesiones, catalogo, ahora: 21_000, storage }).estado,
+    "ninguno",
+  );
+  assert.equal(storage.getItem(clave), null);
+});
+
+test("ETAPA 5: detecta estado obsoleto si el instructor cambia los ejercicios o series de la sesión", () => {
+  const storage = crearStorageMemoria();
+  const { ambito, rutina, catalogo, filasB, sesiones } = fixtureBorrador();
+  let estado = crearEntrenamiento({ sesion: "B", filas: filasB, catalogo });
+  estado = reducirEntrenamiento(estado, { tipo: "editar", serie: 0, campo: "cantidad", valor: "12" });
+  estado = reducirEntrenamiento(estado, { tipo: "completar", serie: 0, ahora: 10_000 });
+  guardarBorradorEntrenamiento(ambito, estado, "", { ahora: 10_000, storage });
+
+  const sesionesModificadas = [
+    sesiones[0],
+    {
+      sesion: "B",
+      ejercicios: [
+        { ...filasB[0], series: 4 },
+        filasB[1],
+      ],
+    },
+  ];
+  const obsoleto = buscarBorradorRutina({
+    ambito,
+    rutina,
+    vigente: true,
+    sesiones: sesionesModificadas,
+    catalogo,
+    ahora: 15_000,
+    storage,
+  });
+  assert.equal(obsoleto.estado, "obsoleto");
+  assert.equal(obsoleto.sesion, "B");
 });

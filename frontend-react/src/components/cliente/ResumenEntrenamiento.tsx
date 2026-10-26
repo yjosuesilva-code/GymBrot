@@ -95,16 +95,11 @@ export function ResumenEntrenamiento({
             <p className="cli-ent-secundario" id="cli-ent-error-ayuda">Tus series siguen intactas. Edita algún valor o vuelve a intentarlo.</p>
           </div>
         )}
-        {guardando && (
-          <p className="cli-ent-secundario" id="cli-ent-estado-guardado" role="status" aria-atomic="true">
-            Guardando entrenamiento…
-          </p>
-        )}
         <button
           type="button"
           className="btn-neon cli-ent-boton cli-ent-principal"
           disabled={guardando}
-          aria-describedby={guardando ? "cli-ent-estado-guardado" : undefined}
+          aria-live="polite"
           onClick={onFinalizar}
         >
           <i className={`bi ${guardando ? "bi-hourglass-split" : "bi-check2-circle"} me-2`} aria-hidden="true" />

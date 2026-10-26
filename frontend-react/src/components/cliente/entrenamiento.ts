@@ -186,7 +186,13 @@ export function reducirEntrenamiento(estado: EstadoEntrenamiento, accion: Accion
     }
     case "ir":
       if (!Number.isInteger(accion.indice) || accion.indice < 0 || accion.indice >= estado.ejercicios.length) return estado;
-      return { ...estado, indice: accion.indice, vista: "ejercicio", descanso: { estado: "inactivo", segundosRestantes: 0 } };
+      return {
+        ...estado,
+        indice: accion.indice,
+        vista: "ejercicio",
+        descanso: { estado: "inactivo", segundosRestantes: 0 },
+        modificado: estado.modificado || accion.indice !== estado.indice,
+      };
     case "revisar":
       return estado.estado === "lista-para-finalizar"
         ? { ...estado, vista: "resumen", descanso: { estado: "inactivo", segundosRestantes: 0 } }

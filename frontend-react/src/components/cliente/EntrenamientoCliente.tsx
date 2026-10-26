@@ -6,6 +6,13 @@ import type { ApiResp, RegistroEntrenamiento, RegistroNuevo } from "../../types"
 import { VistaPreviaRecurso } from "../ejercicios/VistaPreviaRecurso";
 import { ResumenEntrenamiento } from "./ResumenEntrenamiento";
 import {
+  eliminarBorradorEntrenamiento,
+  guardarBorradorEntrenamiento,
+  huellaAutoguardado,
+  tieneProgresoEntrenamiento,
+} from "./borradorEntrenamiento";
+import type { AmbitoBorrador } from "./borradorEntrenamiento";
+import {
   cantidadObjetivo,
   crearEntrenamiento,
   ejercicioCompleto,
@@ -16,28 +23,48 @@ import {
   progresoSesion,
   reducirEntrenamiento,
 } from "./entrenamiento";
-import type { InicioEntrenamiento } from "./entrenamiento";
+import type { EstadoEntrenamiento, InicioEntrenamiento } from "./entrenamiento";
 import { obtenerNotaEntrenador, obtenerPasosTecnicos } from "./guiaTecnica";
 
 type Props = InicioEntrenamiento & {
+  ambitoBorrador?: AmbitoBorrador | null;
+  borradorInicial?: { estado: EstadoEntrenamiento; notas: string } | null;
   nombreRutina: string;
   onSalir: () => void;
   onRegistrar: (registro: RegistroNuevo) => Promise<ApiResp<RegistroEntrenamiento>>;
   onRegistrado: () => void;
 };
 
-export function EntrenamientoCliente({ nombreRutina, onSalir, onRegistrar, onRegistrado, ...inicio }: Props) {
-  const [estado, enviar] = useReducer(reducirEntrenamiento, inicio, crearEntrenamiento);
+export function EntrenamientoCliente({
+  ambitoBorrador = null,
+  borradorInicial = null,
+  nombreRutina,
+  onSalir,
+  onRegistrar,
+  onRegistrado,
+  ...inicio
+}: Props) {
+  const [estado, enviar] = useReducer(
+    reducirEntrenamiento,
+    inicio,
+    (arg) => borradorInicial?.estado ?? crearEntrenamiento(arg),
+  );
   const [confirmarSalida, setConfirmarSalida] = useState(false);
   const [indiceTecnicaAbierta, setIndiceTecnicaAbierta] = useState<number | null>(null);
-  const [notasSesion, setNotasSesion] = useState("");
+  const [notasSesion, setNotasSesion] = useState(() => borradorInicial?.notas ?? "");
   const titulo = useRef<HTMLHeadingElement>(null);
   const envioEnCurso = useRef(false);
+  const bloqueadoBorrador = useRef(false);
+  const ultimaHuella = useRef<string | null>(
+    borradorInicial ? huellaAutoguardado(borradorInicial.estado, borradorInicial.notas) : null,
+  );
   const [guardando, setGuardando] = useState(false);
   const [errorGuardado, setErrorGuardado] = useState<string | null>(null);
   const descansando = estado.descanso.estado === "activo";
   const mostrarTecnica = indiceTecnicaAbierta === estado.indice;
   const idPanelTecnica = `cli-ent-tecnica-${estado.indice}`;
+  const tieneProgreso = tieneProgresoEntrenamiento(estado, notasSesion);
+  const huella = huellaAutoguardado(estado, notasSesion);
 
   useEffect(() => {
     if (!descansando) return;
@@ -51,13 +78,20 @@ export function EntrenamientoCliente({ nombreRutina, onSalir, onRegistrar, onReg
   }, [estado.indice, estado.vista]);
 
   useEffect(() => {
-    if (!estado.modificado) return;
+    if (!tieneProgreso) return;
     const avisar = (e: BeforeUnloadEvent) => {
       e.preventDefault();
     };
     window.addEventListener("beforeunload", avisar);
     return () => window.removeEventListener("beforeunload", avisar);
-  }, [estado.modificado]);
+  }, [tieneProgreso]);
+
+  useEffect(() => {
+    if (bloqueadoBorrador.current || !ambitoBorrador || !tieneProgreso) return;
+    if (ultimaHuella.current === huella) return;
+    ultimaHuella.current = huella;
+    guardarBorradorEntrenamiento(ambitoBorrador, estado, notasSesion);
+  }, [ambitoBorrador, estado, huella, notasSesion, tieneProgreso]);
 
   const progreso = progresoSesion(estado);
   const actual = estado.ejercicios[estado.indice];
@@ -76,8 +110,23 @@ export function EntrenamientoCliente({ nombreRutina, onSalir, onRegistrar, onReg
 
   function salir() {
     if (envioEnCurso.current) return;
-    if (estado.modificado) setConfirmarSalida(true);
+    if (tieneProgreso) setConfirmarSalida(true);
     else onSalir();
+  }
+
+  function salirGuardandoBorrador() {
+    if (ambitoBorrador && tieneProgreso) {
+      guardarBorradorEntrenamiento(ambitoBorrador, estado, notasSesion);
+    }
+    onSalir();
+  }
+
+  function salirDescartandoBorrador() {
+    bloqueadoBorrador.current = true;
+    if (ambitoBorrador) {
+      eliminarBorradorEntrenamiento(ambitoBorrador, estado.sesion);
+    }
+    onSalir();
   }
 
   async function finalizar() {
@@ -106,18 +155,22 @@ export function EntrenamientoCliente({ nombreRutina, onSalir, onRegistrar, onReg
     try {
       respuesta = await onRegistrar(registro);
     } catch {
-      setErrorGuardado("No se pudo registrar el entrenamiento. Tus datos se conservan; vuelve a intentarlo.");
+      setErrorGuardado("No se pudo registrar el entrenamiento por un problema inesperado.");
       envioEnCurso.current = false;
       setGuardando(false);
       return;
     }
     if (respuesta?.ok !== true) {
-      setErrorGuardado(respuesta?.ok === false ? respuesta.mensaje : "No se pudo confirmar el registro. Tus datos se conservan; vuelve a intentarlo.");
+      setErrorGuardado(respuesta?.ok === false ? respuesta.mensaje : "No se pudo confirmar el registro del entrenamiento.");
       envioEnCurso.current = false;
       setGuardando(false);
       return;
     }
-    // Solo un registro exitoso desmonta este componente y elimina su estado y temporizadores.
+    // Solo un registro exitoso elimina el borrador persistido y desmonta el modo entrenamiento.
+    bloqueadoBorrador.current = true;
+    if (ambitoBorrador) {
+      eliminarBorradorEntrenamiento(ambitoBorrador, estado.sesion);
+    }
     onRegistrado();
   }
 
@@ -457,9 +510,12 @@ export function EntrenamientoCliente({ nombreRutina, onSalir, onRegistrar, onReg
 
       <Modal show={confirmarSalida} onHide={() => setConfirmarSalida(false)} centered aria-labelledby="cli-ent-salir-titulo" aria-describedby="cli-ent-salir-mensaje">
         <Modal.Header><Modal.Title as="h2" id="cli-ent-salir-titulo">¿Salir del entrenamiento?</Modal.Title></Modal.Header>
-        <Modal.Body id="cli-ent-salir-mensaje">Tu progreso de esta sesión aún no se ha guardado. Si sales ahora, se descartarán las series registradas.</Modal.Body>
-        <Modal.Footer>
-          <button type="button" className="btn-dark cli-ent-boton cli-ent-boton-peligro" onClick={onSalir}>Salir y descartar</button>
+        <Modal.Body id="cli-ent-salir-mensaje">
+          Este entrenamiento todavía no se ha registrado definitivamente. Puedes salir conservando tu borrador en este dispositivo para retomarlo después o descartarlo por completo.
+        </Modal.Body>
+        <Modal.Footer className="cli-borrador-modal-acciones">
+          <button type="button" className="btn-dark cli-ent-boton cli-ent-boton-peligro" onClick={salirDescartandoBorrador}>Descartar borrador y salir</button>
+          <button type="button" className="btn-dark cli-ent-boton" onClick={salirGuardandoBorrador}>Guardar borrador y salir</button>
           <button type="button" className="btn-neon cli-ent-boton" autoFocus onClick={() => setConfirmarSalida(false)}>Continuar entrenando</button>
         </Modal.Footer>
       </Modal>

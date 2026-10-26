@@ -406,13 +406,23 @@ export interface RutinaEjercicio {
 // Lo que manda el constructor por cada ejercicio de una sesión (id_rutina y gimnasio los pone la API)
 export type SesionEjercicioNuevo = Omit<RutinaEjercicio, 'gimnasio_id' | 'id_rutina'>;
 
-// Lo que hizo el cliente en un ejercicio durante una sesión registrada (opcional)
-export interface EjercicioRealizado {
-  id_ejercicio: number;
-  series?: number;
+// Una serie hecha por el cliente (KAN-98): reps para REPETICIONES, segundos para TIEMPO
+export interface SerieRealizada {
+  numero: number;                  // 1..N, sin repetir
   reps?: number | null;
   segundos?: number | null;
-  peso_kg?: number | null;
+  peso_kg?: number | null;         // null = peso corporal
+}
+
+// Lo que hizo el cliente en un ejercicio durante una sesión registrada (opcional).
+// Si trae detalle_series, la API recalcula el resumen con resumirSeries (lib/rutinas.ts).
+export interface EjercicioRealizado {
+  id_ejercicio: number;
+  series?: number;                 // resumen: número de series hechas
+  reps?: number | null;            // resumen: las de la serie de mayor peso
+  segundos?: number | null;        // resumen: el máximo
+  peso_kg?: number | null;         // resumen: el de la serie de mayor peso
+  detalle_series?: SerieRealizada[]; // KAN-98: cada serie por separado
 }
 
 // Una sesión de entrenamiento completada (de aquí salen la siguiente sesión y el avance)

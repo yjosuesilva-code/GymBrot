@@ -1,6 +1,7 @@
-import type { Ejercicio, LetraSesion, RutinaEjercicio } from "../../types";
+import { validarSeries } from "../../lib/rutinas";
+import type { Ejercicio, EjercicioRealizado, LetraSesion, RutinaEjercicio, SerieRealizada } from "../../types";
 
-// Estado de UI por serie. EjercicioRealizado resume un ejercicio y no conserva este detalle.
+// Estado editable de UI; se convierte al contrato T3 únicamente al preparar el registro.
 export type SerieEntrenamiento = { cantidad: string; peso: string; completada: boolean };
 export type EjercicioEntrenamiento = {
   fila: RutinaEjercicio;
@@ -27,7 +28,12 @@ export type AccionEntrenamiento =
   | { tipo: "revisar" }
   | { tipo: "tick"; ahora: number }
   | { tipo: "omitir-descanso" }
+  | { tipo: "cerrar-descanso" }
   | { tipo: "ampliar-descanso"; ahora: number };
+
+function pesoInicial(fila: RutinaEjercicio): string {
+  return fila.peso_kg != null && Number.isFinite(fila.peso_kg) && fila.peso_kg >= 0 ? String(fila.peso_kg) : "";
+}
 
 export function crearEntrenamiento({ sesion, filas, catalogo }: InicioEntrenamiento): EstadoEntrenamiento {
   return {
@@ -39,7 +45,7 @@ export function crearEntrenamiento({ sesion, filas, catalogo }: InicioEntrenamie
       series: Number.isSafeInteger(fila.series) && (fila.series ?? 0) > 0
         ? Array.from({ length: fila.series ?? 0 }, () => ({
             cantidad: "",
-            peso: fila.peso_kg != null && Number.isFinite(fila.peso_kg) && fila.peso_kg >= 0 ? String(fila.peso_kg) : "",
+            peso: pesoInicial(fila),
             completada: false,
           }))
         : [],
@@ -72,11 +78,39 @@ export function permitePeso(e: EjercicioEntrenamiento): boolean {
   return e.fila.peso_kg != null || (e.ejercicio !== undefined && e.ejercicio.equipo !== "Peso corporal");
 }
 
-export function serieValida(serie: SerieEntrenamiento, conPeso: boolean): boolean {
-  const cantidad = Number(serie.cantidad);
-  const peso = Number(serie.peso);
-  return serie.cantidad.trim() !== "" && Number.isSafeInteger(cantidad) && cantidad > 0
-    && (!conPeso || serie.peso.trim() === "" || (Number.isFinite(peso) && peso >= 0));
+function convertirSerie(serie: SerieEntrenamiento, e: EjercicioEntrenamiento, numero: number): SerieRealizada {
+  const cantidad = serie.cantidad.trim() === "" ? null : Number(serie.cantidad);
+  const peso_kg = permitePeso(e) && serie.peso.trim() !== "" ? Number(serie.peso) : null;
+  return e.ejercicio?.tipo_medicion === "TIEMPO"
+    ? { numero, segundos: cantidad, peso_kg }
+    : { numero, reps: cantidad, peso_kg };
+}
+
+export function serieValida(serie: SerieEntrenamiento, e: EjercicioEntrenamiento): boolean {
+  return errorSerie(serie, e) === null;
+}
+
+export function errorSerie(serie: SerieEntrenamiento, e: EjercicioEntrenamiento): string | null {
+  if (!e.ejercicio) return "El ejercicio no está disponible en el catálogo.";
+  const error = validarSeries([convertirSerie(serie, e, 1)], e.ejercicio);
+  // El grupo de campos ya identifica la serie real; la validación aislada siempre usa el número 1.
+  const prefijo = `${e.ejercicio.nombre}, serie 1: `;
+  return error?.startsWith(prefijo) ? error.slice(prefijo.length) : error;
+}
+
+export function detalleRealizado(e: EjercicioEntrenamiento): SerieRealizada[] {
+  return e.series.filter((s) => s.completada).map((s, i) => convertirSerie(s, e, i + 1));
+}
+
+export function ejerciciosRealizados(estado: EstadoEntrenamiento): EjercicioRealizado[] {
+  return estado.ejercicios.flatMap((e) => {
+    const detalle_series = detalleRealizado(e);
+    if (detalle_series.length === 0) return [];
+    if (!e.ejercicio) throw new Error("Un ejercicio realizado ya no está disponible en el catálogo.");
+    const error = validarSeries(detalle_series, e.ejercicio);
+    if (error) throw new Error(error);
+    return [{ id_ejercicio: e.fila.id_ejercicio, detalle_series }];
+  });
 }
 
 export function progresoSesion(estado: EstadoEntrenamiento) {
@@ -127,8 +161,18 @@ export function reducirEntrenamiento(estado: EstadoEntrenamiento, accion: Accion
       const serie = ejercicio?.series[accion.serie];
       if (!ejercicio?.ejercicio || !serie) return estado;
       const marcando = !serie.completada;
-      if (marcando && !serieValida(serie, permitePeso(ejercicio))) return estado;
-      const actualizado = { ...ejercicio, series: ejercicio.series.map((s, i) => i === accion.serie ? { ...s, completada: marcando } : s) };
+      if (marcando && !serieValida(serie, ejercicio)) return estado;
+      const pesoBase = pesoInicial(ejercicio.fila);
+      const actualizado = {
+        ...ejercicio,
+        series: ejercicio.series.map((s, i) => {
+          if (i === accion.serie) return { ...s, completada: marcando };
+          if (marcando && i === accion.serie + 1 && !s.completada && permitePeso(ejercicio) && s.peso === pesoBase) {
+            return { ...s, peso: serie.peso };
+          }
+          return s;
+        }),
+      };
       const siguiente = conEjercicio(estado, actualizado, marcando);
       const segundos = ejercicio.fila.descanso_seg;
       const descansar = marcando && accion.serie < ejercicio.series.length - 1 && !ejercicioCompleto(actualizado)
@@ -159,6 +203,8 @@ export function reducirEntrenamiento(estado: EstadoEntrenamiento, accion: Accion
     }
     case "omitir-descanso":
       return { ...estado, descanso: { estado: "terminado", segundosRestantes: 0 } };
+    case "cerrar-descanso":
+      return { ...estado, descanso: { estado: "inactivo", segundosRestantes: 0 } };
     case "ampliar-descanso": {
       if (estado.descanso.estado !== "activo") return estado;
       const hasta = Math.max(estado.descanso.hasta, accion.ahora) + 15000;

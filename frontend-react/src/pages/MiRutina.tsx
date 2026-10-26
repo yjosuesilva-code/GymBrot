@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { current } from "../lib/auth";
 import { formatoPrescripcion, idealAHoy, resumenSesion, textoVigencia } from "../lib/rutinas";
 import { utils } from "../lib/utils";
-import { AvanceRutina } from "../components/rutinas/AvanceRutina";
+import { AvanceCliente } from "../components/cliente/AvanceCliente";
 import { BadgeEstadoRutina } from "../components/rutinas/BadgeEstadoRutina";
 import { FilaEjercicio } from "../components/rutinas/FilaEjercicio";
 import { PestanasSesion } from "../components/rutinas/PestanasSesion";
 import { VistaPreviaRecurso } from "../components/ejercicios/VistaPreviaRecurso";
 import { EntrenamientoCliente } from "../components/cliente/EntrenamientoCliente";
+import { obtenerNotaEntrenador, obtenerPasosTecnicos } from "../components/cliente/guiaTecnica";
 import type { Ejercicio, LetraSesion, Rutina, RutinaEjercicio } from "../types";
 
 type EjercicioSeleccionado = { fila: RutinaEjercicio; ejercicio: Ejercicio };
@@ -29,6 +30,14 @@ type Consulta =
   | { estado: "sin-rutina" }
   | { estado: "lista"; datos: DatosRutina };
 
+async function consultarAvance(idRutina: number) {
+  const [avance, siguiente] = await Promise.all([
+    api.rutinas.avance(idRutina),
+    api.rutinas.siguienteSesion(idRutina),
+  ]);
+  return { avance, siguiente };
+}
+
 export function MiRutina() {
   const [sesion] = useState(current);
   const cedula = sesion?.numero_identificacion;
@@ -36,6 +45,14 @@ export function MiRutina() {
   const [activa, setActiva] = useState<LetraSesion>("A");
   const [detalle, setDetalle] = useState<EjercicioSeleccionado | null>(null);
   const [entrenando, setEntrenando] = useState<LetraSesion | null>(null);
+  const [sesionRegistrada, setSesionRegistrada] = useState<LetraSesion | null>(null);
+  const [actualizacion, setActualizacion] = useState<"lista" | "cargando" | "error">("lista");
+  const confirmacion = useRef<HTMLDivElement>(null);
+  const tituloSesiones = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    if (sesionRegistrada && entrenando === null) confirmacion.current?.focus();
+  }, [sesionRegistrada, entrenando]);
 
   function cambiarSesion(letra: LetraSesion) {
     setDetalle(null);
@@ -59,13 +76,13 @@ export function MiRutina() {
           return;
         }
 
-        const [sesiones, avance, siguiente, catalogo, instructor] = await Promise.all([
+        const [sesiones, progreso, catalogo, instructor] = await Promise.all([
           api.rutinas.sesiones(rutina.id_rutina),
-          api.rutinas.avance(rutina.id_rutina),
-          api.rutinas.siguienteSesion(rutina.id_rutina),
+          consultarAvance(rutina.id_rutina),
           api.ejercicios.list(),
           api.instructores.get(rutina.id_instructor),
         ]);
+        const { avance, siguiente } = progreso;
         if (cancelado) return;
         setActiva(
           siguiente && sesiones.some((s) => s.sesion === siguiente)
@@ -88,6 +105,21 @@ export function MiRutina() {
       cancelado = true;
     };
   }, [cedula]);
+
+  async function actualizarAvance(idRutina: number) {
+    setActualizacion("cargando");
+    try {
+      const progreso = await consultarAvance(idRutina);
+      setConsulta((anterior) => anterior.estado === "lista" && anterior.datos.rutina.id_rutina === idRutina
+        ? { estado: "lista", datos: { ...anterior.datos, ...progreso } }
+        : anterior);
+      if (progreso.siguiente) setActiva(progreso.siguiente);
+      setActualizacion("lista");
+    } catch {
+      // El registro ya tuvo éxito. Reintentar aquí solo vuelve a consultar, nunca a guardar.
+      setActualizacion("error");
+    }
+  }
 
   if (consulta.estado !== "lista") {
     return (
@@ -126,14 +158,31 @@ export function MiRutina() {
         filas={sesionEntrenada.ejercicios}
         catalogo={catalogo}
         onSalir={() => { setDetalle(null); setEntrenando(null); }}
+        onRegistrar={(registro) => {
+          const autenticado = current();
+          if (!autenticado || autenticado.rol !== "CLIENTE"
+            || autenticado.numero_identificacion !== rutina.id_cliente
+            || autenticado.gimnasio_id !== rutina.gimnasio_id
+            || registro.sesion !== sesionEntrenada.sesion) {
+            return Promise.resolve({ ok: false, mensaje: "La sesión activa no corresponde a este entrenamiento. Vuelve a iniciar sesión con tu cuenta." });
+          }
+          return api.rutinas.registrarSesion(rutina.id_rutina, registro);
+        }}
+        onRegistrado={() => {
+          setSesionRegistrada(sesionEntrenada.sesion);
+          setDetalle(null);
+          setEntrenando(null);
+          void actualizarAvance(rutina.id_rutina);
+        }}
       />
     );
   }
 
   function iniciarEntrenamiento() {
     const actual = api.rutinas.estado(rutina);
-    if ((actual === "VIGENTE" || actual === "POR_VENCER") && sesionActiva && sesionActiva.ejercicios.length > 0) {
+    if (actualizacion === "lista" && (actual === "VIGENTE" || actual === "POR_VENCER") && sesionActiva && sesionActiva.ejercicios.length > 0) {
       setDetalle(null);
+      setSesionRegistrada(null);
       setEntrenando(sesionActiva.sesion);
     }
   }
@@ -147,12 +196,20 @@ export function MiRutina() {
 
   return (
     <div className="cli-mi-rutina d-flex flex-column gap-3">
+      {sesionRegistrada && (
+        <div className="cli-registro-exito" role="status" aria-atomic="true" tabIndex={-1} ref={confirmacion}>
+          <i className="bi bi-check2-circle" aria-hidden="true" />
+          <div>
+            <p>Entrenamiento de la sesión {sesionRegistrada} registrado correctamente.</p>
+            {actualizacion === "lista" && siguiente && <p className="cli-ent-secundario">Próxima sesión sugerida: {siguiente}.</p>}
+          </div>
+        </div>
+      )}
       <section className="card-g" aria-labelledby="mi-rutina-titulo">
         <div className="card-head">
           <div>
-            <p className="card-sub">Mi rutina</p>
-            <h1 className="card-title" id="mi-rutina-titulo">{rutina.nombre}</h1>
             <p className="card-sub">{rutina.objetivo}</p>
+            <h1 className="card-title mb-0" id="mi-rutina-titulo">{rutina.nombre}</h1>
           </div>
           <BadgeEstadoRutina estado={estado} detalle={textoVigencia(rutina, estado)} />
         </div>
@@ -180,28 +237,38 @@ export function MiRutina() {
         </dl>
       </section>
 
-      <section className="card-g" aria-labelledby="mi-rutina-avance">
+      <section className="card-g cli-avance-panel" aria-labelledby="mi-rutina-avance">
         <div className="card-head">
           <h2 className="card-title" id="mi-rutina-avance">Mi avance</h2>
         </div>
-        <AvanceRutina
+        {actualizacion === "cargando" ? <p className="cli-ent-secundario" role="status"><i className="bi bi-hourglass-split me-2" aria-hidden="true" />Actualizando avance y próxima sesión…</p>
+          : actualizacion === "error" ? (
+            <div className="cli-ent-error">
+              <p role="alert">Tu entrenamiento está guardado, pero no pudimos actualizar el avance y la próxima sesión.</p>
+              <button type="button" className="btn-dark cli-ent-boton" onClick={() => void actualizarAvance(rutina.id_rutina)}>Reintentar actualización</button>
+            </div>
+          ) : <AvanceCliente
           avance={avance}
           siguiente={vigente ? siguiente : null}
           ideal={vigente && (rutina.sesiones_planeadas ?? 0) > 0 ? idealAHoy(rutina) : null}
-        />
+          onVerSesion={(letra) => {
+            cambiarSesion(letra);
+            tituloSesiones.current?.focus();
+          }}
+        />}
       </section>
 
       <section className="card-g" aria-labelledby="mi-rutina-sesiones">
         <div className="card-head">
           <div>
-            <h2 className="card-title" id="mi-rutina-sesiones">Sesiones de la rutina</h2>
-            {vigente && siguiente && activa === siguiente && (
+            <h2 className="card-title cli-ent-titulo" id="mi-rutina-sesiones" ref={tituloSesiones} tabIndex={-1}>Sesiones de la rutina</h2>
+            {actualizacion === "lista" && vigente && siguiente && activa === siguiente && (
               <p className="card-sub">Sesión {siguiente} sugerida para tu entrenamiento de hoy</p>
             )}
           </div>
           {vigente && sesionActiva && sesionActiva.ejercicios.length > 0 && (
             <div className="cli-sesion-cta">
-              <button type="button" className="btn-neon cli-ent-boton" onClick={iniciarEntrenamiento}>
+              <button type="button" className="btn-neon cli-ent-boton" disabled={actualizacion !== "lista"} onClick={iniciarEntrenamiento}>
                 <i className="bi bi-play-fill me-2" aria-hidden="true" />Iniciar entrenamiento · Sesión {activa}
               </button>
             </div>
@@ -267,6 +334,8 @@ function DetalleEjercicio({ detalle, onCerrar }: { detalle: EjercicioSeleccionad
     : "Sin indicación";
   const duracion = fila.segundos != null ? `${fila.segundos} s` : "Sin indicación";
   const pendiente = fila.agregado_por_cliente === true && fila.revisado_por_instructor !== true;
+  const pasosTecnicos = obtenerPasosTecnicos(ejercicio);
+  const notaEntrenador = obtenerNotaEntrenador(fila, ejercicio);
   const indicaciones = [
     { etiqueta: "Series", valor: fila.series ?? "Sin indicación" },
     { etiqueta: porTiempo ? "Duración" : "Repeticiones", valor: porTiempo ? duracion : repeticiones },
@@ -312,14 +381,20 @@ function DetalleEjercicio({ detalle, onCerrar }: { detalle: EjercicioSeleccionad
         </section>
         <section aria-labelledby="cli-ej-ejecucion">
           <h3 className="cli-ej-seccion" id="cli-ej-ejecucion">¿Cómo realizarlo?</h3>
-          <p className="cli-ej-texto">{ejercicio.descripcion.trim() ? ejercicio.descripcion : "No hay instrucciones adicionales para este ejercicio."}</p>
+          <ul className="cli-ej-pasos">
+            {pasosTecnicos.map((paso) => (
+              <li className="cli-ej-paso" key={paso.etapa}>
+                <strong className="cli-ej-paso-etapa">{paso.etapa}:</strong> {paso.instruccion}
+              </li>
+            ))}
+          </ul>
         </section>
-        {fila.notas_instructor.trim() && <section className="cli-ej-nota" aria-labelledby="cli-ej-nota-titulo">
+        <section className="cli-ej-nota" aria-labelledby="cli-ej-nota-titulo">
           <h3 className="cli-ej-seccion" id="cli-ej-nota-titulo">
-            <i className="bi bi-chat-left-text me-2" aria-hidden="true" />Nota de tu instructor
+            <i className="bi bi-chat-left-text me-2" aria-hidden="true" />Nota de tu entrenador
           </h3>
-          <p className="cli-ej-texto">{fila.notas_instructor}</p>
-        </section>}
+          <p className="cli-ej-texto">{notaEntrenador}</p>
+        </section>
         {pendiente && (
           <p className="cli-ej-pendiente" role="status">
             <i className="bi bi-clock-history me-2" aria-hidden="true" />Pendiente de revisión por tu instructor

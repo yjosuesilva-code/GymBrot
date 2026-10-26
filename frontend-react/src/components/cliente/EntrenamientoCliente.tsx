@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Collapse, Modal } from "react-bootstrap";
 import { formatoPrescripcion, MAX_PESO_KG, MAX_REPS, MAX_SEGUNDOS } from "../../lib/rutinas";
 import { utils } from "../../lib/utils";
@@ -60,6 +60,10 @@ export function EntrenamientoCliente({
   );
   const [guardando, setGuardando] = useState(false);
   const [errorGuardado, setErrorGuardado] = useState<string | null>(null);
+  const [errorBorrador, setErrorBorrador] = useState(false);
+  const focoSeriePendiente = useRef<number | "siguiente" | null>(null);
+  const siguienteEjercicio = useRef<HTMLButtonElement>(null);
+  const primerEjercicioPendiente = useRef<HTMLButtonElement>(null);
   const descansando = estado.descanso.estado === "activo";
   const mostrarTecnica = indiceTecnicaAbierta === estado.indice;
   const idPanelTecnica = `cli-ent-tecnica-${estado.indice}`;
@@ -86,12 +90,19 @@ export function EntrenamientoCliente({
     return () => window.removeEventListener("beforeunload", avisar);
   }, [tieneProgreso]);
 
-  useEffect(() => {
-    if (bloqueadoBorrador.current || !ambitoBorrador || !tieneProgreso) return;
-    if (ultimaHuella.current === huella) return;
-    ultimaHuella.current = huella;
-    guardarBorradorEntrenamiento(ambitoBorrador, estado, notasSesion);
+  const persistirBorrador = useCallback(() => {
+    if (bloqueadoBorrador.current || !ambitoBorrador || !tieneProgreso) return false;
+    const guardado = guardarBorradorEntrenamiento(ambitoBorrador, estado, notasSesion) !== null;
+    if (guardado) ultimaHuella.current = huella;
+    setErrorBorrador(!guardado);
+    return guardado;
   }, [ambitoBorrador, estado, huella, notasSesion, tieneProgreso]);
+
+  useEffect(() => {
+    if (!bloqueadoBorrador.current && tieneProgreso && ultimaHuella.current !== huella) {
+      persistirBorrador();
+    }
+  }, [huella, persistirBorrador, tieneProgreso]);
 
   const progreso = progresoSesion(estado);
   const actual = estado.ejercicios[estado.indice];
@@ -100,13 +111,32 @@ export function EntrenamientoCliente({
   const metaCantidad = actual ? cantidadObjetivo(actual) : null;
   const pasoCantidad = porTiempo ? 5 : 1;
   const pasosTecnicos = actual ? obtenerPasosTecnicos(actual.ejercicio) : [];
-  const notaEntrenador = actual ? obtenerNotaEntrenador(actual.fila, actual.ejercicio) : "";
+  const notaEntrenador = actual ? obtenerNotaEntrenador(actual.fila) : "";
   const seriesCompletadas = actual ? actual.series.filter((s) => s.completada).length : 0;
   const serieActual = actual?.series.findIndex((s) => !s.completada) ?? -1;
   const primerPendiente = estado.ejercicios.findIndex((e) => !ejercicioCompleto(e));
   const hayEjerciciosNoRealizables = estado.ejercicios.some((e) => !ejercicioRealizable(e));
   const segundos = estado.descanso.segundosRestantes;
   const reloj = `${String(Math.floor(segundos / 60)).padStart(2, "0")}:${String(segundos % 60).padStart(2, "0")}`;
+
+  useEffect(() => {
+    const destino = focoSeriePendiente.current;
+    focoSeriePendiente.current = null;
+    if (destino === null || estado.vista !== "ejercicio") return;
+    if (destino === "siguiente") {
+      const boton = siguienteEjercicio.current?.disabled ? primerEjercicioPendiente.current : siguienteEjercicio.current;
+      boton?.focus();
+    }
+    else document.getElementById(`cli-serie-${estado.indice}-${destino}-cantidad`)?.focus();
+  }, [estado.ejercicios, estado.indice, estado.vista]);
+
+  function alternarSerie(indice: number, ahora: number) {
+    const serie = actual?.series[indice];
+    if (!serie || (!serie.completada && errorSerie(serie, actual) !== null)) return;
+    const siguiente = serie.completada ? indice : actual.series.findIndex((s, i) => i !== indice && !s.completada);
+    focoSeriePendiente.current = siguiente >= 0 ? siguiente : "siguiente";
+    enviar({ tipo: "completar", serie: indice, ahora });
+  }
 
   function salir() {
     if (envioEnCurso.current) return;
@@ -115,10 +145,7 @@ export function EntrenamientoCliente({
   }
 
   function salirGuardandoBorrador() {
-    if (ambitoBorrador && tieneProgreso) {
-      guardarBorradorEntrenamiento(ambitoBorrador, estado, notasSesion);
-    }
-    onSalir();
+    if (!tieneProgreso || persistirBorrador()) onSalir();
   }
 
   function salirDescartandoBorrador() {
@@ -178,13 +205,13 @@ export function EntrenamientoCliente({
     const vacio = valorActual.trim() === "";
     const base = vacio ? (metaCantidad ?? 0) : Number(valorActual) || 0;
     const siguiente = Math.min(porTiempo ? MAX_SEGUNDOS : MAX_REPS,
-      vacio && delta > 0 && metaCantidad != null ? metaCantidad : Math.max(0, Math.round(base + delta)));
+      vacio && delta > 0 && metaCantidad != null ? metaCantidad : Math.max(0, porTiempo ? base + delta : Math.round(base + delta)));
     enviar({ tipo: "editar", serie: indiceSerie, campo: "cantidad", valor: String(siguiente) });
   }
 
   function ajustarPeso(indiceSerie: number, valorActual: string, delta: number) {
     const base = valorActual.trim() === "" ? (actual?.fila.peso_kg ?? 0) : Number(valorActual) || 0;
-    const siguiente = Math.min(MAX_PESO_KG, Math.max(0, Math.round((base + delta) * 10) / 10));
+    const siguiente = Math.min(MAX_PESO_KG, Math.max(0, base + delta));
     enviar({ tipo: "editar", serie: indiceSerie, campo: "peso", valor: String(siguiente) });
   }
 
@@ -224,6 +251,13 @@ export function EntrenamientoCliente({
           </nav>
         )}
       </header>
+
+      {errorBorrador && !confirmarSalida && (
+        <div className="cli-ent-error" role="alert">
+          <p>No se pudo guardar el borrador en este dispositivo. Tus datos siguen en esta pantalla; evita cerrarla hasta guardarlos.</p>
+          <button type="button" className="btn-dark cli-ent-boton" disabled={guardando} onClick={persistirBorrador}>Reintentar guardado del borrador</button>
+        </div>
+      )}
 
       {hayEjerciciosNoRealizables && (
         <p className="card-g cli-ent-secundario" role="status">Hay ejercicios sin datos de catálogo o sin series válidas. Puedes realizar los demás, pero esta sesión no estará completa hasta que tu instructor corrija la asignación.</p>
@@ -372,7 +406,7 @@ export function EntrenamientoCliente({
                           type="button"
                           className="btn-dark cli-ent-boton cli-ent-desmarcar"
                           aria-pressed={true}
-                          onClick={() => enviar({ tipo: "completar", serie: indice, ahora: Date.now() })}
+                          onClick={() => alternarSerie(indice, Date.now())}
                           aria-label={`Desmarcar serie ${indice + 1} para editar`}
                         >
                           <i className="bi bi-arrow-counterclockwise me-2" aria-hidden="true" />
@@ -473,7 +507,7 @@ export function EntrenamientoCliente({
                       <button
                         type="button" className={`${esActiva ? "btn-neon" : "btn-dark"} cli-ent-boton cli-ent-principal`}
                         disabled={!valida} aria-pressed={false}
-                        onClick={() => enviar({ tipo: "completar", serie: indice, ahora: Date.now() })}
+                        onClick={() => alternarSerie(indice, Date.now())}
                         aria-label={`Completar serie ${indice + 1}`}
                       >
                         <i className="bi bi-check2 me-2" aria-hidden="true" />
@@ -489,9 +523,9 @@ export function EntrenamientoCliente({
           <nav className="cli-ent-navegacion" aria-label="Ejercicios del entrenamiento">
             <button type="button" className="btn-dark cli-ent-boton" disabled={estado.indice === 0} onClick={() => enviar({ tipo: "ir", indice: estado.indice - 1 })}><i className="bi bi-arrow-left me-2" aria-hidden="true" />Anterior</button>
             {estado.indice < progreso.total - 1 ? (
-              <button type="button" className="btn-dark cli-ent-boton" onClick={() => enviar({ tipo: "ir", indice: estado.indice + 1 })}>Siguiente<i className="bi bi-arrow-right ms-2" aria-hidden="true" /></button>
+              <button ref={siguienteEjercicio} type="button" className="btn-dark cli-ent-boton" onClick={() => enviar({ tipo: "ir", indice: estado.indice + 1 })}>Siguiente<i className="bi bi-arrow-right ms-2" aria-hidden="true" /></button>
             ) : (
-              <button type="button" className="btn-neon cli-ent-boton" disabled={estado.estado !== "lista-para-finalizar"} onClick={() => enviar({ tipo: "revisar" })}>Revisar entrenamiento</button>
+              <button ref={siguienteEjercicio} type="button" className="btn-neon cli-ent-boton" disabled={estado.estado !== "lista-para-finalizar"} onClick={() => enviar({ tipo: "revisar" })}>Revisar entrenamiento</button>
             )}
           </nav>
           {estado.estado === "lista-para-finalizar" && estado.indice < progreso.total - 1 && (
@@ -502,7 +536,7 @@ export function EntrenamientoCliente({
           {estado.indice === progreso.total - 1 && primerPendiente !== -1 && (
             <div className="cli-ent-pendientes">
               <p className="cli-ent-secundario">Completa todas las series para revisar y guardar el entrenamiento.</p>
-              {primerPendiente !== estado.indice && <button type="button" className="btn-dark cli-ent-boton" onClick={() => enviar({ tipo: "ir", indice: primerPendiente })}>Ir al primer ejercicio pendiente</button>}
+              {primerPendiente !== estado.indice && <button ref={primerEjercicioPendiente} type="button" className="btn-dark cli-ent-boton" onClick={() => enviar({ tipo: "ir", indice: primerPendiente })}>Ir al primer ejercicio pendiente</button>}
             </div>
           )}
         </>
@@ -512,6 +546,7 @@ export function EntrenamientoCliente({
         <Modal.Header><Modal.Title as="h2" id="cli-ent-salir-titulo">¿Salir del entrenamiento?</Modal.Title></Modal.Header>
         <Modal.Body id="cli-ent-salir-mensaje">
           Este entrenamiento todavía no se ha registrado definitivamente. Puedes salir conservando tu borrador en este dispositivo para retomarlo después o descartarlo por completo.
+          {errorBorrador && <p className="cli-ent-error mt-3 mb-0" role="alert">No se pudo guardar el borrador. Conserva esta pantalla abierta y vuelve a intentarlo; tus series siguen intactas.</p>}
         </Modal.Body>
         <Modal.Footer className="cli-borrador-modal-acciones">
           <button type="button" className="btn-dark cli-ent-boton cli-ent-boton-peligro" onClick={salirDescartandoBorrador}>Descartar borrador y salir</button>

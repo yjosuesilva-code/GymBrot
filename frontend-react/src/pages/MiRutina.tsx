@@ -18,6 +18,9 @@ import { PestanasSesion } from "../components/rutinas/PestanasSesion";
 import { VistaPreviaRecurso } from "../components/ejercicios/VistaPreviaRecurso";
 import { EntrenamientoCliente } from "../components/cliente/EntrenamientoCliente";
 import type { EstadoEntrenamiento } from "../components/cliente/entrenamiento";
+import { HistorialEntrenamientos } from "../components/cliente/HistorialEntrenamientos";
+import { ModalCambioEjercicioCliente } from "../components/cliente/ModalCambioEjercicioCliente";
+import type { ModoCambioEjercicio } from "../components/cliente/cambioEjercicio";
 import { obtenerNotaEntrenador, obtenerPasosTecnicos } from "../components/cliente/guiaTecnica";
 import type { Ejercicio, LetraSesion, Rutina, RutinaEjercicio } from "../types";
 
@@ -35,6 +38,7 @@ type DatosRutina = {
   siguiente: LetraSesion | null;
   catalogo: Awaited<ReturnType<typeof api.ejercicios.list>>;
   instructor: Awaited<ReturnType<typeof api.instructores.get>>;
+  registros: Awaited<ReturnType<typeof api.rutinas.registros>>;
 };
 
 type Consulta =
@@ -69,25 +73,63 @@ function limpiarDescripcionRutina(rutina: Rutina): string {
 }
 
 export function MiRutina() {
-  const [sesion] = useState(current);
+  const [sesion, setSesion] = useState(current);
   const tenant = useTenantOpcional();
   const cedula = sesion?.numero_identificacion;
   const gimnasioId = tenant?.gimnasio.gimnasio_id ?? sesion?.gimnasio_id;
+
+  useEffect(() => {
+    const actualizar = () => setSesion(current());
+    const alCambiarStorage = (evento: StorageEvent) => {
+      if (evento.key === "gymbrot_session" || evento.key === null) actualizar();
+    };
+    window.addEventListener("storage", alCambiarStorage);
+    window.addEventListener("focus", actualizar);
+    return () => {
+      window.removeEventListener("storage", alCambiarStorage);
+      window.removeEventListener("focus", actualizar);
+    };
+  }, []);
+
+  // Cambiar de cuenta o gimnasio desmonta también modales, entrenamiento y consultas pendientes.
+  return <RutinaDelCliente
+    key={JSON.stringify([gimnasioId, cedula, sesion?.tipo_usuario])}
+    cedula={cedula}
+    gimnasioId={gimnasioId}
+    esCliente={sesion?.tipo_usuario === "CLIENTE"}
+  />;
+}
+
+function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
+  cedula: string | undefined;
+  gimnasioId: string | undefined;
+  esCliente: boolean;
+}) {
+  const tenant = useTenantOpcional();
   const [consulta, setConsulta] = useState<Consulta>({ estado: "cargando" });
   const [activa, setActiva] = useState<LetraSesion>("A");
   const [detalle, setDetalle] = useState<EjercicioSeleccionado | null>(null);
   const [entrenando, setEntrenando] = useState<SesionEnEntrenamiento | null>(null);
   const [sesionRegistrada, setSesionRegistrada] = useState<LetraSesion | null>(null);
   const [actualizacion, setActualizacion] = useState<"lista" | "cargando" | "error">("lista");
+  const [estadoHistorial, setEstadoHistorial] = useState<"lista" | "cargando" | "error">("lista");
   const [, refrescarBorrador] = useReducer((n: number) => n + 1, 0);
   const [modalDescartar, setModalDescartar] = useState(false);
   const [sesionPendienteInicio, setSesionPendienteInicio] = useState<LetraSesion | null>(null);
+  const [modoCambio, setModoCambio] = useState<ModoCambioEjercicio | null>(null);
+  const [cambioBloqueado, setCambioBloqueado] = useState<ModoCambioEjercicio | null>(null);
+  const [avisoCambio, setAvisoCambio] = useState<{ sesion: LetraSesion; titulo: string; detalle: string } | null>(null);
   const confirmacion = useRef<HTMLDivElement>(null);
+  const confirmacionCambio = useRef<HTMLDivElement>(null);
   const tituloSesiones = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     if (sesionRegistrada && entrenando === null) confirmacion.current?.focus();
   }, [sesionRegistrada, entrenando]);
+
+  useEffect(() => {
+    if (avisoCambio && entrenando === null) confirmacionCambio.current?.focus();
+  }, [avisoCambio, entrenando]);
 
   useEffect(() => {
     if (entrenando !== null) return;
@@ -105,7 +147,7 @@ export function MiRutina() {
 
     async function cargar() {
       try {
-        if (!cedula || !gimnasioId) {
+        if (!cedula || !gimnasioId || !esCliente) {
           throw new Error("No hay una sesión activa. Vuelve a iniciar sesión para consultar tu rutina.");
         }
 
@@ -122,11 +164,15 @@ export function MiRutina() {
           throw new Error("La rutina consultada no corresponde a tu cuenta o gimnasio actual.");
         }
 
-        const [sesiones, progreso, catalogo, instructor] = await Promise.all([
+        const [sesiones, progreso, catalogo, instructor, resultadoRegistros] = await Promise.all([
           api.rutinas.sesiones(rutina.id_rutina),
           consultarAvance(rutina.id_rutina),
           api.ejercicios.list(),
           api.instructores.get(rutina.id_instructor),
+          api.rutinas
+            .registros(rutina.id_rutina)
+            .then((registros) => ({ ok: true as const, registros }))
+            .catch(() => ({ ok: false as const, registros: [] })),
         ]);
         const { avance, siguiente } = progreso;
         if (cancelado) return;
@@ -135,7 +181,19 @@ export function MiRutina() {
             ? siguiente
             : sesiones[0]?.sesion ?? "A",
         );
-        setConsulta({ estado: "lista", datos: { rutina, sesiones, avance, siguiente, catalogo, instructor } });
+        setEstadoHistorial(resultadoRegistros.ok ? "lista" : "error");
+        setConsulta({
+          estado: "lista",
+          datos: {
+            rutina,
+            sesiones,
+            avance,
+            siguiente,
+            catalogo,
+            instructor,
+            registros: resultadoRegistros.registros,
+          },
+        });
       } catch (error: unknown) {
         if (!cancelado) {
           setConsulta({
@@ -150,16 +208,35 @@ export function MiRutina() {
     return () => {
       cancelado = true;
     };
-  }, [cedula, gimnasioId]);
+  }, [cedula, gimnasioId, esCliente]);
+
+  async function recargarHistorial(idRutina: number) {
+    setEstadoHistorial("cargando");
+    try {
+      const registros = await api.rutinas.registros(idRutina);
+      setConsulta((anterior) =>
+        anterior.estado === "lista" && anterior.datos.rutina.id_rutina === idRutina
+          ? { estado: "lista", datos: { ...anterior.datos, registros } }
+          : anterior,
+      );
+      setEstadoHistorial("lista");
+    } catch {
+      setEstadoHistorial("error");
+    }
+  }
 
   async function actualizarAvance(idRutina: number) {
     setActualizacion("cargando");
     try {
-      const progreso = await consultarAvance(idRutina);
+      const [progreso, registros] = await Promise.all([
+        consultarAvance(idRutina),
+        api.rutinas.registros(idRutina),
+      ]);
       setConsulta((anterior) => anterior.estado === "lista" && anterior.datos.rutina.id_rutina === idRutina
-        ? { estado: "lista", datos: { ...anterior.datos, ...progreso } }
+        ? { estado: "lista", datos: { ...anterior.datos, ...progreso, registros } }
         : anterior);
       if (progreso.siguiente) setActiva(progreso.siguiente);
+      setEstadoHistorial("lista");
       setActualizacion("lista");
     } catch {
       // El registro ya tuvo éxito. Reintentar aquí solo vuelve a consultar, nunca a guardar.
@@ -167,9 +244,34 @@ export function MiRutina() {
     }
   }
 
+  async function sincronizarSesiones(idRutina: number, modo: ModoCambioEjercicio, actualizado: RutinaEjercicio) {
+    setConsulta((anterior) => {
+      if (anterior.estado !== "lista" || anterior.datos.rutina.id_rutina !== idRutina) return anterior;
+      const nuevasSesiones = anterior.datos.sesiones.map((s) => {
+        if (s.sesion !== modo.sesion) return s;
+        const ejercicios =
+          modo.tipo === "reemplazar"
+            ? s.ejercicios.map((e) => (e.id_ejercicio === modo.filaAnterior.id_ejercicio ? actualizado : e))
+            : [...s.ejercicios, actualizado].sort((a, b) => a.orden - b.orden);
+        return { ...s, ejercicios };
+      });
+      return { estado: "lista", datos: { ...anterior.datos, sesiones: nuevasSesiones } };
+    });
+    try {
+      const sesionesActualizadas = await api.rutinas.sesiones(idRutina);
+      setConsulta((anterior) =>
+        anterior.estado === "lista" && anterior.datos.rutina.id_rutina === idRutina
+          ? { estado: "lista", datos: { ...anterior.datos, sesiones: sesionesActualizadas } }
+          : anterior,
+      );
+    } catch {
+      // El estado local ya se actualizó con la fila devuelta por cambioCliente().
+    }
+  }
+
   if (consulta.estado !== "lista") {
     return (
-      <section className="card-g" aria-labelledby="mi-rutina-titulo">
+      <section className="card-g cli-mi-rutina" aria-labelledby="mi-rutina-titulo">
         <div className="card-head">
           <h1 className="card-title" id="mi-rutina-titulo">Mi rutina</h1>
         </div>
@@ -190,7 +292,7 @@ export function MiRutina() {
     );
   }
 
-  const { rutina, sesiones, avance, siguiente, catalogo, instructor } = consulta.datos;
+  const { rutina, sesiones, avance, siguiente, catalogo, instructor, registros } = consulta.datos;
   const estado = api.rutinas.estado(rutina);
   const vigente = estado === "VIGENTE" || estado === "POR_VENCER";
   const sesionActiva = sesiones.find((s) => s.sesion === activa);
@@ -263,6 +365,7 @@ export function MiRutina() {
     if (!borradorRestaurable) return;
     setModalDescartar(false);
     setSesionPendienteInicio(null);
+    setCambioBloqueado(null);
     setDetalle(null);
     setSesionRegistrada(null);
     setActiva(borradorRestaurable.sesion);
@@ -280,6 +383,7 @@ export function MiRutina() {
     if (clave) eliminarBorradorPorClave(clave);
     setModalDescartar(false);
     setSesionPendienteInicio(null);
+    setCambioBloqueado(null);
     refrescarBorrador();
   }
 
@@ -291,6 +395,30 @@ export function MiRutina() {
     setModalDescartar(false);
     refrescarBorrador();
     if (destino) abrirSesionDesdeCero(destino);
+  }
+
+  function solicitarModificacionEjercicio(modo: ModoCambioEjercicio) {
+    const actual = api.rutinas.estado(rutina);
+    if (actual !== "VIGENTE" && actual !== "POR_VENCER") return;
+    setAvisoCambio(null);
+    if (borradorRestaurable && borradorRestaurable.sesion === modo.sesion) {
+      setCambioBloqueado(modo);
+      return;
+    }
+    if (borradorObsoleto && borradorObsoleto.sesion === modo.sesion) {
+      eliminarBorradorPorClave(borradorObsoleto.clave);
+      refrescarBorrador();
+    }
+    setModoCambio(modo);
+  }
+
+  function descartarBorradorYModificar() {
+    const pendiente = cambioBloqueado;
+    if (borradorRestaurable) eliminarBorradorPorClave(borradorRestaurable.clave);
+    if (borradorObsoleto) eliminarBorradorPorClave(borradorObsoleto.clave);
+    setCambioBloqueado(null);
+    refrescarBorrador();
+    if (pendiente) setModoCambio(pendiente);
   }
 
   function iniciarEntrenamiento() {
@@ -320,6 +448,9 @@ export function MiRutina() {
   const detalleVigencia = rutina.fecha_fin !== null && estado !== "FINALIZADA"
     ? textoVigencia(rutina, estado)
     : undefined;
+  const tienePendientesSesion = Boolean(
+    sesionActiva?.ejercicios.some((e) => e.agregado_por_cliente === true && e.revisado_por_instructor !== true),
+  );
 
   return (
     <div className="cli-mi-rutina d-flex flex-column gap-3">
@@ -330,6 +461,24 @@ export function MiRutina() {
             <p>Entrenamiento de la sesión {sesionRegistrada} registrado correctamente.</p>
             {actualizacion === "lista" && siguiente && <p className="cli-ent-secundario">Próxima sesión sugerida: {siguiente}.</p>}
           </div>
+        </div>
+      )}
+
+      {avisoCambio && (
+        <div className="cli-registro-exito cli-cambio-exito" role="status" aria-atomic="true" tabIndex={-1} ref={confirmacionCambio}>
+          <i className="bi bi-check2-circle" aria-hidden="true" />
+          <div className="cli-cambio-exito-texto">
+            <p>{avisoCambio.titulo}</p>
+            <p className="cli-ent-secundario">{avisoCambio.detalle}</p>
+          </div>
+          <button
+            type="button"
+            className="btn-dark cli-ej-cerrar-icono"
+            aria-label="Cerrar confirmación de cambio"
+            onClick={() => setAvisoCambio(null)}
+          >
+            <i className="bi bi-x-lg" aria-hidden="true" />
+          </button>
         </div>
       )}
 
@@ -471,10 +620,18 @@ export function MiRutina() {
               onCambiar={cambiarSesion}
             />
             <div role="tabpanel" aria-label={`Ejercicios de la sesión ${activa}`}>
+              {tienePendientesSesion && (
+                <p className="cli-sesion-pendiente-aviso" role="status">
+                  <i className="bi bi-clock-history" aria-hidden="true" />
+                  <span>
+                    Los ejercicios con etiqueta <strong>Pendiente de revisión</strong> ya forman parte de tu sesión y serán revisados por tu instructor.
+                  </span>
+                </p>
+              )}
               {!sesionActiva?.ejercicios.length ? (
                 <p className="empty-state mb-0">Esta sesión aún no tiene ejercicios asignados. Consulta con tu instructor.</p>
               ) : (
-                <div className="inst-lista-ej">
+                <div className="inst-lista-ej cli-rutina-ejercicios">
                   {sesionActiva.ejercicios.map((fila) => {
                     const ejercicio = catalogo.find((e) => e.id_ejercicio === fila.id_ejercicio);
                     return (
@@ -483,27 +640,164 @@ export function MiRutina() {
                         fila={fila}
                         ejercicio={ejercicio}
                         acciones={ejercicio && (
-                          <button
-                            type="button"
-                            className="btn-dark cli-ej-accion"
-                            aria-label={`Ver detalle de ${ejercicio.nombre}`}
-                            title={`Ver detalle de ${ejercicio.nombre}`}
-                            onClick={() => setDetalle({ fila, ejercicio })}
-                          >
-                            <i className="bi bi-info-circle" aria-hidden="true" />
-                            <span>Ver detalle</span>
-                          </button>
+                          <div className="cli-ej-acciones">
+                            <button
+                              type="button"
+                              className="btn-dark cli-ej-accion"
+                              aria-label={`Ver detalle de ${ejercicio.nombre}`}
+                              title={`Ver detalle de ${ejercicio.nombre}`}
+                              onClick={() => setDetalle({ fila, ejercicio })}
+                            >
+                              <i className="bi bi-info-circle" aria-hidden="true" />
+                              <span>Ver detalle</span>
+                            </button>
+                            {vigente && (
+                              <button
+                                type="button"
+                                className="btn-dark cli-ej-accion cli-ej-accion-cambiar"
+                                aria-label={`Cambiar ${ejercicio.nombre}`}
+                                title={`Cambiar ${ejercicio.nombre}`}
+                                onClick={() =>
+                                  solicitarModificacionEjercicio({
+                                    tipo: "reemplazar",
+                                    sesion: sesionActiva.sesion,
+                                    filaAnterior: fila,
+                                    ejercicioAnterior: ejercicio,
+                                  })
+                                }
+                              >
+                                <i className="bi bi-arrow-left-right" aria-hidden="true" />
+                                <span>Cambiar<span className="cli-ej-accion-contexto"> ejercicio</span></span>
+                              </button>
+                            )}
+                          </div>
                         )}
                       />
                     );
                   })}
                 </div>
               )}
+              {vigente && sesionActiva && (
+                <div className="cli-sesion-agregar">
+                  <div className="cli-sesion-agregar-info">
+                    <span className="cli-ent-secundario">
+                      ¿Necesitas ajustar la Sesión {sesionActiva.sesion}? Los cambios quedarán pendientes de revisión por tu instructor.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-dark cli-ent-boton cli-btn-agregar-ej"
+                    aria-label={`Agregar ejercicio a la sesión ${sesionActiva.sesion}`}
+                    onClick={() =>
+                      solicitarModificacionEjercicio({
+                        tipo: "agregar",
+                        sesion: sesionActiva.sesion,
+                      })
+                    }
+                  >
+                    <i className="bi bi-plus-circle me-2" aria-hidden="true" />
+                    Agregar ejercicio
+                  </button>
+                </div>
+              )}
             </div>
           </>
         )}
       </section>
+
+      {ambitoBorrador && (
+        <HistorialEntrenamientos
+          ambito={ambitoBorrador}
+          division={rutina.division ?? sesiones.map((s) => s.sesion)}
+          registros={registros}
+          catalogo={catalogo}
+          estadoCarga={estadoHistorial}
+          onReintentar={() => void recargarHistorial(rutina.id_rutina)}
+        />
+      )}
+
       {detalle && <DetalleEjercicio detalle={detalle} onCerrar={() => setDetalle(null)} />}
+
+      {modoCambio && sesionActiva && (
+        <ModalCambioEjercicioCliente
+          modo={modoCambio}
+          filasSesion={
+            (sesiones.find((s) => s.sesion === modoCambio.sesion) ?? sesionActiva).ejercicios
+          }
+          catalogo={catalogo}
+          onConfirmar={(ejercicioNuevo, idEjercicioAnterior) => {
+            const autenticado = current();
+            const gymActual = tenant?.gimnasio.gimnasio_id ?? autenticado?.gimnasio_id;
+            const estadoActual = api.rutinas.estado(rutina);
+            if (
+              !autenticado ||
+              autenticado.rol !== "CLIENTE" ||
+              autenticado.numero_identificacion !== rutina.id_cliente ||
+              gymActual !== rutina.gimnasio_id
+            ) {
+              return Promise.resolve({
+                ok: false,
+                mensaje: "Tu sesión activa no coincide con esta rutina. Vuelve a iniciar sesión con tu cuenta.",
+              });
+            }
+            if (estadoActual !== "VIGENTE" && estadoActual !== "POR_VENCER") {
+              return Promise.resolve({
+                ok: false,
+                mensaje: "Solo se puede cambiar una rutina vigente.",
+              });
+            }
+            return api.rutinas.cambioCliente(rutina.id_rutina, ejercicioNuevo, idEjercicioAnterior);
+          }}
+          onCerrar={() => setModoCambio(null)}
+          onExito={(modoAplicado, actualizado, ejercicioElegido) => {
+            setModoCambio(null);
+            setActiva(modoAplicado.sesion);
+            void sincronizarSesiones(rutina.id_rutina, modoAplicado, actualizado);
+            const nombreAnterior =
+              modoAplicado.tipo === "reemplazar"
+                ? (modoAplicado.ejercicioAnterior?.nombre ?? `Ejercicio ${modoAplicado.filaAnterior.id_ejercicio}`)
+                : "";
+            setAvisoCambio({
+              sesion: modoAplicado.sesion,
+              titulo:
+                modoAplicado.tipo === "reemplazar"
+                  ? `Cambiaste «${nombreAnterior}» por «${ejercicioElegido.nombre}» en la Sesión ${modoAplicado.sesion}.`
+                  : `Agregaste «${ejercicioElegido.nombre}» a la Sesión ${modoAplicado.sesion}.`,
+              detalle: "El cambio ya está activo en tu sesión y queda pendiente de revisión por tu instructor.",
+            });
+          }}
+        />
+      )}
+
+      <Modal
+        show={cambioBloqueado !== null && borradorRestaurable !== null}
+        onHide={() => setCambioBloqueado(null)}
+        centered
+        aria-labelledby="cli-modal-bloqueo-cambio-titulo"
+        aria-describedby="cli-modal-bloqueo-cambio-desc"
+      >
+        <Modal.Header>
+          <Modal.Title as="h2" id="cli-modal-bloqueo-cambio-titulo">
+            Entrenamiento en curso en la Sesión {borradorRestaurable?.sesion}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body id="cli-modal-bloqueo-cambio-desc">
+          <p className="mb-0">
+            Tienes un entrenamiento en curso para esta sesión. Termínalo o descártalo antes de modificar sus ejercicios.
+          </p>
+        </Modal.Body>
+        <Modal.Footer className="cli-borrador-modal-acciones">
+          <button type="button" className="btn-dark cli-ent-boton" onClick={() => setCambioBloqueado(null)}>
+            Cancelar
+          </button>
+          <button type="button" className="btn-dark cli-ent-boton cli-ent-boton-peligro" onClick={descartarBorradorYModificar}>
+            Descartar borrador
+          </button>
+          <button type="button" className="btn-neon cli-ent-boton" autoFocus onClick={continuarBorrador}>
+            Continuar entrenamiento
+          </button>
+        </Modal.Footer>
+      </Modal>
 
       <Modal
         show={modalDescartar && borradorRestaurable !== null}
@@ -585,7 +879,7 @@ function DetalleEjercicio({ detalle, onCerrar }: { detalle: EjercicioSeleccionad
   const duracion = fila.segundos != null ? `${fila.segundos} s` : "Sin indicación";
   const pendiente = fila.agregado_por_cliente === true && fila.revisado_por_instructor !== true;
   const pasosTecnicos = obtenerPasosTecnicos(ejercicio);
-  const notaEntrenador = obtenerNotaEntrenador(fila, ejercicio);
+  const notaEntrenador = obtenerNotaEntrenador(fila);
   const indicaciones = [
     { etiqueta: "Series", valor: fila.series ?? "Sin indicación" },
     { etiqueta: porTiempo ? "Duración" : "Repeticiones", valor: porTiempo ? duracion : repeticiones },
@@ -618,8 +912,16 @@ function DetalleEjercicio({ detalle, onCerrar }: { detalle: EjercicioSeleccionad
             <VistaPreviaRecurso key={ejercicio.recurso_url} url={ejercicio.recurso_url} tamano="grande" alt={ejercicio.nombre} grupo={ejercicio.grupo_muscular} />
           </div>
         )}
+        {pendiente && (
+          <p className="cli-ej-pendiente" role="status">
+            <i className="bi bi-clock-history me-2" aria-hidden="true" />
+            Pendiente de revisión por tu instructor — pauta provisional hasta que tu entrenador la valide.
+          </p>
+        )}
         <section aria-labelledby="cli-ej-indicacion">
-          <h3 className="cli-ej-seccion" id="cli-ej-indicacion">Tu indicación</h3>
+          <h3 className="cli-ej-seccion" id="cli-ej-indicacion">
+            {pendiente ? "Pauta provisional (pendiente de revisión)" : "Tu indicación"}
+          </h3>
           <dl className="cli-ej-prescripcion">
             {indicaciones.map(({ etiqueta, valor }) => (
               <div className="cli-ej-dato" key={etiqueta}>
@@ -645,11 +947,6 @@ function DetalleEjercicio({ detalle, onCerrar }: { detalle: EjercicioSeleccionad
           </h3>
           <p className="cli-ej-texto">{notaEntrenador}</p>
         </section>
-        {pendiente && (
-          <p className="cli-ej-pendiente" role="status">
-            <i className="bi bi-clock-history me-2" aria-hidden="true" />Pendiente de revisión por tu instructor
-          </p>
-        )}
       </Modal.Body>
       <Modal.Footer>
         <button type="button" className="btn-neon cli-ej-cerrar" onClick={onCerrar}>Cerrar</button>

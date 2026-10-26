@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { current } from "../lib/auth";
-import { formatoPrescripcion, idealAHoy, resumenSesion } from "../lib/rutinas";
+import { formatoPrescripcion, idealAHoy, resumenSesion, textoVigencia } from "../lib/rutinas";
 import { utils } from "../lib/utils";
 import { AvanceRutina } from "../components/rutinas/AvanceRutina";
 import { BadgeEstadoRutina } from "../components/rutinas/BadgeEstadoRutina";
 import { FilaEjercicio } from "../components/rutinas/FilaEjercicio";
 import { PestanasSesion } from "../components/rutinas/PestanasSesion";
 import { VistaPreviaRecurso } from "../components/ejercicios/VistaPreviaRecurso";
+import { EntrenamientoCliente } from "../components/cliente/EntrenamientoCliente";
 import type { Ejercicio, LetraSesion, Rutina, RutinaEjercicio } from "../types";
 
 type EjercicioSeleccionado = { fila: RutinaEjercicio; ejercicio: Ejercicio };
@@ -34,6 +35,7 @@ export function MiRutina() {
   const [consulta, setConsulta] = useState<Consulta>({ estado: "cargando" });
   const [activa, setActiva] = useState<LetraSesion>("A");
   const [detalle, setDetalle] = useState<EjercicioSeleccionado | null>(null);
+  const [entrenando, setEntrenando] = useState<LetraSesion | null>(null);
 
   function cambiarSesion(letra: LetraSesion) {
     setDetalle(null);
@@ -114,6 +116,27 @@ export function MiRutina() {
   const estado = api.rutinas.estado(rutina);
   const vigente = estado === "VIGENTE" || estado === "POR_VENCER";
   const sesionActiva = sesiones.find((s) => s.sesion === activa);
+  const sesionEntrenada = sesiones.find((s) => s.sesion === entrenando);
+  if (sesionEntrenada) {
+    return (
+      <EntrenamientoCliente
+        key={sesionEntrenada.sesion}
+        nombreRutina={rutina.nombre}
+        sesion={sesionEntrenada.sesion}
+        filas={sesionEntrenada.ejercicios}
+        catalogo={catalogo}
+        onSalir={() => { setDetalle(null); setEntrenando(null); }}
+      />
+    );
+  }
+
+  function iniciarEntrenamiento() {
+    const actual = api.rutinas.estado(rutina);
+    if ((actual === "VIGENTE" || actual === "POR_VENCER") && sesionActiva && sesionActiva.ejercicios.length > 0) {
+      setDetalle(null);
+      setEntrenando(sesionActiva.sesion);
+    }
+  }
   const aviso = estado === "VENCIDA"
     ? "Tu última rutina está vencida. Puedes consultarla aquí; acércate a un instructor para renovarla."
     : estado === "FINALIZADA"
@@ -131,7 +154,7 @@ export function MiRutina() {
             <h1 className="card-title" id="mi-rutina-titulo">{rutina.nombre}</h1>
             <p className="card-sub">{rutina.objetivo}</p>
           </div>
-          <BadgeEstadoRutina estado={estado} />
+          <BadgeEstadoRutina estado={estado} detalle={textoVigencia(rutina, estado)} />
         </div>
         {aviso && (
           <div className="alert-g show inst-alerta-info" role="status">
@@ -139,20 +162,20 @@ export function MiRutina() {
           </div>
         )}
         {rutina.descripcion && <p>{rutina.descripcion}</p>}
-        <dl className="row mb-0">
-          <div className="col-12 col-md-6 col-lg-4 mb-3">
-            <dt className="card-sub">Instructor</dt>
-            <dd className="mb-0">
+        <dl className="cli-rutina-meta">
+          <div className="cli-rutina-dato">
+            <dt>Instructor</dt>
+            <dd>
               {instructor ? `${instructor.nombre} ${instructor.apellidos}` : "Instructor no disponible"}
             </dd>
           </div>
-          <div className="col-12 col-md-6 col-lg-4 mb-3">
-            <dt className="card-sub">Fecha de inicio</dt>
-            <dd className="mb-0">{utils.fecha(rutina.fecha_creacion)}</dd>
+          <div className="cli-rutina-dato">
+            <dt>Fecha de inicio</dt>
+            <dd>{utils.fecha(rutina.fecha_creacion)}</dd>
           </div>
-          <div className="col-12 col-md-6 col-lg-4 mb-3">
-            <dt className="card-sub">Fecha de fin</dt>
-            <dd className="mb-0">{rutina.fecha_fin ? utils.fecha(rutina.fecha_fin) : "Sin fecha de fin"}</dd>
+          <div className="cli-rutina-dato">
+            <dt>Fecha de fin</dt>
+            <dd>{rutina.fecha_fin ? utils.fecha(rutina.fecha_fin) : "Sin fecha de fin"}</dd>
           </div>
         </dl>
       </section>
@@ -170,7 +193,19 @@ export function MiRutina() {
 
       <section className="card-g" aria-labelledby="mi-rutina-sesiones">
         <div className="card-head">
-          <h2 className="card-title" id="mi-rutina-sesiones">Sesiones de la rutina</h2>
+          <div>
+            <h2 className="card-title" id="mi-rutina-sesiones">Sesiones de la rutina</h2>
+            {vigente && siguiente && activa === siguiente && (
+              <p className="card-sub">Sesión {siguiente} sugerida para tu entrenamiento de hoy</p>
+            )}
+          </div>
+          {vigente && sesionActiva && sesionActiva.ejercicios.length > 0 && (
+            <div className="cli-sesion-cta">
+              <button type="button" className="btn-neon cli-ent-boton" onClick={iniciarEntrenamiento}>
+                <i className="bi bi-play-fill me-2" aria-hidden="true" />Iniciar entrenamiento · Sesión {activa}
+              </button>
+            </div>
+          )}
         </div>
         {sesiones.length === 0 ? (
           <p className="empty-state mb-0">
@@ -224,6 +259,7 @@ export function MiRutina() {
 // Ficha local de T4: combina el catálogo con la indicación de esta rutina, sin consultar ni guardar datos.
 function DetalleEjercicio({ detalle, onCerrar }: { detalle: EjercicioSeleccionado; onCerrar: () => void }) {
   const { fila, ejercicio } = detalle;
+  const nombre = ejercicio.nombre;
   const porTiempo = ejercicio.tipo_medicion === "TIEMPO";
   const tieneReps = fila.reps_min != null || fila.reps_max != null;
   const repeticiones = tieneReps
@@ -244,21 +280,25 @@ function DetalleEjercicio({ detalle, onCerrar }: { detalle: EjercicioSeleccionad
     <Modal show onHide={onCerrar} centered scrollable fullscreen="sm-down" contentClassName="cli-ej-detalle" aria-labelledby="cli-ej-titulo">
       <Modal.Header className="cli-ej-cabecera">
         <div className="cli-ej-identidad">
-          <Modal.Title as="h2" id="cli-ej-titulo">{ejercicio.nombre}</Modal.Title>
-          <div className="cli-ej-meta">
-            <span className="badge-g cli-ej-etiqueta">{ejercicio.grupo_muscular}</span>
-            <span className="badge-g cli-ej-etiqueta">{ejercicio.nivel}</span>
-            <span className="badge-g cli-ej-etiqueta">{ejercicio.equipo}</span>
-          </div>
+          <Modal.Title as="h2" id="cli-ej-titulo">{nombre}</Modal.Title>
+          {ejercicio && (
+            <div className="cli-ej-meta">
+              <span className="badge-g cli-ej-etiqueta">{ejercicio.grupo_muscular}</span>
+              <span className="badge-g cli-ej-etiqueta">{ejercicio.nivel}</span>
+              <span className="badge-g cli-ej-etiqueta">{ejercicio.equipo}</span>
+            </div>
+          )}
         </div>
         <button type="button" className="btn-dark cli-ej-cerrar-icono" onClick={onCerrar} aria-label="Cerrar detalle del ejercicio" title="Cerrar detalle del ejercicio">
           <i className="bi bi-x-lg" aria-hidden="true" />
         </button>
       </Modal.Header>
       <Modal.Body className="cli-ej-cuerpo">
-        <div className="cli-ej-visual">
-          <VistaPreviaRecurso key={ejercicio.recurso_url} url={ejercicio.recurso_url} tamano="grande" alt={ejercicio.nombre} grupo={ejercicio.grupo_muscular} />
-        </div>
+        {ejercicio && (
+          <div className="cli-ej-visual">
+            <VistaPreviaRecurso key={ejercicio.recurso_url} url={ejercicio.recurso_url} tamano="grande" alt={ejercicio.nombre} grupo={ejercicio.grupo_muscular} />
+          </div>
+        )}
         <section aria-labelledby="cli-ej-indicacion">
           <h3 className="cli-ej-seccion" id="cli-ej-indicacion">Tu indicación</h3>
           <dl className="cli-ej-prescripcion">
@@ -271,17 +311,15 @@ function DetalleEjercicio({ detalle, onCerrar }: { detalle: EjercicioSeleccionad
           </dl>
         </section>
         <section aria-labelledby="cli-ej-ejecucion">
-          <h3 className="cli-ej-seccion" id="cli-ej-ejecucion">Cómo realizarlo</h3>
+          <h3 className="cli-ej-seccion" id="cli-ej-ejecucion">¿Cómo realizarlo?</h3>
           <p className="cli-ej-texto">{ejercicio.descripcion.trim() ? ejercicio.descripcion : "No hay instrucciones adicionales para este ejercicio."}</p>
         </section>
-        {fila.notas_instructor.trim() && (
-          <section className="cli-ej-nota" aria-labelledby="cli-ej-nota-titulo">
-            <h3 className="cli-ej-seccion" id="cli-ej-nota-titulo">
-              <i className="bi bi-chat-left-text me-2" aria-hidden="true" />Nota de tu instructor
-            </h3>
-            <p className="cli-ej-texto">{fila.notas_instructor}</p>
-          </section>
-        )}
+        {fila.notas_instructor.trim() && <section className="cli-ej-nota" aria-labelledby="cli-ej-nota-titulo">
+          <h3 className="cli-ej-seccion" id="cli-ej-nota-titulo">
+            <i className="bi bi-chat-left-text me-2" aria-hidden="true" />Nota de tu instructor
+          </h3>
+          <p className="cli-ej-texto">{fila.notas_instructor}</p>
+        </section>}
         {pendiente && (
           <p className="cli-ej-pendiente" role="status">
             <i className="bi bi-clock-history me-2" aria-hidden="true" />Pendiente de revisión por tu instructor

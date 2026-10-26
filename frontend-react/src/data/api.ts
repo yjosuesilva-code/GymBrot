@@ -1,7 +1,7 @@
 import { utils } from "../lib/utils";
 import { membresiaVigente } from "../lib/membresias";
 import { notificarCambioDeDatos } from "../lib/datos";
-import { OBJETIVOS_RUTINA } from "../lib/rutinas"; // [P3] única lista de objetivos
+import { OBJETIVOS_RUTINA, resumirSeries, validarResumen, validarSeries } from "../lib/rutinas"; // [P3] objetivos y series (KAN-98)
 import { DIAS_MAX_INSCRIPCION, TIPOS_CLASE, aMinutos, diaSemanaDe, fechasDeClase, horaFin, seCruzan } from "../lib/clases"; // [P3] B7
 import { slugUnico, slugify, validarSlug, normalizarSlugDeUrl } from "../lib/slug"; // [multitenant-slug]
 import { gimnasioFijado } from "../tenant/tenantActivo"; // [multitenant-slug]
@@ -46,6 +46,8 @@ import type {
   SesionEjercicioNuevo, // [P3]
   RegistroEntrenamiento, // [P3]
   RegistroNuevo, // [P3]
+  EjercicioRealizado, // [P3] KAN-98
+  SerieRealizada, // [P3] KAN-98
   AvanceRutina, // [P3]
   ResumenSupervision, // [P3]
   FilaSupervision, // [P3]
@@ -2927,9 +2929,33 @@ export const api = {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(data.fecha)) return { ok: false, mensaje: "La fecha no es válida" };
       if (data.fecha > utils.isoDate()) return { ok: false, mensaje: "No se puede registrar una sesión en el futuro" };
       if (data.fecha < r.fecha_creacion) return { ok: false, mensaje: "La fecha es anterior al inicio de la rutina" };
+      // KAN-98: cada ejercicio se valida y se reconstruye campo por campo (lo desconocido se descarta)
       const catalogo = leerCatalogo();
-      const ajeno = (data.ejercicios_realizados ?? []).find((e) => !catalogo.some((c) => c.id_ejercicio === e.id_ejercicio));
-      if (ajeno) return { ok: false, mensaje: "El ejercicio " + ajeno.id_ejercicio + " no existe en el catálogo" };
+      let realizados: EjercicioRealizado[] | undefined;
+      if (data.ejercicios_realizados) {
+        realizados = [];
+        for (const e of data.ejercicios_realizados) {
+          const ejercicio = catalogo.find((c) => c.id_ejercicio === e.id_ejercicio);
+          if (!ejercicio) return { ok: false, mensaje: "El ejercicio " + e.id_ejercicio + " no existe en el catálogo" };
+          if (realizados.some((x) => x.id_ejercicio === e.id_ejercicio))
+            return { ok: false, mensaje: ejercicio.nombre + " está repetido en el registro" };
+          if (e.detalle_series) {
+            const error = validarSeries(e.detalle_series, ejercicio);
+            if (error) return { ok: false, mensaje: error };
+            const detalle: SerieRealizada[] = e.detalle_series
+              .map((s) => ({ numero: s.numero, reps: s.reps ?? null, segundos: s.segundos ?? null, peso_kg: s.peso_kg ?? null }))
+              .sort((a, b) => a.numero - b.numero);
+            // El resumen siempre sale del detalle, aunque el cliente haya mandado otro
+            realizados.push({ id_ejercicio: e.id_ejercicio, ...resumirSeries(detalle), detalle_series: detalle });
+          } else {
+            const error = validarResumen(e, ejercicio);
+            if (error) return { ok: false, mensaje: error };
+            const resumen: EjercicioRealizado = { id_ejercicio: e.id_ejercicio, reps: e.reps ?? null, segundos: e.segundos ?? null, peso_kg: e.peso_kg ?? null };
+            if (e.series != null) resumen.series = e.series;
+            realizados.push(resumen);
+          }
+        }
+      }
       const arr = db.readTenant<RegistroEntrenamiento>("registros_entrenamiento");
       const nuevo: RegistroEntrenamiento = {
         gimnasio_id: gimnasioParaEscribir(),
@@ -2940,7 +2966,7 @@ export const api = {
         fecha: data.fecha,
         registrado_por: cedulaEnSesion(),
         notas: data.notas.trim(),
-        ejercicios_realizados: data.ejercicios_realizados,
+        ...(realizados ? { ejercicios_realizados: realizados } : {}),
       };
       arr.push(nuevo);
       db.writeTenant("registros_entrenamiento", arr);

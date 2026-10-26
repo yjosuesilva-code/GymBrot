@@ -20,8 +20,9 @@ export const CADUCIDAD_BORRADOR_MS = 48 * 60 * 60 * 1000;
 
 const MARGEN_RELOJ_FUTURO_MS = 5 * 60 * 1000;
 const MAX_LONGITUD_NOTAS = 300;
-const MAX_LONGITUD_CAMPO_SERIE = 12;
-const PATRON_NUMERO_EDITABLE = /^\d*(?:\.\d*)?$/;
+// Conserva también valores aún por corregir y la notación que admite input[type=number].
+// Las series marcadas se validan después con el mismo validador del registro definitivo.
+const PATRON_NUMERO_EDITABLE = /^[+-]?\d*(?:\.\d*)?(?:[eE][+-]?\d*)?$/;
 
 export type AlmacenamientoBorrador = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -252,8 +253,7 @@ function esSerieBorradorValida(dato: unknown): dato is SerieBorrador {
   if (dato === null || typeof dato !== "object") return false;
   const s = dato as Record<string, unknown>;
   if (typeof s.completada !== "boolean") return false;
-  if (typeof s.cantidad !== "string" || s.cantidad.length > MAX_LONGITUD_CAMPO_SERIE) return false;
-  if (typeof s.peso !== "string" || s.peso.length > MAX_LONGITUD_CAMPO_SERIE) return false;
+  if (typeof s.cantidad !== "string" || typeof s.peso !== "string") return false;
   if (!PATRON_NUMERO_EDITABLE.test(s.cantidad.trim()) || !PATRON_NUMERO_EDITABLE.test(s.peso.trim())) {
     return false;
   }

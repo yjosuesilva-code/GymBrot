@@ -10,22 +10,12 @@ type GuiaEjercicio = {
   nota: (repsTexto: string) => string;
 };
 
-const NOTA_GENERICA_SEMILLA = "calienta 5 minutos antes de la primera serie.";
-
 function normalizarClave(texto: string): string {
   return texto
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
-}
-
-function etiquetaMeta(fila: RutinaEjercicio, ejercicio: Ejercicio | undefined): string {
-  if (ejercicio?.tipo_medicion === "TIEMPO" || (fila.segundos != null && fila.reps_min == null && fila.reps_max == null)) {
-    return fila.segundos != null ? `los ${fila.segundos} s` : "el tiempo objetivo";
-  }
-  const meta = fila.reps_min ?? fila.reps_max;
-  return meta != null ? `las ${meta} reps` : "las repeticiones objetivo";
 }
 
 const GUIAS_POR_ID: Record<number, GuiaEjercicio> = {
@@ -476,8 +466,16 @@ const GUIAS_POR_GRUPO: Record<GrupoMuscular, GuiaEjercicio> = {
 
 export function obtenerPasosTecnicos(ejercicio: Ejercicio | undefined): PasoTecnico[] {
   if (!ejercicio) return [];
-  const porId = GUIAS_POR_ID[ejercicio.id_ejercicio];
+  // Solo el catálogo base es inmutable. Un ejercicio propio puede conservar su ID
+  // aunque el gimnasio cambie su nombre, modalidad y técnica.
+  const porId = ejercicio.gimnasio_id === null ? GUIAS_POR_ID[ejercicio.id_ejercicio] : undefined;
   if (porId) return porId.pasos;
+
+  const descripcion = ejercicio.descripcion?.trim();
+  if (descripcion) return [{ etapa: "Técnica del catálogo", instruccion: descripcion }];
+  if (ejercicio.gimnasio_id !== null) {
+    return [{ etapa: "Técnica pendiente", instruccion: "Consulta con tu instructor la técnica de este ejercicio." }];
+  }
 
   if (normalizarClave(ejercicio.nombre).includes("flexiones de pecho")) {
     return GUIAS_POR_ID[3].pasos;
@@ -486,22 +484,6 @@ export function obtenerPasosTecnicos(ejercicio: Ejercicio | undefined): PasoTecn
   return GUIAS_POR_GRUPO[ejercicio.grupo_muscular]?.pasos ?? GUIAS_POR_GRUPO["Cuerpo completo"].pasos;
 }
 
-export function obtenerNotaEntrenador(fila: RutinaEjercicio, ejercicio: Ejercicio | undefined): string {
-  const notaGuardada = fila.notas_instructor.trim();
-  if (notaGuardada && normalizarClave(notaGuardada) !== NOTA_GENERICA_SEMILLA) {
-    return notaGuardada;
-  }
-
-  if (ejercicio && (ejercicio.id_ejercicio === 3 || normalizarClave(ejercicio.nombre).includes("flexiones de pecho"))) {
-    return GUIAS_POR_ID[3].nota("");
-  }
-
-  const meta = etiquetaMeta(fila, ejercicio);
-  if (ejercicio && GUIAS_POR_ID[ejercicio.id_ejercicio]) {
-    return GUIAS_POR_ID[ejercicio.id_ejercicio].nota(meta);
-  }
-  if (ejercicio && GUIAS_POR_GRUPO[ejercicio.grupo_muscular]) {
-    return GUIAS_POR_GRUPO[ejercicio.grupo_muscular].nota(meta);
-  }
-  return GUIAS_POR_GRUPO["Cuerpo completo"].nota(meta);
+export function obtenerNotaEntrenador(fila: RutinaEjercicio): string {
+  return fila.notas_instructor.trim() || "Tu instructor no ha dejado una nota para este ejercicio.";
 }

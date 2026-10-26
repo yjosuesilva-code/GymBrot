@@ -17,6 +17,7 @@ registerHooks({
 });
 
 const { crearEntrenamiento, ejerciciosRealizados, reducirEntrenamiento, serieValida, errorSerie } = await import("./entrenamiento.ts");
+const { obtenerNotaEntrenador, obtenerPasosTecnicos } = await import("./guiaTecnica.ts");
 const {
   CADUCIDAD_BORRADOR_MS,
   buscarBorradorRutina,
@@ -28,6 +29,22 @@ const {
   huellaAutoguardado,
   tieneProgresoEntrenamiento,
 } = await import("./borradorEntrenamiento.ts");
+const {
+  construirSesionEjercicioCliente,
+  ejerciciosExcluidosEnSesion,
+  filtrarCatalogoCliente,
+  prescripcionInicialCambio,
+  validarFormularioPrescripcion,
+} = await import("./cambioEjercicio.ts");
+const {
+  construirEvolucionEjercicio,
+  extraerEjerciciosConHistorial,
+  filtrarYOrdenarRegistrosRutina,
+  formatoRealizado,
+  formatoSerieRealizada,
+  resolverEjercicioHistorial,
+  resumenOficialEjercicioRealizado,
+} = await import("./historialEntrenamiento.ts");
 const { MAX_REPS, MAX_SEGUNDOS, MAX_PESO_KG, resumirSeries, validarSeries } = await import("../../lib/rutinas.ts");
 
 function ejercicio(tipo = "REPETICIONES", equipo = "Mancuernas", peso = 7.5) {
@@ -405,4 +422,570 @@ test("ETAPA 5: detecta estado obsoleto si el instructor cambia los ejercicios o 
   });
   assert.equal(obsoleto.estado, "obsoleto");
   assert.equal(obsoleto.sesion, "B");
+});
+
+test("ETAPA 6: excluye ejercicios ya presentes en la sesión y filtra catálogo por texto, grupo, nivel y equipo", () => {
+  const catalogo = [
+    {
+      id_ejercicio: 10,
+      nombre: "Press de banca con barra",
+      grupo_muscular: "Pecho",
+      equipo: "Barra",
+      nivel: "Intermedio",
+      estado: "ACTIVO",
+      tipo_medicion: "REPETICIONES",
+      series_sugeridas: 4,
+      repeticiones_min_sugeridas: 8,
+      repeticiones_max_sugeridas: 10,
+      segundos_sugeridos: null,
+    },
+    {
+      id_ejercicio: 11,
+      nombre: "Press inclinado con mancuernas",
+      grupo_muscular: "Pecho",
+      equipo: "Mancuerna",
+      nivel: "Principiante",
+      estado: "ACTIVO",
+      tipo_medicion: "REPETICIONES",
+      series_sugeridas: 3,
+      repeticiones_min_sugeridas: 10,
+      repeticiones_max_sugeridas: 12,
+      segundos_sugeridos: null,
+    },
+    {
+      id_ejercicio: 12,
+      nombre: "Plancha abdominal",
+      grupo_muscular: "Abdomen",
+      equipo: "Peso corporal",
+      nivel: "Principiante",
+      estado: "ACTIVO",
+      tipo_medicion: "TIEMPO",
+      series_sugeridas: 3,
+      repeticiones_min_sugeridas: null,
+      repeticiones_max_sugeridas: null,
+      segundos_sugeridos: 45,
+    },
+    {
+      id_ejercicio: 13,
+      nombre: "Ejercicio inactivo",
+      grupo_muscular: "Pecho",
+      equipo: "Barra",
+      nivel: "Principiante",
+      estado: "INACTIVO",
+      tipo_medicion: "REPETICIONES",
+      series_sugeridas: 3,
+      repeticiones_min_sugeridas: 10,
+      repeticiones_max_sugeridas: 12,
+      segundos_sugeridos: null,
+    },
+  ];
+  const ejerciciosSesion = [{ id_ejercicio: 10, sesion: "A", orden: 1 }];
+  const excluidos = ejerciciosExcluidosEnSesion(ejerciciosSesion, 10);
+  assert.equal(excluidos.includes(10), true);
+
+  const disponibles = filtrarCatalogoCliente(catalogo, {
+    excluidos,
+    busqueda: "",
+    grupo: "",
+    nivel: "",
+    equipo: "",
+  });
+  assert.deepEqual(disponibles.map((e) => e.id_ejercicio), [11, 12]);
+
+  const soloPecho = filtrarCatalogoCliente(catalogo, {
+    excluidos,
+    busqueda: "inclinado",
+    grupo: "Pecho",
+    nivel: "Principiante",
+    equipo: "Mancuerna",
+  });
+  assert.deepEqual(soloPecho.map((e) => e.id_ejercicio), [11]);
+});
+
+test("ETAPA 6: conserva pauta al reemplazar mismo tipo de medición y usa sugeridos al agregar o cambiar tipo", () => {
+  const filaAnterior = {
+    id_rutina: 7,
+    sesion: "A",
+    id_ejercicio: 10,
+    orden: 1,
+    series: 4,
+    reps_min: 6,
+    reps_max: 8,
+    segundos: null,
+    peso_kg: 60,
+    descanso_seg: 120,
+    notas_instructor: "Baja controlado",
+  };
+  const modoReemplazar = {
+    tipo: "reemplazar",
+    sesion: "A",
+    filaAnterior,
+  };
+  const nuevoMismoTipo = {
+    id_ejercicio: 11,
+    nombre: "Press con mancuernas",
+    grupo_muscular: "Pecho",
+    equipo: "Mancuerna",
+    nivel: "Intermedio",
+    tipo_medicion: "REPETICIONES",
+    series_sugeridas: 3,
+    repeticiones_min_sugeridas: 10,
+    repeticiones_max_sugeridas: 12,
+    segundos_sugeridos: null,
+  };
+  const pautaConservada = prescripcionInicialCambio(modoReemplazar, nuevoMismoTipo);
+  assert.equal(pautaConservada.origen, "conservada");
+  assert.equal(pautaConservada.series, "4");
+  assert.equal(pautaConservada.repsMin, "6");
+  assert.equal(pautaConservada.repsMax, "8");
+  assert.equal(pautaConservada.pesoKg, "60");
+  assert.equal(pautaConservada.descansoSeg, "120");
+
+  const nuevoTiempo = {
+    id_ejercicio: 12,
+    nombre: "Plancha abdominal",
+    grupo_muscular: "Abdomen",
+    equipo: "Peso corporal",
+    nivel: "Principiante",
+    tipo_medicion: "TIEMPO",
+    series_sugeridas: 3,
+    repeticiones_min_sugeridas: null,
+    repeticiones_max_sugeridas: null,
+    segundos_sugeridos: 45,
+  };
+  const pautaSugerida = prescripcionInicialCambio(modoReemplazar, nuevoTiempo);
+  assert.equal(pautaSugerida.origen, "sugerida-catalogo");
+  assert.equal(pautaSugerida.series, "4");
+  assert.equal(pautaSugerida.segundos, "45");
+  assert.equal(pautaSugerida.pesoKg, "");
+
+  const pautaAgregar = prescripcionInicialCambio({ tipo: "agregar", sesion: "A" }, nuevoTiempo);
+  assert.equal(pautaAgregar.origen, "sugerida-catalogo");
+  assert.equal(pautaAgregar.series, "3");
+  assert.equal(pautaAgregar.segundos, "45");
+});
+
+test("ETAPA 6: construye payload SesionEjercicioNuevo válido, previene duplicados y es entrenable en modo entrenamiento", () => {
+  const ejercicioRep = {
+    id_ejercicio: 11,
+    nombre: "Press con mancuernas",
+    grupo_muscular: "Pecho",
+    equipo: "Mancuerna",
+    nivel: "Intermedio",
+    tipo_medicion: "REPETICIONES",
+    series_sugeridas: 3,
+    repeticiones_min_sugeridas: 10,
+    repeticiones_max_sugeridas: 12,
+    segundos_sugeridos: null,
+  };
+  const filaAnterior = {
+    id_rutina: 7,
+    sesion: "A",
+    id_ejercicio: 10,
+    orden: 1,
+    series: 4,
+    reps_min: 8,
+    reps_max: 10,
+    segundos: null,
+    peso_kg: 20,
+    descanso_seg: 90,
+    notas_instructor: "",
+  };
+  const modoReemplazar = {
+    tipo: "reemplazar",
+    sesion: "A",
+    filaAnterior,
+  };
+
+  // Rechaza reemplazar por el mismo ejercicio
+  assert.throws(() =>
+    construirSesionEjercicioCliente(
+      modoReemplazar,
+      { ...ejercicioRep, id_ejercicio: 10 },
+      { series: "3", repsMin: "10", repsMax: "12", segundos: "", descansoSeg: "60", pesoKg: "20", origen: "conservada" },
+      1,
+    ),
+  );
+
+  // Rechaza rango inválido reps_min > reps_max
+  assert.equal(
+    validarFormularioPrescripcion(
+      { series: "3", repsMin: "14", repsMax: "10", segundos: "30", descansoSeg: "60", pesoKg: "20", origen: "conservada" },
+      ejercicioRep,
+    ) !== null,
+    true,
+  );
+
+  // Construye payload válido para cambioCliente
+  const payload = construirSesionEjercicioCliente(
+    modoReemplazar,
+    ejercicioRep,
+    { series: "4", repsMin: "8", repsMax: "10", segundos: "", descansoSeg: "90", pesoKg: "22.5", origen: "conservada" },
+    1,
+  );
+  assert.deepEqual(payload, {
+    sesion: "A",
+    id_ejercicio: 11,
+    orden: 1,
+    series: 4,
+    reps_min: 8,
+    reps_max: 10,
+    segundos: null,
+    peso_kg: 22.5,
+    descanso_seg: 90,
+    notas_instructor: "",
+  });
+
+  // El ejercicio resultante (con marcas de cliente) es 100% compatible con crearEntrenamiento
+  const filaActualizada = {
+    gimnasio_id: 1,
+    id_rutina: 7,
+    ...payload,
+    agregado_por_cliente: true,
+    revisado_por_instructor: false,
+  };
+  const entrenamiento = crearEntrenamiento({
+    sesion: "A",
+    filas: [filaActualizada],
+    catalogo: [ejercicioRep],
+  });
+  assert.equal(entrenamiento.ejercicios.length, 1);
+  assert.equal(entrenamiento.ejercicios[0].series.length, 4);
+  assert.equal(entrenamiento.ejercicios[0].series[0].cantidad, "");
+  assert.equal(entrenamiento.ejercicios[0].series[0].peso, "22.5");
+});
+
+test("ETAPA 7: filtra por cliente/gimnasio/rutina, ordena cronológicamente y maneja ejercicio eliminado (#19) y registros sin detalle_series", () => {
+  const ambito = { gimnasioId: "gym-centro", idCliente: "1000000001", idRutina: 5 };
+  const catalogo = [
+    {
+      id_ejercicio: 1,
+      nombre: "Press de banca",
+      grupo_muscular: "Pecho",
+      equipo: "Barra",
+      nivel: "Intermedio",
+      tipo_medicion: "REPETICIONES",
+      recurso_url: "",
+      estado: "ACTIVO",
+    },
+  ];
+
+  const registrosDesordenados = [
+    {
+      gimnasio_id: "gym-centro",
+      id_registro: 10,
+      id_rutina: 5,
+      id_cliente: "1000000001",
+      sesion: "A",
+      fecha: "2026-10-01",
+      registrado_por: "1000000001",
+      notas: "Primero",
+    },
+    {
+      gimnasio_id: "gym-titan",
+      id_registro: 11,
+      id_rutina: 5,
+      id_cliente: "1000000001",
+      sesion: "A",
+      fecha: "2026-10-15",
+      registrado_por: "1000000001",
+      notas: "Otro gym",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_registro: 12,
+      id_rutina: 99,
+      id_cliente: "1000000001",
+      sesion: "A",
+      fecha: "2026-10-16",
+      registrado_por: "1000000001",
+      notas: "Otra rutina",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_registro: 15,
+      id_rutina: 5,
+      id_cliente: "1000000001",
+      sesion: "B",
+      fecha: "2026-10-10",
+      registrado_por: "1000000001",
+      notas: "Más reciente",
+      ejercicios_realizados: [
+        // Registro antiguo sin detalle_series
+        { id_ejercicio: 1, series: 4, reps: 10, segundos: null, peso_kg: 42.5 },
+        // Ejercicio eliminado del catálogo (#19) con detalle_series
+        {
+          id_ejercicio: 19,
+          series: 2,
+          reps: 12,
+          segundos: null,
+          peso_kg: null,
+          detalle_series: [
+            { numero: 2, reps: 12, segundos: null, peso_kg: null },
+            { numero: 1, reps: 10, segundos: null, peso_kg: null },
+          ],
+        },
+      ],
+    },
+  ];
+
+  const filtrados = filtrarYOrdenarRegistrosRutina(registrosDesordenados, ambito);
+  assert.deepEqual(filtrados.map((r) => r.id_registro), [15, 10]);
+
+  const infoEliminado = resolverEjercicioHistorial(19, catalogo);
+  assert.equal(infoEliminado.enCatalogo, false);
+  assert.equal(infoEliminado.nombre, "Ejercicio #19");
+
+  const legado = resumenOficialEjercicioRealizado(filtrados[0].ejercicios_realizados[0]);
+  assert.equal(legado.tieneDetalle, false);
+  assert.equal(legado.peso_kg, 42.5);
+  assert.equal(
+    formatoRealizado(filtrados[0].ejercicios_realizados[0], catalogo[0]),
+    "4 series · 10 reps · 42.5 kg",
+  );
+
+  const conDetalle = resumenOficialEjercicioRealizado(filtrados[0].ejercicios_realizados[1]);
+  assert.equal(conDetalle.tieneDetalle, true);
+  assert.deepEqual(conDetalle.detalle_series.map((s) => s.numero), [1, 2]);
+  assert.equal(formatoSerieRealizada(conDetalle.detalle_series[0]), "10 reps · Peso corporal");
+});
+
+test("ETAPA 7: evolución de cargas con peso decimal, peso corporal (reps sin inventar 0 kg), TIEMPO (segundos) y 1 solo registro", () => {
+  const catalogo = [
+    {
+      id_ejercicio: 1,
+      nombre: "Press con mancuernas",
+      grupo_muscular: "Pecho",
+      equipo: "Mancuerna",
+      nivel: "Intermedio",
+      tipo_medicion: "REPETICIONES",
+      recurso_url: "",
+      estado: "ACTIVO",
+    },
+    {
+      id_ejercicio: 2,
+      nombre: "Flexiones de pecho",
+      grupo_muscular: "Pecho",
+      equipo: "Peso corporal",
+      nivel: "Principiante",
+      tipo_medicion: "REPETICIONES",
+      recurso_url: "",
+      estado: "ACTIVO",
+    },
+    {
+      id_ejercicio: 3,
+      nombre: "Plancha abdominal",
+      grupo_muscular: "Abdomen",
+      equipo: "Peso corporal",
+      nivel: "Principiante",
+      tipo_medicion: "TIEMPO",
+      recurso_url: "",
+      estado: "ACTIVO",
+    },
+  ];
+
+  const registros = [
+    {
+      gimnasio_id: "gym-centro",
+      id_registro: 1,
+      id_rutina: 5,
+      id_cliente: "1000000001",
+      sesion: "A",
+      fecha: "2026-10-01",
+      registrado_por: "1000000001",
+      notas: "",
+      ejercicios_realizados: [
+        {
+          id_ejercicio: 1,
+          series: 3,
+          reps: 10,
+          segundos: null,
+          peso_kg: 17.5,
+          detalle_series: [
+            { numero: 1, reps: 12, segundos: null, peso_kg: 15 },
+            { numero: 2, reps: 10, segundos: null, peso_kg: 17.5 },
+            { numero: 3, reps: 8, segundos: null, peso_kg: 17.5 },
+          ],
+        },
+        {
+          id_ejercicio: 2,
+          series: 3,
+          reps: 12,
+          segundos: null,
+          peso_kg: null,
+          detalle_series: [
+            { numero: 1, reps: 12, segundos: null, peso_kg: null },
+            { numero: 2, reps: 12, segundos: null, peso_kg: null },
+            { numero: 3, reps: 10, segundos: null, peso_kg: null },
+          ],
+        },
+        {
+          id_ejercicio: 3,
+          series: 3,
+          reps: null,
+          segundos: 45,
+          peso_kg: null,
+          detalle_series: [
+            { numero: 1, reps: null, segundos: 40, peso_kg: null },
+            { numero: 2, reps: null, segundos: 45, peso_kg: null },
+            { numero: 3, reps: null, segundos: 45, peso_kg: null },
+          ],
+        },
+      ],
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_registro: 2,
+      id_rutina: 5,
+      id_cliente: "1000000001",
+      sesion: "B",
+      fecha: "2026-10-08",
+      registrado_por: "1000000001",
+      notas: "",
+      ejercicios_realizados: [
+        // Registro de Press donde ese día no se anotó peso (null): no debe inventar 0 kg
+        {
+          id_ejercicio: 1,
+          series: 3,
+          reps: 12,
+          segundos: null,
+          peso_kg: null,
+        },
+        {
+          id_ejercicio: 2,
+          series: 3,
+          reps: 15,
+          segundos: null,
+          peso_kg: null,
+        },
+      ],
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_registro: 3,
+      id_rutina: 5,
+      id_cliente: "1000000001",
+      sesion: "A",
+      fecha: "2026-10-15",
+      registrado_por: "1000000001",
+      notas: "",
+      ejercicios_realizados: [
+        {
+          id_ejercicio: 1,
+          series: 3,
+          reps: 10,
+          segundos: null,
+          peso_kg: 22.5,
+          detalle_series: [
+            { numero: 1, reps: 10, segundos: null, peso_kg: 20 },
+            { numero: 2, reps: 10, segundos: null, peso_kg: 22.5 },
+            { numero: 3, reps: 9, segundos: null, peso_kg: 22.5 },
+          ],
+        },
+      ],
+    },
+  ];
+
+  const opciones = extraerEjerciciosConHistorial(registros, catalogo);
+  assert.deepEqual(opciones.map((o) => o.info.id_ejercicio), [1, 2, 3]);
+  assert.deepEqual(opciones[0].sesiones, ["A", "B"]);
+
+  // 1. Ejercicio con peso y peso decimal (+ una sesión con peso null que no se convierte en 0 kg)
+  const evPeso = construirEvolucionEjercicio(registros, 1, catalogo);
+  assert.equal(evPeso.metrica, "PESO");
+  assert.equal(evPeso.suficientesParaComparar, true);
+  assert.equal(evPeso.tieneAlgunoSinCarga, true);
+  assert.equal(evPeso.puntosAsc.length, 3);
+  assert.equal(evPeso.puntosAsc[1].valorMetrica, null);
+  assert.equal(evPeso.puntosAsc[1].etiquetaValor, "Sin carga registrada");
+  assert.deepEqual(evPeso.puntosGraficables.map((p) => p.valorMetrica), [17.5, 22.5]);
+  assert.equal(evPeso.primero?.valorMetrica, 17.5);
+  assert.equal(evPeso.ultimo?.valorMetrica, 22.5);
+  assert.equal(evPeso.maximo?.valorMetrica, 22.5);
+
+  // 2. Ejercicio de peso corporal (REPETICIONES sin peso): evoluciona por repeticiones sin inventar 0 kg
+  const evReps = construirEvolucionEjercicio(registros, 2, catalogo);
+  assert.equal(evReps.metrica, "REPETICIONES");
+  assert.equal(evReps.suficientesParaComparar, true);
+  assert.deepEqual(evReps.puntosGraficables.map((p) => p.valorMetrica), [12, 15]);
+  assert.equal(evReps.ultimo?.etiquetaValor, "15 reps");
+
+  // 3. Ejercicio por TIEMPO con un único registro histórico
+  const evTiempo = construirEvolucionEjercicio(registros, 3, catalogo);
+  assert.equal(evTiempo.metrica, "SEGUNDOS");
+  assert.equal(evTiempo.suficientesParaComparar, false);
+  assert.equal(evTiempo.puntosGraficables.length, 1);
+  assert.equal(evTiempo.ultimo?.etiquetaValor, "45 s");
+});
+
+test("AUDITORÍA: restaura valores aceptados por el formulario sin perder las series ya completadas", () => {
+  const { ambito, rutina, catalogo, filasB, sesiones } = fixtureBorrador();
+  for (const [cantidad, peso, pendiente] of [
+    ["1e1", "7.5", "-1"],
+    ["10", "7.51234567890123", ""],
+  ]) {
+    const storage = crearStorageMemoria();
+    let estado = crearEntrenamiento({ sesion: "B", filas: filasB, catalogo });
+    estado = reducirEntrenamiento(estado, { tipo: "editar", serie: 0, campo: "cantidad", valor: cantidad });
+    estado = reducirEntrenamiento(estado, { tipo: "editar", serie: 0, campo: "peso", valor: peso });
+    estado = reducirEntrenamiento(estado, { tipo: "completar", serie: 0, ahora: 10_000 });
+    estado = reducirEntrenamiento(estado, { tipo: "editar", serie: 1, campo: "cantidad", valor: pendiente });
+    guardarBorradorEntrenamiento(ambito, estado, "", { ahora: 10_000, storage });
+    const resultado = buscarBorradorRutina({ ambito, rutina, vigente: true, sesiones, catalogo, ahora: 11_000, storage });
+    assert.equal(resultado.estado, "restaurable");
+    assert.deepEqual(resultado.entrenamiento.ejercicios[0].series, estado.ejercicios[0].series);
+    assert.equal(resultado.entrenamiento.ejercicios[0].series[0].completada, true);
+  }
+});
+
+test("AUDITORÍA: conserva la carga decimal del cambio sin redondear la prescripción", () => {
+  const e = ejercicio().ejercicio;
+  const modo = { tipo: "agregar", sesion: "A" };
+  const form = { ...prescripcionInicialCambio(modo, e), pesoKg: "7.25" };
+  assert.equal(construirSesionEjercicioCliente(modo, e, form, 0).peso_kg, 7.25);
+});
+
+test("AUDITORÍA: muestra la nota guardada sin sustituirla por una indicación inventada", () => {
+  const nota = "Calienta 5 minutos antes de la primera serie.";
+  assert.equal(obtenerNotaEntrenador({ notas_instructor: nota }), nota);
+  assert.match(obtenerNotaEntrenador({ notas_instructor: "" }), /no ha dejado|no hay|sin nota/i);
+});
+
+test("AUDITORÍA: la evolución de tiempo conserva el peso de la serie de mayor duración", () => {
+  const e = { ...ejercicio("TIEMPO").ejercicio, id_ejercicio: 900 };
+  const detalle = [{ numero: 1, segundos: 60, peso_kg: 10 }, { numero: 2, segundos: 30, peso_kg: 20 }];
+  const registros = [{ id_registro: 1, fecha: "2026-10-01", sesion: "A", notas: "", ejercicios_realizados: [{ id_ejercicio: 900, ...resumirSeries(detalle), detalle_series: detalle }] }];
+  const ev = construirEvolucionEjercicio(registros, 900, [e]);
+  assert.equal(ev.ultimo.valorMetrica, 60);
+  assert.match(ev.ultimo.contextoSecundario, /10 kg/);
+  assert.doesNotMatch(ev.ultimo.contextoSecundario, /20 kg/);
+});
+
+test("AUDITORÍA: no compara como carga una ejecución por tiempo y otra por repeticiones", () => {
+  const e = { ...ejercicio().ejercicio, id_ejercicio: 900 };
+  const registros = [
+    { id_registro: 1, fecha: "2026-10-01", sesion: "A", notas: "", ejercicios_realizados: [{ id_ejercicio: 900, segundos: 60, peso_kg: 10 }] },
+    { id_registro: 2, fecha: "2026-10-02", sesion: "A", notas: "", ejercicios_realizados: [{ id_ejercicio: 900, reps: 12, peso_kg: 20 }] },
+  ];
+  const ev = construirEvolucionEjercicio(registros, 900, [e]);
+  assert.equal(ev.suficientesParaComparar, false);
+  assert.equal(ev.puntosAsc.length, 2, "ambas ejecuciones siguen en el historial");
+  assert.equal(ev.puntosAsc[0].valorMetrica, null);
+  assert.equal(ev.puntosAsc[1].valorMetrica, 20);
+});
+
+test("AUDITORÍA: distingue peso corporal explícito, cero y carga ausente en registros antiguos", () => {
+  const cuerpo = { tipo_medicion: "REPETICIONES", equipo: "Peso corporal" };
+  assert.equal(formatoSerieRealizada({ numero: 1, reps: 10, peso_kg: null }), "10 reps · Peso corporal");
+  assert.equal(formatoSerieRealizada({ numero: 1, reps: 10, peso_kg: 0 }), "10 reps · 0 kg");
+  assert.equal(formatoSerieRealizada({ numero: 1, reps: 10 }, cuerpo), "10 reps · Carga no registrada");
+  assert.doesNotMatch(formatoRealizado({ id_ejercicio: 1, reps: 10 }, cuerpo), /Peso corporal/);
+});
+
+test("AUDITORÍA: un ejercicio propio editado conserva su descripción actual en la guía", () => {
+  const descripcion = "Apoya los antebrazos y mantén el cuerpo alineado.";
+  const propio = { ...ejercicio("TIEMPO").ejercicio, id_ejercicio: 42, gimnasio_id: "gym-centro", nombre: "Plancha personalizada", grupo_muscular: "Abdomen", descripcion };
+  const texto = obtenerPasosTecnicos(propio).map((p) => p.instruccion).join(" ");
+  assert.ok(texto.includes(descripcion));
+  assert.doesNotMatch(texto, /barra|trapecios/);
 });

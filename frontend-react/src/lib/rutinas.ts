@@ -241,6 +241,28 @@ export function validarSeries(detalle: SerieRealizada[], ejercicio: Ejercicio): 
   return null;
 }
 
+// "7,5" en vez de "7.5"
+const numeroEs = (n: number) => String(n).replace(".", ",");
+
+// Lo hecho en un ejercicio, en una línea: con detalle "12×8 · 11×8 · 10×7,5" (reps × kg o "45 s");
+// sin detalle, el resumen "3 × 12 · 8 kg". Sin datos, "—".
+export function formatoRealizado(e: EjercicioRealizado): string {
+  if (e.detalle_series && e.detalle_series.length > 0) {
+    return e.detalle_series
+      .map((s) => {
+        const cantidad = s.segundos != null ? s.segundos + " s" : s.reps != null ? String(s.reps) : "—";
+        return s.peso_kg != null ? cantidad + "×" + numeroEs(s.peso_kg) : cantidad;
+      })
+      .join(" · ");
+  }
+  const cantidad = e.segundos != null ? e.segundos + " s" : e.reps != null ? String(e.reps) : "";
+  const partes: string[] = [];
+  if (e.series != null) partes.push(cantidad ? e.series + " × " + cantidad : e.series + " series");
+  else if (cantidad) partes.push(cantidad);
+  if (e.peso_kg != null) partes.push(numeroEs(e.peso_kg) + " kg");
+  return partes.join(" · ") || "—";
+}
+
 // Valida un resumen que llega sin detalle (todos los campos son opcionales)
 export function validarResumen(e: ResumenSeries, ejercicio: Ejercicio): string | null {
   if (e.series != null && (!Number.isInteger(e.series) || e.series < 0 || e.series > MAX_REPS))

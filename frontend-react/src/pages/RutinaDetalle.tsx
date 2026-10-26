@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { instructorEnSesion } from "../lib/sesionInstructor";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
 import { useTenant } from "../tenant/TenantContext";
 import { utils } from "../lib/utils";
-import { idealAHoy, resumenSesion, textoVigencia } from "../lib/rutinas";
+import { formatoRealizado, idealAHoy, resumenSesion, textoVigencia } from "../lib/rutinas";
 import { Paginador } from "../components/Paginador";
 import { AvanceRutina } from "../components/rutinas/AvanceRutina";
 import { BadgeEstadoRutina } from "../components/rutinas/BadgeEstadoRutina";
@@ -57,6 +57,7 @@ export function RutinaDetalle() {
   const [version, setVersion] = useState(0); // subirla vuelve a cargar todo
   const [activa, setActiva] = useState<LetraSesion>("A");
   const [pagina, setPagina] = useState(1);
+  const [registroAbierto, setRegistroAbierto] = useState<number | null>(null); // KAN-98: fila del historial expandida
   const [alerta, setAlerta] = useState<Alerta | null>(null);
 
   // Modales
@@ -329,20 +330,55 @@ export function RutinaDetalle() {
         <div className="table-wrap">
           <table className="table-g tabla-stack">
             <thead>
-              <tr><th>Fecha</th><th>Sesión</th><th>Registrada por</th><th>Notas</th></tr>
+              <tr><th>Fecha</th><th>Sesión</th><th>Registrada por</th><th>Notas</th><th>Ejercicios</th></tr>
             </thead>
             <tbody>
               {registros.length === 0 ? (
-                <tr><td colSpan={4} className="empty-state">Todavía no hay sesiones registradas.</td></tr>
+                <tr><td colSpan={5} className="empty-state">Todavía no hay sesiones registradas.</td></tr>
               ) : (
-                registrosPagina.map((x) => (
-                  <tr key={x.id_registro}>
-                    <td data-label="Fecha">{utils.fecha(x.fecha)}</td>
-                    <td data-label="Sesión"><span className="inst-letra inst-letra-sm">{x.sesion}</span></td>
-                    <td data-label="Registrada por">{nombreDe(x.registrado_por)}</td>
-                    <td data-label="Notas">{x.notas || "—"}</td>
-                  </tr>
-                ))
+                registrosPagina.map((x) => {
+                  // KAN-98: fila expandible con lo que hizo en cada ejercicio (solo si lo registró)
+                  const hechos = x.ejercicios_realizados ?? [];
+                  const abierto = registroAbierto === x.id_registro;
+                  return (
+                    <Fragment key={x.id_registro}>
+                      <tr>
+                        <td data-label="Fecha">{utils.fecha(x.fecha)}</td>
+                        <td data-label="Sesión"><span className="inst-letra inst-letra-sm">{x.sesion}</span></td>
+                        <td data-label="Registrada por">{nombreDe(x.registrado_por)}</td>
+                        <td data-label="Notas">{x.notas || "—"}</td>
+                        <td data-label="Ejercicios" className="inst-td-ejercicios">
+                          {hechos.length === 0 ? (
+                            "—"
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn-dark"
+                              aria-expanded={abierto}
+                              onClick={() => setRegistroAbierto(abierto ? null : x.id_registro)}
+                            >
+                              {hechos.length} <i className={"bi " + (abierto ? "bi-chevron-up" : "bi-chevron-down") + " ms-1"} aria-hidden />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {abierto && (
+                        <tr className="inst-fila-realizados">
+                          <td colSpan={5}>
+                            <ul className="inst-realizados">
+                              {hechos.map((e) => (
+                                <li key={e.id_ejercicio}>
+                                  <strong>{catalogo.find((c) => c.id_ejercicio === e.id_ejercicio)?.nombre ?? "Ejercicio " + e.id_ejercicio}:</strong>{" "}
+                                  {formatoRealizado(e)}
+                                </li>
+                              ))}
+                            </ul>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>

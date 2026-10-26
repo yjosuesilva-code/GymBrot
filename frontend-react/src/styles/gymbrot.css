@@ -1546,3 +1546,12 @@ body {
   .inst-sesion { flex-wrap: wrap; }
   .inst-ocupacion { min-width: 0; width: 100%; }
 }
+
+/* [P3] .inst-* · Series realizadas en el historial de la rutina (KAN-98) */
+.inst-realizados { list-style: none; margin: 0; padding: 4px 0; display: flex; flex-direction: column; gap: 4px; text-align: left; font-size: 13px; }
+.inst-realizados strong { color: #fff; font-weight: 600; }
+.tabla-stack .inst-fila-realizados td { display: block; }
+@media (max-width: 640px) {
+  /* La base oculta la etiqueta de la última celda (acciones); aquí sí hace falta */
+  .tabla-stack td.inst-td-ejercicios::before { content: attr(data-label); display: block; }
+}

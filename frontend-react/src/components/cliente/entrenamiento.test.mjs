@@ -61,6 +61,13 @@ const {
   resolverBeneficiosPlan,
   separarMembresiasCliente,
 } = await import("./miMembresia.ts");
+const {
+  calcularResumenFisico,
+  determinarMetricasDisponibles,
+  obtenerPuntosGrafico,
+  ordenarMedicionesCronologico,
+  ordenarMedicionesReciente,
+} = await import("./miProgreso.ts");
 const { MAX_REPS, MAX_SEGUNDOS, MAX_PESO_KG, resumirSeries, validarSeries } = await import("../../lib/rutinas.ts");
 
 function ejercicio(tipo = "REPETICIONES", equipo = "Mancuernas", peso = 7.5) {
@@ -1435,4 +1442,179 @@ test("ETAPA 9: historial de membresías excluye la actual y ordena cronológicam
   );
   assert.equal(anteriores[0].estado, "CANCELADA");
   assert.equal(anteriores[1].estado, "VENCIDA");
+});
+
+test("ETAPA 10: resumen físico distingue datos ausentes de cero y calcula deltas neutrales", () => {
+  assert.equal(calcularResumenFisico([]), null);
+
+  const unica = [
+    {
+      gimnasio_id: "gym-centro",
+      id_progreso: 1,
+      id_cliente: "1000000001",
+      fecha: "2026-10-01",
+      peso: 72.4,
+      altura: 1.75,
+      porcentaje_grasa: 18.2,
+      masa_muscular: 31.0,
+      notas: "Primera",
+    },
+  ];
+  const rUnica = calcularResumenFisico(unica);
+  assert.ok(rUnica);
+  assert.equal(rUnica.totalMediciones, 1);
+  assert.equal(rUnica.ultimoPesoKg, 72.4);
+  assert.equal(rUnica.diferenciaPesoKg, null);
+  assert.equal(rUnica.etiquetaDiferenciaPeso, null);
+  assert.equal(rUnica.ultimaGrasaPorcentaje, 18.2);
+  assert.equal(rUnica.ultimaMasaMuscular, 31.0);
+  assert.equal(rUnica.fechaUltimaMedicion, "2026-10-01");
+
+  // Múltiples mediciones con delta positivo, negativo y neutro
+  const variaciones = [
+    {
+      gimnasio_id: "gym-centro",
+      id_progreso: 1,
+      id_cliente: "1000000001",
+      fecha: "2026-08-01",
+      peso: 70.0,
+      altura: 1.75,
+      notas: "",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_progreso: 2,
+      id_cliente: "1000000001",
+      fecha: "2026-09-01",
+      peso: 71.5,
+      altura: 1.75,
+      porcentaje_grasa: 19.0,
+      notas: "",
+    },
+  ];
+  const rPos = calcularResumenFisico(variaciones);
+  assert.equal(rPos?.etiquetaDiferenciaPeso, "+1.5 kg");
+  assert.equal(rPos?.diferenciaPesoKg, 1.5);
+  assert.equal(rPos?.ultimaGrasaPorcentaje, 19.0);
+  assert.equal(rPos?.ultimaMasaMuscular, null, "masa ausente es null, no 0");
+
+  const negativa = [
+    { ...variaciones[0], peso: 72.0 },
+    { ...variaciones[1], peso: 70.0 },
+  ];
+  assert.equal(calcularResumenFisico(negativa)?.etiquetaDiferenciaPeso, "-2.0 kg");
+
+  const neutra = [
+    { ...variaciones[0], peso: 70.0 },
+    { ...variaciones[1], peso: 70.0 },
+  ];
+  assert.equal(calcularResumenFisico(neutra)?.etiquetaDiferenciaPeso, "0.0 kg");
+});
+
+test("ETAPA 10: puntos del gráfico respetan orden cronológico y no sustituyen valores ausentes con cero", () => {
+  const mediciones = [
+    {
+      gimnasio_id: "gym-centro",
+      id_progreso: 3,
+      id_cliente: "1000000001",
+      fecha: "2026-10-15",
+      peso: 68.5,
+      altura: 1.7,
+      porcentaje_grasa: 21.0,
+      notas: "",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_progreso: 1,
+      id_cliente: "1000000001",
+      fecha: "2026-08-10",
+      peso: 70.0,
+      altura: 1.7,
+      notas: "", // Sin porcentaje_grasa
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_progreso: 2,
+      id_cliente: "1000000001",
+      fecha: "2026-09-10",
+      peso: 69.0,
+      altura: 1.7,
+      porcentaje_grasa: 22.0,
+      notas: "",
+    },
+  ];
+
+  const puntosPeso = obtenerPuntosGrafico(mediciones, "PESO");
+  assert.equal(puntosPeso.length, 3);
+  assert.deepEqual(
+    puntosPeso.map((p) => p.valor),
+    [70.0, 69.0, 68.5],
+  );
+  assert.deepEqual(
+    puntosPeso.map((p) => p.fecha),
+    ["2026-08-10", "2026-09-10", "2026-10-15"],
+  );
+
+  const puntosGrasa = obtenerPuntosGrafico(mediciones, "GRASA");
+  assert.equal(puntosGrasa.length, 2, "ignora el registro sin grasa sin inventar 0%");
+  assert.deepEqual(
+    puntosGrasa.map((p) => p.valor),
+    [22.0, 21.0],
+  );
+
+  const metricas = determinarMetricasDisponibles(mediciones);
+  assert.deepEqual(metricas, ["PESO", "GRASA"]);
+
+  const sinGrasa = [mediciones[1]];
+  assert.deepEqual(determinarMetricasDisponibles(sinGrasa), ["PESO"]);
+});
+
+test("ETAPA 10: ordenamiento de mediciones y manejo de fechas repetidas", () => {
+  const mediciones = [
+    {
+      gimnasio_id: "gym-centro",
+      id_progreso: 10,
+      id_cliente: "1000000001",
+      fecha: "2026-10-01",
+      peso: 70.0,
+      altura: 1.7,
+      notas: "Mañana",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_progreso: 11,
+      id_cliente: "1000000001",
+      fecha: "2026-10-01",
+      peso: 70.5,
+      altura: 1.7,
+      notas: "Tarde",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_progreso: 12,
+      id_cliente: "1000000001",
+      fecha: "2026-10-15",
+      peso: 69.8,
+      altura: 1.7,
+      notas: "",
+    },
+  ];
+
+  const asc = ordenarMedicionesCronologico(mediciones);
+  assert.deepEqual(
+    asc.map((m) => m.id_progreso),
+    [10, 11, 12],
+  );
+
+  const desc = ordenarMedicionesReciente(mediciones);
+  assert.deepEqual(
+    desc.map((m) => m.id_progreso),
+    [12, 11, 10],
+  );
+
+  const puntos = obtenerPuntosGrafico(mediciones, "PESO");
+  assert.equal(puntos.length, 3);
+  assert.match(puntos[0].etiquetaFecha, /#10/);
+  assert.match(puntos[1].etiquetaFecha, /#11/);
+  assert.doesNotMatch(puntos[2].etiquetaFecha, /#12/);
 });

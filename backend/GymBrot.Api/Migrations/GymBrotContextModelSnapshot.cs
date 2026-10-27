@@ -22,6 +22,71 @@ namespace GymBrot.Api.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("GymBrot.Api.Models.Cliente", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Apellidos")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Correo")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Direccion")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(15)
+                        .HasColumnType("nvarchar(15)");
+
+                    b.Property<DateTime?>("FechaNacimiento")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("FechaRegistro")
+                        .HasColumnType("date");
+
+                    b.Property<int>("GimnasioId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NumeroIdentificacion")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Telefono")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TipoIdentificacion")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GimnasioId", "NumeroIdentificacion")
+                        .IsUnique();
+
+                    b.ToTable("Clientes");
+                });
+
             modelBuilder.Entity("GymBrot.Api.Models.Ejercicio", b =>
                 {
                     b.Property<int>("Id")
@@ -144,6 +209,71 @@ namespace GymBrot.Api.Migrations
                     b.ToTable("Gimnasios");
                 });
 
+            modelBuilder.Entity("GymBrot.Api.Models.Instructor", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Apellidos")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Correo")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Especialidad")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("FechaContratacion")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Foto")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("GimnasioId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NumeroIdentificacion")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Telefono")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TipoIdentificacion")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GimnasioId", "NumeroIdentificacion")
+                        .IsUnique();
+
+                    b.ToTable("Instructores");
+                });
+
             modelBuilder.Entity("GymBrot.Api.Models.PlanSoftware", b =>
                 {
                     b.Property<int>("Id")
@@ -207,11 +337,90 @@ namespace GymBrot.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("GymBrot.Api.Models.Usuario", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Apellidos")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Contrasena")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Correo")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<bool>("DebeCambiarContrasena")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(15)
+                        .HasColumnType("nvarchar(15)");
+
+                    b.Property<int?>("GimnasioId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NumeroIdentificacion")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Rol")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("TipoUsuario")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GimnasioId", "Correo")
+                        .IsUnique()
+                        .HasFilter("[GimnasioId] IS NOT NULL");
+
+                    b.HasIndex("GimnasioId", "NumeroIdentificacion")
+                        .IsUnique()
+                        .HasFilter("[GimnasioId] IS NOT NULL");
+
+                    b.ToTable("Usuarios");
+                });
+
+            modelBuilder.Entity("GymBrot.Api.Models.Cliente", b =>
+                {
+                    b.HasOne("GymBrot.Api.Models.Gimnasio", "Gimnasio")
+                        .WithMany()
+                        .HasForeignKey("GimnasioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Gimnasio");
+                });
+
             modelBuilder.Entity("GymBrot.Api.Models.Ejercicio", b =>
                 {
                     b.HasOne("GymBrot.Api.Models.Gimnasio", "Gimnasio")
                         .WithMany()
-                        .HasForeignKey("GimnasioId");
+                        .HasForeignKey("GimnasioId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Gimnasio");
                 });
@@ -221,10 +430,31 @@ namespace GymBrot.Api.Migrations
                     b.HasOne("GymBrot.Api.Models.PlanSoftware", "PlanSoftware")
                         .WithMany("Gimnasios")
                         .HasForeignKey("PlanSoftwareId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("PlanSoftware");
+                });
+
+            modelBuilder.Entity("GymBrot.Api.Models.Instructor", b =>
+                {
+                    b.HasOne("GymBrot.Api.Models.Gimnasio", "Gimnasio")
+                        .WithMany()
+                        .HasForeignKey("GimnasioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Gimnasio");
+                });
+
+            modelBuilder.Entity("GymBrot.Api.Models.Usuario", b =>
+                {
+                    b.HasOne("GymBrot.Api.Models.Gimnasio", "Gimnasio")
+                        .WithMany()
+                        .HasForeignKey("GimnasioId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Gimnasio");
                 });
 
             modelBuilder.Entity("GymBrot.Api.Models.PlanSoftware", b =>

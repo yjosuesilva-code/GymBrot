@@ -9,6 +9,7 @@ namespace GymBrot.Api.Data
 
         public DbSet<PlanSoftware> PlanesSoftware { get; set; }
         public DbSet<Gimnasio> Gimnasios { get; set; }
+        public DbSet<Ejercicio> Ejercicios { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

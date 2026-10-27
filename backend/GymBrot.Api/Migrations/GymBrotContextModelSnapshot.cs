@@ -17,10 +17,80 @@ namespace GymBrot.Api.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.21")
+                .HasAnnotation("ProductVersion", "8.0.33")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("GymBrot.Api.Models.Ejercicio", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Descripcion")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Equipo")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int?>("GimnasioId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("GrupoMuscular")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Nivel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("RecursoUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("RepeticionesMaxSugeridas")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RepeticionesMinSugeridas")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SegundosSugeridos")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SeriesSugeridas")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TipoMedicion")
+                        .IsRequired()
+                        .HasMaxLength(15)
+                        .HasColumnType("nvarchar(15)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GimnasioId");
+
+                    b.ToTable("Ejercicios");
+                });
 
             modelBuilder.Entity("GymBrot.Api.Models.Gimnasio", b =>
                 {
@@ -135,6 +205,15 @@ namespace GymBrot.Api.Migrations
                             Nombre = "Premium",
                             PrecioMensual = 299000m
                         });
+                });
+
+            modelBuilder.Entity("GymBrot.Api.Models.Ejercicio", b =>
+                {
+                    b.HasOne("GymBrot.Api.Models.Gimnasio", "Gimnasio")
+                        .WithMany()
+                        .HasForeignKey("GimnasioId");
+
+                    b.Navigation("Gimnasio");
                 });
 
             modelBuilder.Entity("GymBrot.Api.Models.Gimnasio", b =>

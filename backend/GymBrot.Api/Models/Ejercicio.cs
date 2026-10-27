@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace GymBrot.Api.Models
 {
@@ -9,7 +10,9 @@ namespace GymBrot.Api.Models
         public int Id { get; set; }
 
         [ForeignKey(nameof(Gimnasio))]
+
         public int? GimnasioId { get; set; }
+        [JsonIgnore]
         public Gimnasio? Gimnasio { get; set; }
 
         [Required, MaxLength(100)]

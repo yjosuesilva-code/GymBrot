@@ -1,5 +1,5 @@
 import { utils } from "../lib/utils";
-import type { ApiResp, Cliente, ClienteNuevo } from "../types";
+import type { ApiResp, Cliente, ClienteNuevo, Ejercicio, EjercicioNuevo } from "../types";
 
 /* [web-api] Cliente HTTP de la Web API en ASP.NET Core (backend/GymBrot.Api).
 
@@ -206,6 +206,85 @@ export const clientesWebApi = {
       // PUT responde 204 sin cuerpo: se devuelve la fila tal como se mando.
       await pedir<void>(`/Clientes/${actual.id}`, { method: "PUT", body: JSON.stringify(cambiado) });
       return { ok: true, mensaje: "Cliente actualizado", data: aCliente(cambiado, t) };
+    } catch (e) {
+      return aResp(e);
+    }
+  },
+};
+
+
+/* ---- Ejercicios ---- */
+
+// Así llega un ejercicio desde la API (igual a Models/Ejercicio.cs, pero en camelCase)
+interface EjercicioApi {
+  id: number;
+  gimnasioId: number | null;
+  nombre: string;
+  descripcion: string;
+  grupoMuscular: string;
+  nivel: string;
+  equipo: string;
+  tipoMedicion: string;
+  seriesSugeridas: number | null;
+  repeticionesMinSugeridas: number | null;
+  repeticionesMaxSugeridas: number | null;
+  segundosSugeridos: number | null;
+  recursoUrl: string;
+  estado: string;
+}
+
+function aEjercicio(e: EjercicioApi, t: TenantApi): Ejercicio {
+  return {
+    id_ejercicio: e.id,
+    gimnasio_id: e.gimnasioId === null ? null : t.gimnasio_id,
+    nombre: e.nombre,
+    descripcion: e.descripcion,
+    grupo_muscular: e.grupoMuscular as Ejercicio["grupo_muscular"],
+    nivel: e.nivel as Ejercicio["nivel"],
+    equipo: e.equipo as Ejercicio["equipo"],
+    tipo_medicion: e.tipoMedicion as Ejercicio["tipo_medicion"],
+    series_sugeridas: e.seriesSugeridas,
+    repeticiones_min_sugeridas: e.repeticionesMinSugeridas,
+    repeticiones_max_sugeridas: e.repeticionesMaxSugeridas,
+    segundos_sugeridos: e.segundosSugeridos,
+    recurso_url: e.recursoUrl,
+    estado: e.estado as Ejercicio["estado"],
+  };
+}
+
+export const ejerciciosWebApi = {
+  // GET /api/Ejercicios?gimnasioId=1 → base + propios
+  async list(t: TenantApi): Promise<Ejercicio[]> {
+    const id = await idGimnasio(t.slug);
+    const lista = await pedir<EjercicioApi[]>(`/Ejercicios?gimnasioId=${id}`);
+    return lista.map((e) => aEjercicio(e, t));
+  },
+
+    // POST /api/Ejercicios → 201 con el ejercicio creado
+  async create(t: TenantApi, d: EjercicioNuevo): Promise<ApiResp<Ejercicio>> {
+    try {
+      const gimnasioId = await idGimnasio(t.slug);
+      // Sin "id": lo genera la base de datos
+      const cuerpo: Omit<EjercicioApi, "id"> = {
+        gimnasioId,
+        nombre: d.nombre,
+        descripcion: d.descripcion,
+        grupoMuscular: d.grupo_muscular,
+        nivel: d.nivel,
+        equipo: d.equipo,
+        tipoMedicion: d.tipo_medicion,
+        seriesSugeridas: d.series_sugeridas,
+        repeticionesMinSugeridas: d.repeticiones_min_sugeridas,
+        repeticionesMaxSugeridas: d.repeticiones_max_sugeridas,
+        segundosSugeridos: d.segundos_sugeridos,
+        recursoUrl: d.recurso_url,
+        estado: "ACTIVO",
+      };
+      const creado = await pedir<EjercicioApi>("/Ejercicios", {
+        method: "POST",
+        body: JSON.stringify(cuerpo),
+      });
+      return { ok: true, mensaje: "Ejercicio registrado", data: aEjercicio(creado, t) };
     } catch (e) {
       return aResp(e);
     }

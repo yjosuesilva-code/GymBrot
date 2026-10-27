@@ -5,7 +5,7 @@ import { OBJETIVOS_RUTINA, resumirSeries, validarResumen, validarSeries } from "
 import { DIAS_MAX_INSCRIPCION, TIPOS_CLASE, aMinutos, diaSemanaDe, fechasDeClase, horaFin, seCruzan } from "../lib/clases"; // [P3] B7
 import { slugUnico, slugify, validarSlug, normalizarSlugDeUrl } from "../lib/slug"; // [multitenant-slug]
 import { gimnasioFijado } from "../tenant/tenantActivo"; // [multitenant-slug]
-import { usaWebApi, clientesWebApi, type TenantApi } from "./webApi"; // [web-api]
+import { usaWebApi, clientesWebApi, ejerciciosWebApi, type TenantApi } from "./webApi"; // [web-api]
 import { migrarDisponibilidadTexto, diaDisponible, horaDisponible, choque, validarHorario } from "../lib/horarios"; // [P3] horario de instructores y citas
 import type {
   Gimnasio, // [multitenant]
@@ -2598,6 +2598,10 @@ export const api = {
   ejercicios: {
     // Base + propios del gimnasio activo, ordenados por nombre
     async list(): Promise<Ejercicio[]> {
+      if (usaWebApi) {                              
+    const t = tenantParaApi();
+    return t ? ejerciciosWebApi.list(t) : [];
+      }   
       await api._delay();
       return leerCatalogo().sort((a, b) => a.nombre.localeCompare(b.nombre));
     },
@@ -2609,6 +2613,14 @@ export const api = {
 
     // Desde un gimnasio solo se crean ejercicios PROPIOS
     async create(data: EjercicioNuevo): Promise<ApiResp<Ejercicio>> {
+       if (usaWebApi) {                                  
+    const t = tenantParaApi();
+    if (!t) return { ok: false, mensaje: "No hay un gimnasio activo." };
+    const datos = limpiarSegunMedicion({ ...data, nombre: data.nombre.trim() });
+    const error = validarEjercicio(datos);
+    if (error) return { ok: false, mensaje: error };
+    return ejerciciosWebApi.create(t, datos);
+        } 
       await api._delay();
       const datos = limpiarSegunMedicion({ ...data, nombre: data.nombre.trim() });
       const error = validarEjercicio(datos);

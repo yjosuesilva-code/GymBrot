@@ -47,21 +47,16 @@ export function HistorialEntrenamientos({
   const registrosOrdenados = filtrarYOrdenarRegistrosRutina(registros, ambito);
   const [filtroSesion, setFiltroSesion] = useState<LetraSesion | "TODAS">("TODAS");
   const [pagina, setPagina] = useState(1);
-  const [registroAbiertoId, setRegistroAbiertoId] = useState<number | null>(() => {
-    const primeroConEjercicios = registrosOrdenados.find(
-      (r) => Array.isArray(r.ejercicios_realizados) && r.ejercicios_realizados.length > 0,
-    );
-    return (primeroConEjercicios ?? registrosOrdenados[0])?.id_registro ?? null;
-  });
+  const [registroAbiertoId, setRegistroAbiertoId] = useState<number | null>(null);
   const [ejercicioEvolucionId, setEjercicioEvolucionId] = useState<number | null>(null);
   const tituloEvolucionRef = useRef<HTMLHeadingElement>(null);
 
-  const sesionesDisponibles: LetraSesion[] = Array.from(
-    new Set([
-      ...division,
-      ...registrosOrdenados.map((r) => r.sesion),
-    ]),
-  );
+  const conjuntoSesiones = new Set<LetraSesion>([
+    ...division,
+    ...registrosOrdenados.map((r) => r.sesion),
+  ]);
+  const ordenBase: LetraSesion[] = ["A", "B", "C", "D"];
+  const sesionesDisponibles: LetraSesion[] = ordenBase.filter((s) => conjuntoSesiones.has(s));
 
   const registrosFiltrados =
     filtroSesion === "TODAS"
@@ -78,6 +73,7 @@ export function HistorialEntrenamientos({
   function cambiarFiltroSesion(nuevo: LetraSesion | "TODAS") {
     setFiltroSesion(nuevo);
     setPagina(1);
+    setRegistroAbiertoId(null);
   }
 
   function alternarDetalle(idRegistro: number) {
@@ -98,50 +94,41 @@ export function HistorialEntrenamientos({
       <section className="card-g cli-historial-panel" aria-labelledby="cli-historial-titulo">
         <div className="card-head cli-historial-cabecera">
           <div>
-            <h2 className="card-title mb-0" id="cli-historial-titulo">
+            <h2 className="card-title mb-0" id="cli-historial-titulo" tabIndex={-1}>
               Historial de entrenamientos
             </h2>
             <p className="card-sub">
               {registrosOrdenados.length === 0
-                ? "Tus sesiones finalizadas aparecerán aquí"
+                ? "Tus entrenamientos registrados aparecerán aquí"
                 : `${registrosOrdenados.length} ${
                     registrosOrdenados.length === 1
                       ? "entrenamiento registrado"
                       : "entrenamientos registrados"
                   } · del más reciente al más antiguo`}
             </p>
+            <p className="cli-ent-secundario">Solo se muestran los entrenamientos de este plan.</p>
           </div>
 
-          {registrosOrdenados.length > 0 && sesionesDisponibles.length > 1 && (
-            <div
-              className="cli-historial-filtros"
-              role="group"
-              aria-label="Filtrar historial por sesión"
-            >
-              <button
-                type="button"
-                className={`btn-dark cli-hist-filtro ${filtroSesion === "TODAS" ? "cli-hist-filtro--activo" : ""}`}
-                aria-pressed={filtroSesion === "TODAS"}
-                onClick={() => cambiarFiltroSesion("TODAS")}
+          {registrosOrdenados.length > 0 && (
+            <div className="cli-historial-selector">
+              <label className="form-label-g" htmlFor="cli-historial-sesion">Filtrar por sesión</label>
+              <select
+                id="cli-historial-sesion"
+                className="form-control-dark cli-historial-select"
+                value={filtroSesion}
+                onChange={(e) => {
+                  const valor = e.target.value;
+                  if (valor === "TODAS" || sesionesDisponibles.some((letra) => letra === valor)) {
+                    cambiarFiltroSesion(valor as LetraSesion | "TODAS");
+                  }
+                }}
               >
-                Todas ({registrosOrdenados.length})
-              </button>
-              {sesionesDisponibles.map((letra) => {
-                const cuenta = registrosOrdenados.filter((r) => r.sesion === letra).length;
-                if (cuenta === 0) return null;
-                const activo = filtroSesion === letra;
-                return (
-                  <button
-                    key={letra}
-                    type="button"
-                    className={`btn-dark cli-hist-filtro ${activo ? "cli-hist-filtro--activo" : ""}`}
-                    aria-pressed={activo}
-                    onClick={() => cambiarFiltroSesion(letra)}
-                  >
-                    Sesión {letra} ({cuenta})
-                  </button>
-                );
-              })}
+                <option value="TODAS">Todos los entrenamientos ({registrosOrdenados.length})</option>
+                {sesionesDisponibles.map((letra) => {
+                  const cuenta = registrosOrdenados.filter((r) => r.sesion === letra).length;
+                  return cuenta > 0 ? <option key={letra} value={letra}>Sesión {letra} ({cuenta})</option> : null;
+                })}
+              </select>
             </div>
           )}
         </div>
@@ -176,14 +163,14 @@ export function HistorialEntrenamientos({
               className="btn-dark cli-ent-boton"
               onClick={() => cambiarFiltroSesion("TODAS")}
             >
-              Ver todas las sesiones
+              Ver todos los entrenamientos
             </button>
           </div>
         ) : (
           <>
             <ol
               className="cli-hist-lista"
-              aria-label="Sesiones de entrenamiento registradas"
+              aria-label="Entrenamientos registrados"
             >
               {registrosPagina.map((reg) => {
                 const cantidadEjercicios = Array.isArray(reg.ejercicios_realizados)
@@ -202,33 +189,22 @@ export function HistorialEntrenamientos({
                       <div className="cli-hist-item-info">
                         <div className="cli-hist-item-encabezado">
                           <span className="cli-hist-sesion">Sesión <strong>{reg.sesion}</strong></span>
-                          <div className="cli-hist-fecha-datos">
-                            <h3 className="cli-hist-item-fecha mb-0">
-                              <time dateTime={reg.fecha}>{utils.fecha(reg.fecha)}</time>
-                            </h3>
-                            <span className="badge-g cli-hist-cantidad">
-                              {cantidadEjercicios > 0
-                                ? `${cantidadEjercicios} ${
-                                    cantidadEjercicios === 1
-                                      ? "ejercicio registrado"
-                                      : "ejercicios registrados"
-                                  }`
-                                : "Sesión sin desglose de ejercicios"}
-                            </span>
-                          </div>
+                          <h3 className="cli-hist-item-fecha mb-0">
+                            <time dateTime={reg.fecha}>{utils.fecha(reg.fecha)}</time>
+                          </h3>
+                          <span className="badge-g cli-hist-cantidad">
+                            {cantidadEjercicios > 0
+                              ? `${cantidadEjercicios} ${
+                                  cantidadEjercicios === 1
+                                    ? "ejercicio registrado"
+                                    : "ejercicios registrados"
+                                }`
+                              : "Sin desglose de ejercicios"}
+                          </span>
                         </div>
 
                         {nombresResumen && (
                           <p className="cli-hist-item-ejercicios mb-0">{nombresResumen}</p>
-                        )}
-
-                        {reg.notas && reg.notas.trim() !== "" && (
-                          <div className="cli-hist-item-notas">
-                            <span className="cli-hist-notas-etiqueta">
-                              <i className="bi bi-chat-left-text" aria-hidden="true" />Notas de la sesión
-                            </span>
-                            <p className="mb-0">{reg.notas}</p>
-                          </div>
                         )}
                       </div>
 
@@ -252,15 +228,21 @@ export function HistorialEntrenamientos({
                       </div>
                     </div>
 
-                    {abierto && (
-                      <div id={panelId} className="cli-hist-item-cuerpo">
-                        <DetalleEntrenamiento
+                      <div id={panelId} className="cli-hist-item-cuerpo" hidden={!abierto}>
+                        {abierto && reg.notas && reg.notas.trim() !== "" && (
+                          <div className="cli-hist-item-notas">
+                            <span className="cli-hist-notas-etiqueta">
+                              <i className="bi bi-chat-left-text" aria-hidden="true" />Notas del entrenamiento
+                            </span>
+                            <p className="mb-0">{reg.notas}</p>
+                          </div>
+                        )}
+                        {abierto && <DetalleEntrenamiento
                           registro={reg}
                           catalogo={catalogo}
                           onVerEvolucion={irAEvolucionDeEjercicio}
-                        />
+                        />}
                       </div>
-                    )}
                   </li>
                 );
               })}
@@ -270,7 +252,7 @@ export function HistorialEntrenamientos({
               pagina={paginaSegura}
               total={registrosFiltrados.length}
               porPagina={POR_PAGINA}
-              onCambiar={setPagina}
+              onCambiar={(nueva) => { setPagina(nueva); setRegistroAbiertoId(null); }}
             />
           </>
         )}
@@ -285,10 +267,10 @@ export function HistorialEntrenamientos({
               ref={tituloEvolucionRef}
               tabIndex={-1}
             >
-              Evolución de cargas
+              Evolución por ejercicio
             </h2>
             <p className="card-sub">
-              Progresión histórica de peso, repeticiones o duración en los ejercicios que has registrado
+              Compara el peso, las repeticiones o la duración registrados en este plan.
             </p>
           </div>
         </div>
@@ -301,7 +283,7 @@ export function HistorialEntrenamientos({
         ) : estadoCarga === "error" ? (
           <div className="cli-ent-error">
             <p role="alert" className="mb-2">
-              No pudimos consultar los registros para calcular la evolución de cargas.
+              No pudimos consultar los registros para mostrar la evolución por ejercicio.
             </p>
             {onReintentar && (
               <button type="button" className="btn-dark cli-ent-boton" onClick={onReintentar}>

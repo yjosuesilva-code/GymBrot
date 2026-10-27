@@ -1,8 +1,9 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { Modal } from "react-bootstrap";
+import { useLocation } from "react-router-dom";
 import { api } from "../data/api";
 import { current } from "../lib/auth";
-import { formatoPrescripcion, idealAHoy, normalizar, resumenSesion, textoVigencia } from "../lib/rutinas";
+import { formatoPrescripcion, gruposDeSesion, idealAHoy, resumenSesion, textoVigencia } from "../lib/rutinas";
 import { utils } from "../lib/utils";
 import { useTenantOpcional } from "../tenant/TenantContext";
 import { AvanceCliente } from "../components/cliente/AvanceCliente";
@@ -12,6 +13,12 @@ import {
   formatearTiempoRelativo,
 } from "../components/cliente/borradorEntrenamiento";
 import type { AmbitoBorrador } from "../components/cliente/borradorEntrenamiento";
+import {
+  formatearListaGrupos,
+  limpiarDescripcionRutina,
+  textoObjetivoPlan,
+} from "../components/cliente/dashboardCliente";
+import type { NavegacionMiRutinaState } from "../components/cliente/dashboardCliente";
 import { BadgeEstadoRutina } from "../components/rutinas/BadgeEstadoRutina";
 import { FilaEjercicio } from "../components/rutinas/FilaEjercicio";
 import { PestanasSesion } from "../components/rutinas/PestanasSesion";
@@ -55,21 +62,13 @@ async function consultarAvance(idRutina: number) {
   return { avance, siguiente };
 }
 
-function limpiarDescripcionRutina(rutina: Rutina): string {
-  const desc = (rutina.descripcion ?? "").trim();
-  if (!desc) return "";
-  const descNorm = normalizar(desc);
-  const objNorm = normalizar(rutina.objetivo);
-  const nomNorm = normalizar(rutina.nombre);
-  if (descNorm === objNorm || descNorm === nomNorm) return "";
-
-  const prefijoPlan = `plan de ${objNorm}`;
-  if (objNorm && descNorm.startsWith(prefijoPlan)) {
-    const resto = desc.slice(prefijoPlan.length).replace(/^[\s·.,:-]+/, "").trim();
-    if (!resto) return "";
-    return resto.charAt(0).toUpperCase() + resto.slice(1);
-  }
-  return desc;
+function resumenPestanaCliente(ejercicios: RutinaEjercicio[], catalogo: Ejercicio[]): string {
+  if (ejercicios.length === 0) return "Sin ejercicios asignados";
+  const grupos = gruposDeSesion(ejercicios, catalogo);
+  const base = resumenSesion(ejercicios, catalogo).replace(/\s*·\s*$/, "");
+  if (grupos.length === 0) return base;
+  const partes = base.split(" · ");
+  return [grupos.join(", "), ...partes.slice(0, 2)].join(" · ");
 }
 
 export function MiRutina() {
@@ -97,15 +96,22 @@ export function MiRutina() {
     cedula={cedula}
     gimnasioId={gimnasioId}
     esCliente={sesion?.tipo_usuario === "CLIENTE"}
+    nombreCliente={sesion?.nombre.trim() ?? ""}
   />;
 }
 
-function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
+function RutinaDelCliente({ cedula, gimnasioId, esCliente, nombreCliente }: {
   cedula: string | undefined;
   gimnasioId: string | undefined;
   esCliente: boolean;
+  nombreCliente: string;
 }) {
   const tenant = useTenantOpcional();
+  const location = useLocation();
+  const intencionInicialRef = useRef<NavegacionMiRutinaState | null>(
+    (location.state as NavegacionMiRutinaState | null) ?? null,
+  );
+  const irAHistorialRef = useRef(false);
   const [consulta, setConsulta] = useState<Consulta>({ estado: "cargando" });
   const [activa, setActiva] = useState<LetraSesion>("A");
   const [detalle, setDetalle] = useState<EjercicioSeleccionado | null>(null);
@@ -130,6 +136,19 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
   useEffect(() => {
     if (avisoCambio && entrenando === null) confirmacionCambio.current?.focus();
   }, [avisoCambio, entrenando]);
+
+  useEffect(() => {
+    if (!irAHistorialRef.current || consulta.estado !== "lista") return;
+    irAHistorialRef.current = false;
+    const nodo = document.getElementById("cli-historial-titulo");
+    if (nodo instanceof HTMLElement) {
+      nodo.focus();
+      nodo.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+        block: "start",
+      });
+    }
+  }, [consulta.estado]);
 
   useEffect(() => {
     if (entrenando !== null) return;
@@ -176,11 +195,58 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
         ]);
         const { avance, siguiente } = progreso;
         if (cancelado) return;
-        setActiva(
+        let sesionActivaInicial: LetraSesion =
           siguiente && sesiones.some((s) => s.sesion === siguiente)
             ? siguiente
-            : sesiones[0]?.sesion ?? "A",
-        );
+            : sesiones[0]?.sesion ?? "A";
+
+        const intencion = intencionInicialRef.current;
+        intencionInicialRef.current = null;
+        if (intencion) {
+          try {
+            window.history.replaceState({}, "");
+          } catch {
+            // Ignora errores de historial en entornos sin ventana completa.
+          }
+          const estadoRutina = api.rutinas.estado(rutina);
+          const esVigenteRutina = estadoRutina === "VIGENTE" || estadoRutina === "POR_VENCER";
+          const borradorDetectado = buscarBorradorRutina({
+            ambito: { gimnasioId, idCliente: cedula, idRutina: rutina.id_rutina },
+            rutina,
+            vigente: esVigenteRutina,
+            sesiones,
+            catalogo,
+          });
+
+          if (intencion.accionEntrenamiento === "continuar" && borradorDetectado.estado === "restaurable") {
+            sesionActivaInicial = borradorDetectado.sesion;
+            setEntrenando({
+              sesion: borradorDetectado.sesion,
+              borradorInicial: {
+                estado: borradorDetectado.entrenamiento,
+                notas: borradorDetectado.notas,
+              },
+            });
+          } else if (intencion.accionEntrenamiento === "iniciar" && esVigenteRutina) {
+            const letraObjetivo = intencion.sesion ?? siguiente;
+            const sesionObjetivo = letraObjetivo ? sesiones.find((s) => s.sesion === letraObjetivo) : undefined;
+            if (sesionObjetivo && sesionObjetivo.ejercicios.length > 0) {
+              sesionActivaInicial = sesionObjetivo.sesion;
+              if (borradorDetectado.estado === "restaurable") {
+                setSesionPendienteInicio(sesionObjetivo.sesion);
+              } else {
+                if (borradorDetectado.estado === "obsoleto") {
+                  eliminarBorradorPorClave(borradorDetectado.clave);
+                }
+                setEntrenando({ sesion: sesionObjetivo.sesion, borradorInicial: null });
+              }
+            }
+          } else if (intencion.seccion === "historial") {
+            irAHistorialRef.current = true;
+          }
+        }
+
+        setActiva(sesionActivaInicial);
         setEstadoHistorial(resultadoRegistros.ok ? "lista" : "error");
         setConsulta({
           estado: "lista",
@@ -273,7 +339,7 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
     return (
       <section className="card-g cli-mi-rutina" aria-labelledby="mi-rutina-titulo">
         <div className="card-head">
-          <h1 className="card-title" id="mi-rutina-titulo">Mi rutina</h1>
+          <h1 className="card-title" id="mi-rutina-titulo">Mi plan</h1>
         </div>
         {consulta.estado === "cargando" && (
           <div className="loader" role="status">
@@ -296,6 +362,9 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
   const estado = api.rutinas.estado(rutina);
   const vigente = estado === "VIGENTE" || estado === "POR_VENCER";
   const sesionActiva = sesiones.find((s) => s.sesion === activa);
+  const sesionSugerida = sesiones.find((s) => s.sesion === siguiente);
+  const gruposSugeridos = gruposDeSesion(sesionSugerida?.ejercicios ?? [], catalogo);
+  const textoGruposSugeridos = formatearListaGrupos(gruposSugeridos);
   const sesionEntrenada = entrenando ? sesiones.find((s) => s.sesion === entrenando.sesion) : undefined;
   const ambitoBorrador: AmbitoBorrador | null =
     gimnasioId && cedula && rutina.id_cliente === cedula && rutina.gimnasio_id === gimnasioId
@@ -351,6 +420,11 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
 
   const borradorRestaurable = resultadoBorrador.estado === "restaurable" ? resultadoBorrador : null;
   const borradorObsoleto = resultadoBorrador.estado === "obsoleto" ? resultadoBorrador : null;
+  const sesionBorrador = borradorRestaurable
+    ? sesiones.find((s) => s.sesion === borradorRestaurable.sesion)
+    : undefined;
+  const gruposBorrador = gruposDeSesion(sesionBorrador?.ejercicios ?? [], catalogo);
+  const textoGruposBorrador = formatearListaGrupos(gruposBorrador);
 
   function abrirSesionDesdeCero(letra: LetraSesion) {
     const objetivo = sesiones.find((s) => s.sesion === letra);
@@ -421,19 +495,20 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
     if (pendiente) setModoCambio(pendiente);
   }
 
-  function iniciarEntrenamiento() {
+  function iniciarEntrenamiento(letra: LetraSesion) {
     const actual = api.rutinas.estado(rutina);
-    if (actualizacion !== "lista" || (actual !== "VIGENTE" && actual !== "POR_VENCER") || !sesionActiva || sesionActiva.ejercicios.length === 0) {
+    const sesion = sesiones.find((s) => s.sesion === letra);
+    if (actualizacion !== "lista" || (actual !== "VIGENTE" && actual !== "POR_VENCER") || !sesion || sesion.ejercicios.length === 0) {
       return;
     }
     if (borradorRestaurable) {
-      setSesionPendienteInicio(sesionActiva.sesion);
+      setSesionPendienteInicio(sesion.sesion);
       return;
     }
     if (borradorObsoleto) {
       eliminarBorradorPorClave(borradorObsoleto.clave);
     }
-    abrirSesionDesdeCero(sesionActiva.sesion);
+    abrirSesionDesdeCero(sesion.sesion);
   }
 
   const aviso = estado === "VENCIDA"
@@ -443,7 +518,6 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
       : estado === "POR_VENCER"
         ? "Tu rutina está por vencer. Consulta con tu instructor su próxima renovación."
         : null;
-  const mostrarObjetivo = Boolean(rutina.objetivo) && !normalizar(rutina.nombre).includes(normalizar(rutina.objetivo));
   const descripcionRutina = limpiarDescripcionRutina(rutina);
   const detalleVigencia = rutina.fecha_fin !== null && estado !== "FINALIZADA"
     ? textoVigencia(rutina, estado)
@@ -459,7 +533,6 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
           <i className="bi bi-check2-circle" aria-hidden="true" />
           <div>
             <p>Entrenamiento de la sesión {sesionRegistrada} registrado correctamente.</p>
-            {actualizacion === "lista" && siguiente && <p className="cli-ent-secundario">Próxima sesión sugerida: {siguiente}.</p>}
           </div>
         </div>
       )}
@@ -482,39 +555,6 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
         </div>
       )}
 
-      {borradorRestaurable && (
-        <section className="card-g cli-borrador-aviso" aria-labelledby="cli-borrador-titulo">
-          <div className="cli-borrador-cuerpo">
-            <div className="cli-borrador-info">
-              <span className="badge-g badge-activo">Sesión {borradorRestaurable.sesion} · Borrador guardado</span>
-              <h2 className="card-title mb-0" id="cli-borrador-titulo">Tienes un entrenamiento en curso</h2>
-              <p className="cli-borrador-resumen">
-                <span>
-                  {borradorRestaurable.resumen.ejerciciosCompletados} de {borradorRestaurable.resumen.totalEjercicios}{" "}
-                  {borradorRestaurable.resumen.totalEjercicios === 1 ? "ejercicio completado" : "ejercicios completados"}
-                </span>
-                {" · "}
-                <span>
-                  {borradorRestaurable.resumen.seriesCompletadas} de {borradorRestaurable.resumen.totalSeries}{" "}
-                  {borradorRestaurable.resumen.totalSeries === 1 ? "serie realizada" : "series realizadas"}
-                </span>
-              </p>
-              <p className="cli-ent-secundario">
-                Última actualización: {formatearTiempoRelativo(borradorRestaurable.updatedAt)}
-              </p>
-            </div>
-            <div className="cli-borrador-acciones">
-              <button type="button" className="btn-neon cli-ent-boton" onClick={continuarBorrador}>
-                <i className="bi bi-play-fill me-2" aria-hidden="true" />Continuar entrenamiento
-              </button>
-              <button type="button" className="btn-dark cli-ent-boton cli-ent-boton-peligro" onClick={() => setModalDescartar(true)}>
-                <i className="bi bi-trash3 me-2" aria-hidden="true" />Descartar borrador
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
-
       {borradorObsoleto && (
         <section className="card-g cli-borrador-obsoleto" aria-labelledby="cli-borrador-obsoleto-titulo" role="status">
           <div className="cli-borrador-cuerpo">
@@ -533,11 +573,11 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
         </section>
       )}
 
-      <section className="card-g" aria-labelledby="mi-rutina-titulo">
+      <section className="card-g cli-plan-panel" aria-labelledby="mi-rutina-titulo">
         <div className="card-head">
           <div>
-            {mostrarObjetivo && <p className="card-sub">{rutina.objetivo}</p>}
-            <h1 className="card-title mb-0" id="mi-rutina-titulo">{rutina.nombre}</h1>
+            <h1 className="card-title mb-0" id="mi-rutina-titulo">Mi plan</h1>
+            <p className="card-sub">Objetivo: {textoObjetivoPlan(rutina.objetivo)}</p>
           </div>
           <BadgeEstadoRutina estado={estado} detalle={detalleVigencia} />
         </div>
@@ -546,7 +586,7 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
             <i className="bi bi-info-circle me-1" aria-hidden="true" />{aviso}
           </div>
         )}
-        {descripcionRutina && <p>{descripcionRutina}</p>}
+        {descripcionRutina && <p className="cli-plan-descripcion">{descripcionRutina}</p>}
         <dl className="cli-rutina-meta">
           <div className="cli-rutina-dato">
             <dt>Instructor</dt>
@@ -565,45 +605,108 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
         </dl>
       </section>
 
-      <section className="card-g cli-avance-panel" aria-labelledby="mi-rutina-avance">
-        <div className="card-head">
-          <h2 className="card-title" id="mi-rutina-avance">Mi avance</h2>
+      <section className="card-g cli-proximo" aria-labelledby="mi-rutina-proximo">
+        <div className="card-head mb-2">
+          <h2 className="card-title mb-0" id="mi-rutina-proximo">Mi próximo entrenamiento</h2>
         </div>
-        {actualizacion === "cargando" ? <p className="cli-ent-secundario" role="status"><i className="bi bi-hourglass-split me-2" aria-hidden="true" />Actualizando avance y próxima sesión…</p>
+        {!vigente ? (
+          <p className="cli-ent-secundario">
+            {estado === "FINALIZADA" ? "Tu plan está finalizado. Consulta con tu instructor para un nuevo plan." : "Tu plan está vencido. Consulta con tu instructor para renovarlo."}
+          </p>
+        ) : borradorRestaurable ? (
+          <div className="cli-proximo-cuerpo">
+            <div className="cli-proximo-mensaje">
+              <p className="cli-proximo-saludo">{nombreCliente ? `Hola, ${nombreCliente}.` : "Hola."} Retoma tu entrenamiento.</p>
+              <p className="cli-proximo-propuesta">
+                Tienes un borrador guardado de la <strong>sesión {borradorRestaurable.sesion}</strong>
+                {textoGruposBorrador ? ` (${textoGruposBorrador})` : ""}.
+              </p>
+              <p className="cli-borrador-resumen">
+                {borradorRestaurable.resumen.ejerciciosCompletados} de {borradorRestaurable.resumen.totalEjercicios}{" "}
+                {borradorRestaurable.resumen.totalEjercicios === 1 ? "ejercicio completado" : "ejercicios completados"}
+                {" · "}
+                {borradorRestaurable.resumen.seriesCompletadas} de {borradorRestaurable.resumen.totalSeries}{" "}
+                {borradorRestaurable.resumen.totalSeries === 1 ? "serie realizada" : "series realizadas"}
+              </p>
+              <p className="cli-ent-secundario">Última actualización: {formatearTiempoRelativo(borradorRestaurable.updatedAt)}</p>
+            </div>
+            <div className="cli-proximo-acciones">
+              <button type="button" className="btn-neon cli-ent-boton" onClick={continuarBorrador}>
+                <i className="bi bi-play-fill me-2" aria-hidden="true" />Continuar entrenamiento
+              </button>
+              <button type="button" className="btn-dark cli-ent-boton" onClick={() => {
+                cambiarSesion(borradorRestaurable.sesion);
+                tituloSesiones.current?.focus();
+              }}>Ver ejercicios</button>
+              <button type="button" className="btn-dark cli-ent-boton cli-ent-boton-peligro" onClick={() => setModalDescartar(true)}>
+                <i className="bi bi-trash3 me-2" aria-hidden="true" />Descartar borrador
+              </button>
+            </div>
+          </div>
+        ) : actualizacion === "cargando" ? (
+          <p className="cli-ent-secundario" role="status">Actualizando la próxima sesión sugerida…</p>
+        ) : actualizacion === "error" ? (
+          <p className="cli-ent-secundario">No pudimos actualizar la sesión sugerida. Reintenta la actualización en «Mi progreso».</p>
+        ) : siguiente && !sesionSugerida?.ejercicios.length ? (
+          <p className="cli-ent-secundario">La sesión {siguiente} aún no tiene ejercicios disponibles. Consulta con tu instructor.</p>
+        ) : siguiente ? (
+          <div className="cli-proximo-cuerpo">
+            <div className="cli-proximo-mensaje">
+              <p className="cli-proximo-saludo">{nombreCliente ? `Hola, ${nombreCliente}.` : "Hola."} ¿Entrenamos hoy?</p>
+              <p className="cli-proximo-propuesta">
+                {textoGruposSugeridos ? `Te proponemos trabajar ${textoGruposSugeridos} con tu ` : "Te proponemos continuar con tu "}
+                <strong>sesión {siguiente}</strong>.
+              </p>
+              <p className="cli-ent-secundario">Sugerencia basada en el orden de tu plan; puedes elegir otra sesión en «Mis sesiones».</p>
+            </div>
+            <div className="cli-proximo-acciones">
+              <button type="button" className="btn-neon cli-ent-boton" onClick={() => iniciarEntrenamiento(siguiente)}>
+                <i className="bi bi-play-fill me-2" aria-hidden="true" />Iniciar sesión {siguiente}
+              </button>
+              <button type="button" className="btn-dark cli-ent-boton" onClick={() => {
+                cambiarSesion(siguiente);
+                tituloSesiones.current?.focus();
+              }}>
+                Ver ejercicios
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="cli-ent-secundario">No hay una sesión sugerida disponible para este plan.</p>
+        )}
+      </section>
+
+      <section className="card-g cli-avance-panel" aria-labelledby="mi-rutina-avance">
+        <div className="card-head mb-2">
+          <h2 className="card-title mb-0" id="mi-rutina-avance">Mi progreso</h2>
+        </div>
+        {actualizacion === "cargando" ? <p className="cli-ent-secundario" role="status"><i className="bi bi-hourglass-split me-2" aria-hidden="true" />Actualizando progreso y próxima sesión…</p>
           : actualizacion === "error" ? (
             <div className="cli-ent-error">
-              <p role="alert">Tu entrenamiento está guardado, pero no pudimos actualizar el avance y la próxima sesión.</p>
+              <p role="alert">Tu entrenamiento está guardado, pero no pudimos actualizar el progreso y la próxima sesión.</p>
               <button type="button" className="btn-dark cli-ent-boton" onClick={() => void actualizarAvance(rutina.id_rutina)}>Reintentar actualización</button>
             </div>
           ) : <AvanceCliente
           avance={avance}
-          siguiente={vigente ? siguiente : null}
-          sesionActiva={activa}
           ideal={vigente && (rutina.sesiones_planeadas ?? 0) > 0 ? idealAHoy(rutina) : null}
           borradorEnCurso={borradorRestaurable ? {
             sesion: borradorRestaurable.sesion,
             ejerciciosCompletados: borradorRestaurable.resumen.ejerciciosCompletados,
             totalEjercicios: borradorRestaurable.resumen.totalEjercicios,
           } : null}
-          onVerSesion={(letra) => {
-            cambiarSesion(letra);
-            tituloSesiones.current?.focus();
-          }}
         />}
       </section>
 
-      <section className="card-g" aria-labelledby="mi-rutina-sesiones">
+      <section className="card-g cli-sesiones-panel" aria-labelledby="mi-rutina-sesiones">
         <div className="card-head">
           <div>
-            <h2 className="card-title cli-ent-titulo" id="mi-rutina-sesiones" ref={tituloSesiones} tabIndex={-1}>Sesiones de la rutina</h2>
-            {actualizacion === "lista" && vigente && siguiente && activa === siguiente && (
-              <p className="card-sub">Sesión {siguiente} sugerida para tu entrenamiento de hoy</p>
-            )}
+            <h2 className="card-title cli-ent-titulo mb-0" id="mi-rutina-sesiones" ref={tituloSesiones} tabIndex={-1}>Mis sesiones</h2>
+            <p className="card-sub">Cada letra identifica un grupo de ejercicios que se repite en tu plan, no un día específico.</p>
           </div>
-          {vigente && sesionActiva && sesionActiva.ejercicios.length > 0 && (
+          {vigente && sesionActiva && sesionActiva.ejercicios.length > 0 && activa !== (borradorRestaurable?.sesion ?? siguiente) && (
             <div className="cli-sesion-cta">
-              <button type="button" className="btn-neon cli-ent-boton" disabled={actualizacion !== "lista"} onClick={iniciarEntrenamiento}>
-                <i className="bi bi-play-fill me-2" aria-hidden="true" />Iniciar entrenamiento · Sesión {activa}
+              <button type="button" className="btn-dark cli-ent-boton" disabled={actualizacion !== "lista"} onClick={() => iniciarEntrenamiento(activa)}>
+                <i className="bi bi-play-fill me-2" aria-hidden="true" />Iniciar sesión {activa}
               </button>
             </div>
           )}
@@ -615,7 +718,7 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
         ) : (
           <>
             <PestanasSesion
-              pestanas={sesiones.map((s) => ({ sesion: s.sesion, resumen: resumenSesion(s.ejercicios, catalogo) }))}
+              pestanas={sesiones.map((s) => ({ sesion: s.sesion, resumen: resumenPestanaCliente(s.ejercicios, catalogo) }))}
               activa={activa}
               onCambiar={cambiarSesion}
             />
@@ -624,7 +727,7 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
                 <p className="cli-sesion-pendiente-aviso" role="status">
                   <i className="bi bi-clock-history" aria-hidden="true" />
                   <span>
-                    Los ejercicios con etiqueta <strong>Pendiente de revisión</strong> ya forman parte de tu sesión y serán revisados por tu instructor.
+                    Los ejercicios con etiqueta <strong>Pendiente de revisión del instructor</strong> ya forman parte de tu sesión.
                   </span>
                 </p>
               )}
@@ -639,7 +742,11 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
                         key={fila.id_ejercicio}
                         fila={fila}
                         ejercicio={ejercicio}
-                        acciones={ejercicio && (
+                        acciones={<div className="cli-ej-opciones">
+                          {fila.agregado_por_cliente === true && fila.revisado_por_instructor !== true && (
+                            <span className="badge-g badge-pendiente cli-ej-revision">Pendiente de revisión del instructor</span>
+                          )}
+                          {ejercicio && (
                           <div className="cli-ej-acciones">
                             <button
                               type="button"
@@ -671,7 +778,8 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
                               </button>
                             )}
                           </div>
-                        )}
+                          )}
+                        </div>}
                       />
                     );
                   })}
@@ -681,7 +789,7 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
                 <div className="cli-sesion-agregar">
                   <div className="cli-sesion-agregar-info">
                     <span className="cli-ent-secundario">
-                      ¿Necesitas ajustar la Sesión {sesionActiva.sesion}? Los cambios quedarán pendientes de revisión por tu instructor.
+                      ¿Necesitas ajustar la sesión {sesionActiva.sesion}? Los cambios se marcarán como «Pendiente de revisión del instructor».
                     </span>
                   </div>
                   <button
@@ -763,7 +871,7 @@ function RutinaDelCliente({ cedula, gimnasioId, esCliente }: {
                 modoAplicado.tipo === "reemplazar"
                   ? `Cambiaste «${nombreAnterior}» por «${ejercicioElegido.nombre}» en la Sesión ${modoAplicado.sesion}.`
                   : `Agregaste «${ejercicioElegido.nombre}» a la Sesión ${modoAplicado.sesion}.`,
-              detalle: "El cambio ya está activo en tu sesión y queda pendiente de revisión por tu instructor.",
+              detalle: "El cambio ya está activo en tu sesión con estado «Pendiente de revisión del instructor».",
             });
           }}
         />
@@ -915,12 +1023,12 @@ function DetalleEjercicio({ detalle, onCerrar }: { detalle: EjercicioSeleccionad
         {pendiente && (
           <p className="cli-ej-pendiente" role="status">
             <i className="bi bi-clock-history me-2" aria-hidden="true" />
-            Pendiente de revisión por tu instructor — pauta provisional hasta que tu entrenador la valide.
+            Pendiente de revisión del instructor. Esta pauta es provisional hasta que la valide.
           </p>
         )}
         <section aria-labelledby="cli-ej-indicacion">
           <h3 className="cli-ej-seccion" id="cli-ej-indicacion">
-            {pendiente ? "Pauta provisional (pendiente de revisión)" : "Tu indicación"}
+            {pendiente ? "Pauta provisional" : "Tu indicación"}
           </h3>
           <dl className="cli-ej-prescripcion">
             {indicaciones.map(({ etiqueta, valor }) => (

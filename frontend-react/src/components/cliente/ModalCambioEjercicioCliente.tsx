@@ -391,7 +391,7 @@ export function ModalCambioEjercicioCliente({
 
             <p className="cli-ej-pendiente" role="status">
               <i className="bi bi-clock-history me-2" aria-hidden="true" />
-              <strong>El cambio quedará pendiente de revisión por tu instructor.</strong>
+              <strong>El cambio se marcará como «Pendiente de revisión del instructor».</strong>
             </p>
 
             <section className="cli-cambio-pauta" aria-labelledby="cli-cambio-pauta-titulo">
@@ -401,8 +401,8 @@ export function ModalCambioEjercicioCliente({
                 </h3>
                 <span className="badge-g badge-pendiente">
                   {form.origen === "conservada"
-                    ? "Conservada de la fila anterior · Sin aprobar"
-                    : "Sugerencia del catálogo · Sin aprobar"}
+                    ? "Pauta anterior conservada"
+                    : "Sugerencia del catálogo"}
                 </span>
               </div>
               <p className="cli-ent-secundario">

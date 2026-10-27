@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using GymBrot.Api.Models;
 using GymBrot.Api.Data;
+using GymBrot.Api.DTOs;
 
 namespace GymBrot.Api.Controllers
 {
@@ -18,74 +18,67 @@ namespace GymBrot.Api.Controllers
         // GET: api/Instructores            -> todos
         // GET: api/Instructores?gimnasioId=1 -> solo los de ese gimnasio
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Instructor>>> GetInstructores([FromQuery] int? gimnasioId)
+        public async Task<ActionResult<IEnumerable<InstructorDto>>> GetInstructores([FromQuery] int? gimnasioId)
         {
             var consulta = _context.Instructores.AsQueryable();
             if (gimnasioId.HasValue)
             {
-                consulta = consulta.Where(x => x.GimnasioId == gimnasioId.Value);
+                consulta = consulta.Where(i => i.GimnasioId == gimnasioId.Value);
             }
-            return await consulta.ToListAsync();
+            var instructores = await consulta.OrderBy(i => i.Nombre).ToListAsync();
+            return instructores.Select(InstructorDto.DesdeModelo).ToList();
         }
 
         // GET: api/Instructores/5
         [HttpGet("{id}")]
-        public async Task<ActionResult<Instructor>> GetInstructor(int id)
+        public async Task<ActionResult<InstructorDto>> GetInstructor(int id)
         {
             var instructor = await _context.Instructores.FindAsync(id);
-
             if (instructor == null)
             {
                 return NotFound();
             }
-
-            return instructor;
-        }
-
-        // PUT: api/Instructores/5
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutInstructor(int id, Instructor instructor)
-        {
-            if (id != instructor.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(instructor).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!InstructorExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
+            return InstructorDto.DesdeModelo(instructor);
         }
 
         // POST: api/Instructores
         [HttpPost]
-        public async Task<ActionResult<Instructor>> PostInstructor(Instructor instructor)
+        public async Task<ActionResult<InstructorDto>> PostInstructor(InstructorCrearDto dto)
         {
-            // La cedula es unica por gimnasio: 409 con un mensaje claro en vez de un 500 de SQL Server.
-            if (await _context.Instructores.AnyAsync(x => x.GimnasioId == instructor.GimnasioId && x.NumeroIdentificacion == instructor.NumeroIdentificacion))
+            if (!await _context.Gimnasios.AnyAsync(g => g.Id == dto.GimnasioId))
+            {
+                return BadRequest(new { mensaje = "El gimnasio no existe." });
+            }
+            if (await _context.Instructores.AnyAsync(i => i.GimnasioId == dto.GimnasioId && i.NumeroIdentificacion == dto.NumeroIdentificacion.Trim()))
             {
                 return Conflict(new { mensaje = "Ya existe un registro con esa identificación en este gimnasio" });
             }
 
+            var instructor = dto.CrearModelo();
             _context.Instructores.Add(instructor);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetInstructor), new { id = instructor.Id }, instructor);
+            return CreatedAtAction(nameof(GetInstructor), new { id = instructor.Id }, InstructorDto.DesdeModelo(instructor));
+        }
+
+        // PUT: api/Instructores/5
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutInstructor(int id, InstructorActualizarDto dto)
+        {
+            var instructor = await _context.Instructores.FindAsync(id);
+            if (instructor == null)
+            {
+                return NotFound();
+            }
+            var cedula = dto.NumeroIdentificacion.Trim();
+            if (await _context.Instructores.AnyAsync(i => i.Id != id && i.GimnasioId == instructor.GimnasioId && i.NumeroIdentificacion == cedula))
+            {
+                return Conflict(new { mensaje = "Ya existe un registro con esa identificación en este gimnasio" });
+            }
+
+            dto.AplicarA(instructor);
+            await _context.SaveChangesAsync();
+            return NoContent();
         }
 
         // DELETE: api/Instructores/5
@@ -99,14 +92,15 @@ namespace GymBrot.Api.Controllers
             }
 
             _context.Instructores.Remove(instructor);
-            await _context.SaveChangesAsync();
-
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                return Conflict(new { mensaje = "No se puede borrar: tiene registros relacionados." });
+            }
             return NoContent();
-        }
-
-        private bool InstructorExists(int id)
-        {
-            return _context.Instructores.Any(e => e.Id == id);
         }
     }
 }

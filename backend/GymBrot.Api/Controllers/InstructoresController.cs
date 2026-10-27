@@ -76,6 +76,12 @@ namespace GymBrot.Api.Controllers
         [HttpPost]
         public async Task<ActionResult<Instructor>> PostInstructor(Instructor instructor)
         {
+            // La cedula es unica por gimnasio: 409 con un mensaje claro en vez de un 500 de SQL Server.
+            if (await _context.Instructores.AnyAsync(x => x.GimnasioId == instructor.GimnasioId && x.NumeroIdentificacion == instructor.NumeroIdentificacion))
+            {
+                return Conflict(new { mensaje = "Ya existe un registro con esa identificación en este gimnasio" });
+            }
+
             _context.Instructores.Add(instructor);
             await _context.SaveChangesAsync();
 

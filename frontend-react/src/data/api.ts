@@ -3323,9 +3323,13 @@ export const api = {
     /* El cliente reserva un cupo en una sesión. Reglas: clase ACTIVA; la fecha cae en su día,
        entre hoy y hoy + DIAS_MAX_INSCRIPCION y, si es hoy, antes de que empiece; sesión no
        cancelada; cliente ACTIVO con membresía vigente (cualquier plan); hay cupo; no está ya
-       inscrito; y no tiene otra inscripción INSCRITA que se cruce en fecha y hora. */
+       inscrito; y no tiene otra inscripción INSCRITA ni cita individual que se cruce en fecha y hora. */
     async inscribir(idClase: number, idCliente: string, fecha: string): Promise<ApiResp<InscripcionClase>> {
       await api._delay();
+      const sesion = sesionGuardada();
+      if (sesion?.tipo_usuario === "CLIENTE" && sesion.numero_identificacion !== idCliente) {
+        return { ok: false, mensaje: "No puedes reservar clases para otro cliente" };
+      }
       const clases = db.readTenant<Clase>("clases");
       const clase = clases.find((c) => c.id_clase === idClase);
       if (!clase) return { ok: false, mensaje: "Clase no encontrada" };
@@ -3357,6 +3361,20 @@ export const api = {
       if (choqueCon)
         return { ok: false, mensaje: "Se cruza con «" + choqueCon.nombre + "» (" + choqueCon.hora + "–" + horaFin(choqueCon) + ") ese mismo día" };
 
+      // [T4] Validación autoritativa: colisión de la clase grupal con citas individuales del cliente (Requisito 2)
+      const citasCliente = db
+        .readTenant<Cita>("citas")
+        .filter((c) => c.id_cliente === idCliente && c.fecha === fecha && (c.estado === "PENDIENTE" || c.estado === "CONFIRMADA"));
+      const citaChoque = citasCliente.find((cita) =>
+        seCruzan({ hora: clase.hora, duracion_min: clase.duracion_min }, { hora: cita.hora, duracion_min: 30 })
+      );
+      if (citaChoque) {
+        return { ok: false, mensaje: "Se cruza con tu cita programada a las " + citaChoque.hora + " ese mismo día" };
+      }
+
+      // Limitación de concurrencia: el mock opera sobre localStorage en un único hilo. La validación autoritativa
+      // previa al guardado previene inconsistencias lógicas en cliente, pero un entorno con backend concurrente
+      // requerirá transacciones ACID o bloqueo de fila en base de datos.
       const nueva: InscripcionClase = {
         gimnasio_id: gimnasioParaEscribir(),
         id_inscripcion: db.siguienteId<InscripcionClase>("inscripciones_clase", (x) => x.id_inscripcion),
@@ -3374,6 +3392,10 @@ export const api = {
     // El cliente se retira de SU inscripción antes de que empiece la sesión (libera el cupo)
     async retirar(idInscripcion: number, idCliente: string): Promise<ApiResp<InscripcionClase>> {
       await api._delay();
+      const sesion = sesionGuardada();
+      if (sesion?.tipo_usuario === "CLIENTE" && sesion.numero_identificacion !== idCliente) {
+        return { ok: false, mensaje: "No puedes retirar clases de otro cliente" };
+      }
       const ins = db.readTenant<InscripcionClase>("inscripciones_clase");
       const x = ins.find((i) => i.id_inscripcion === idInscripcion);
       if (!x || x.id_cliente !== idCliente) return { ok: false, mensaje: "Inscripción no encontrada" };
@@ -3391,6 +3413,10 @@ export const api = {
        cercana primero) y después las pasadas (la más reciente primero). */
     async deCliente(idCliente: string): Promise<{ inscripcion: InscripcionClase; clase: Clase }[]> {
       await api._delay();
+      const sesion = sesionGuardada();
+      if (sesion?.tipo_usuario === "CLIENTE" && sesion.numero_identificacion !== idCliente) {
+        return [];
+      }
       const clases = db.readTenant<Clase>("clases");
       const ahora = utils.isoDate() + " " + horaLocal();
       const filas = db
@@ -3464,19 +3490,78 @@ export const api = {
         return `${instructor.nombre} ${instructor.apellidos} no está disponible a las ${data.hora} ese día`;
       if (choque(db.readTenant<Cita>("citas"), data.id_instructor, data.fecha, data.hora, excluirId))
         return `${instructor.nombre} ${instructor.apellidos} ya tiene una cita a esa fecha y hora`;
+
+      // [T4] Validación autoritativa: colisión con otras citas del cliente (intervalo de 30 minutos)
+      const citasCliente = db
+        .readTenant<Cita>("citas")
+        .filter(
+          (c) =>
+            c.id_cliente === data.id_cliente &&
+            c.fecha === data.fecha &&
+            c.id_cita !== excluirId &&
+            c.estado !== "CANCELADA"
+        );
+      const citaSolapada = citasCliente.find((c) =>
+        seCruzan({ hora: data.hora, duracion_min: 30 }, { hora: c.hora, duracion_min: 30 })
+      );
+      if (citaSolapada) {
+        return `Ya tienes otra cita programada a las ${citaSolapada.hora} ese mismo día`;
+      }
+
+      // [T4] Validación autoritativa: colisión con clases grupales reservadas por el cliente
+      const clases = db.readTenant<Clase>("clases");
+      const clasesCliente = db
+        .readTenant<InscripcionClase>("inscripciones_clase")
+        .filter((x) => x.id_cliente === data.id_cliente && x.fecha === data.fecha && x.estado === "INSCRITA")
+        .map((x) => clases.find((c) => c.id_clase === x.id_clase))
+        .filter((c): c is Clase => c !== undefined);
+
+      const claseSolapada = clasesCliente.find((clase) =>
+        seCruzan({ hora: data.hora, duracion_min: 30 }, { hora: clase.hora, duracion_min: clase.duracion_min })
+      );
+      if (claseSolapada) {
+        return `Se cruza con tu clase de «${claseSolapada.nombre}» (${claseSolapada.hora}–${horaFin(claseSolapada)}) ese mismo día`;
+      }
+
       return null;
     },
 
     async list(): Promise<Cita[]> {
       await api._delay();
-      return db.readTenant<Cita>("citas");
+      const sesion = sesionGuardada();
+      const citas = db.readTenant<Cita>("citas");
+      if (sesion?.tipo_usuario === "CLIENTE") {
+        const idCliente = typeof sesion.numero_identificacion === "string" ? sesion.numero_identificacion : "";
+        return citas.filter((c) => c.id_cliente === idCliente);
+      }
+      return citas;
     },
     async byCliente(id: string): Promise<Cita[]> {
       await api._delay();
+      const sesion = sesionGuardada();
+      if (sesion?.tipo_usuario === "CLIENTE" && sesion.numero_identificacion !== id) {
+        return [];
+      }
       return db.readTenant<Cita>("citas").filter((c) => c.id_cliente === id);
+    },
+    /* [T4] KAN-94: Devuelve exclusivamente las franjas ocupadas de las citas activas del gimnasio
+       (instructor, fecha, hora), sin identidades de cliente ni notas privadas.
+       Permite verificar colisiones en la vista del cliente sin exponer datos ajenos.
+       NOTA: En producción, esta restricción debe aplicarse directamente desde el endpoint del backend. */
+    async franjasOcupadas(): Promise<Array<{ id_instructor: string; fecha: string; hora: string }>> {
+      await api._delay();
+      return db
+        .readTenant<Cita>("citas")
+        .filter((c) => c.estado !== "CANCELADA")
+        .map(({ id_instructor, fecha, hora }) => ({ id_instructor, fecha, hora }));
     },
     async create(data: CitaNueva): Promise<ApiResp<Cita>> {
       await api._delay();
+      const sesion = sesionGuardada();
+      if (sesion?.tipo_usuario === "CLIENTE" && sesion.numero_identificacion !== data.id_cliente) {
+        return { ok: false, mensaje: "No tienes permiso para agendar citas para otro cliente" };
+      }
+      // Validación autoritativa inmediata antes de persistir (mitiga condiciones de carrera en mock sin transacciones)
       const error = api.citas._validar(data);
       if (error) return { ok: false, mensaje: error };
       const arr = db.readTenant<Cita>("citas");
@@ -3491,6 +3576,13 @@ export const api = {
       const arr = db.readTenant<Cita>("citas");
       const cita = arr.find((c) => c.id_cita === id);
       if (!cita) return { ok: false, mensaje: "Cita no encontrada" };
+      const sesion = sesionGuardada();
+      if (sesion?.tipo_usuario === "CLIENTE" && cita.id_cliente !== sesion.numero_identificacion) {
+        return { ok: false, mensaje: "No tienes permiso para modificar esta cita" };
+      }
+      if (sesion?.tipo_usuario === "CLIENTE" && data.id_cliente && data.id_cliente !== sesion.numero_identificacion) {
+        return { ok: false, mensaje: "No tienes permiso para transferir esta cita a otro cliente" };
+      }
       const final = { ...cita, ...data };
       const error = api.citas._validar(final, id);
       if (error) return { ok: false, mensaje: error };
@@ -3503,6 +3595,32 @@ export const api = {
       const arr = db.readTenant<Cita>("citas");
       const cita = arr.find((c) => c.id_cita === id);
       if (!cita) return { ok: false, mensaje: "Cita no encontrada" };
+
+      const sesion = sesionGuardada();
+      const esCliente = sesion?.tipo_usuario === "CLIENTE";
+
+      if (esCliente && cita.id_cliente !== sesion.numero_identificacion) {
+        return { ok: false, mensaje: "No tienes permiso para modificar esta cita" };
+      }
+      if (esCliente && estado !== "CANCELADA") {
+        return { ok: false, mensaje: "Solo puedes cancelar tus propias citas" };
+      }
+
+      if (estado === "CANCELADA") {
+        if (cita.estado === "COMPLETADA") {
+          return { ok: false, mensaje: "La cita ya fue completada y no se puede cancelar" };
+        }
+        if (cita.estado === "CANCELADA") {
+          return { ok: false, mensaje: "La cita ya fue cancelada previamente" };
+        }
+        const hoy = utils.isoDate();
+        const ahora = horaLocal();
+        // Si la cita empieza a las 09:00, a las 09:00 ya no debe permitir cancelarla
+        if (cita.fecha < hoy || (cita.fecha === hoy && cita.hora <= ahora)) {
+          return { ok: false, mensaje: "La cita ya empezó o es pasada y no puede cancelarse" };
+        }
+      }
+
       cita.estado = estado;
       db.writeTenant("citas", arr);
       return { ok: true, mensaje: "Estado actualizado", data: cita };

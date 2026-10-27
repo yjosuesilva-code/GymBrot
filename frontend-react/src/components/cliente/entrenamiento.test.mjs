@@ -68,6 +68,16 @@ const {
   ordenarMedicionesCronologico,
   ordenarMedicionesReciente,
 } = await import("./miProgreso.ts");
+const {
+  aFranjasOcupadas,
+  badgeEstadoCita,
+  badgeEstadoInscripcion,
+  filtrarHorariosDisponibles,
+  puedeCancelarCita,
+  puedeRetirarseClase,
+  separarCitasCliente,
+  separarInscripcionesCliente,
+} = await import("./misCitas.ts");
 const { MAX_REPS, MAX_SEGUNDOS, MAX_PESO_KG, resumirSeries, validarSeries } = await import("../../lib/rutinas.ts");
 
 function ejercicio(tipo = "REPETICIONES", equipo = "Mancuernas", peso = 7.5) {
@@ -1617,4 +1627,469 @@ test("ETAPA 10: ordenamiento de mediciones y manejo de fechas repetidas", () => 
   assert.match(puntos[0].etiquetaFecha, /#10/);
   assert.match(puntos[1].etiquetaFecha, /#11/);
   assert.doesNotMatch(puntos[2].etiquetaFecha, /#12/);
+});
+
+test("ETAPA 11: separar citas cliente respeta tenant/usuario y ordena próximas y pasadas", () => {
+  const hoy = "2026-10-27";
+  const ahora = "10:00";
+  const citas = [
+    {
+      id_cita: 1,
+      gimnasio_id: "gym-centro",
+      id_cliente: "1000000001",
+      id_instructor: "2000000001",
+      fecha: "2026-10-27",
+      hora: "11:00",
+      estado: "CONFIRMADA",
+      tipo_cita: "EVALUACION",
+      notas: "Cita hoy más tarde",
+    },
+    {
+      id_cita: 2,
+      gimnasio_id: "gym-centro",
+      id_cliente: "1000000001",
+      id_instructor: "2000000002",
+      fecha: "2026-10-28",
+      hora: "09:00",
+      estado: "PENDIENTE",
+      tipo_cita: "NUTRICION",
+      notas: "Cita mañana",
+    },
+    {
+      id_cita: 3,
+      gimnasio_id: "gym-centro",
+      id_cliente: "1000000001",
+      id_instructor: "2000000001",
+      fecha: "2026-10-27",
+      hora: "08:30",
+      estado: "CONFIRMADA",
+      tipo_cita: "CONSULTA",
+      notas: "Cita hoy pero hora ya pasada",
+    },
+    {
+      id_cita: 4,
+      gimnasio_id: "gym-centro",
+      id_cliente: "1000000001",
+      id_instructor: "2000000001",
+      fecha: "2026-10-20",
+      hora: "14:00",
+      estado: "COMPLETADA",
+      tipo_cita: "EVALUACION",
+      notas: "Cita semana pasada completada",
+    },
+    {
+      id_cita: 5,
+      gimnasio_id: "gym-centro",
+      id_cliente: "1000000001",
+      id_instructor: "2000000003",
+      fecha: "2026-10-29",
+      hora: "16:00",
+      estado: "CANCELADA",
+      tipo_cita: "SEGUIMIENTO",
+      notas: "Cita futura pero cancelada",
+    },
+    // Cita de otro cliente
+    {
+      id_cita: 6,
+      gimnasio_id: "gym-centro",
+      id_cliente: "1000000002",
+      id_instructor: "2000000001",
+      fecha: "2026-10-28",
+      hora: "10:00",
+      estado: "CONFIRMADA",
+      tipo_cita: "EVALUACION",
+      notas: "Otro cliente",
+    },
+    // Cita en otro gimnasio
+    {
+      id_cita: 7,
+      gimnasio_id: "gym-titan",
+      id_cliente: "1000000001",
+      id_instructor: "2000000001",
+      fecha: "2026-10-28",
+      hora: "11:00",
+      estado: "CONFIRMADA",
+      tipo_cita: "EVALUACION",
+      notas: "Otro gym",
+    },
+  ];
+
+  const res = separarCitasCliente({
+    citas,
+    idCliente: "1000000001",
+    gimnasioId: "gym-centro",
+    hoy,
+    horaActualTexto: ahora,
+  });
+
+  // Próximas: cita 1 (hoy 11:00) y cita 2 (mañana 09:00)
+  assert.deepEqual(
+    res.proximas.map((c) => c.id_cita),
+    [1, 2],
+  );
+  // Pasadas: cita 5 (cancelada futura 2026-10-29), cita 3 (hoy 08:30 ya pasó), cita 4 (2026-10-20 completada)
+  assert.deepEqual(
+    res.pasadas.map((c) => c.id_cita),
+    [5, 3, 4],
+  );
+});
+
+test("ETAPA 11: reglas para permitir o rechazar cancelación de cita", () => {
+  const hoy = "2026-10-27";
+  const ahora = "10:00";
+
+  // Permitida: PENDIENTE futura
+  assert.equal(
+    puedeCancelarCita({ estado: "PENDIENTE", fecha: "2026-10-28", hora: "08:00" }, hoy, ahora),
+    true,
+  );
+  // Permitida: CONFIRMADA hoy más tarde
+  assert.equal(
+    puedeCancelarCita({ estado: "CONFIRMADA", fecha: "2026-10-27", hora: "11:00" }, hoy, ahora),
+    true,
+  );
+  // Rechazada: cita hoy que ya pasó
+  assert.equal(
+    puedeCancelarCita({ estado: "CONFIRMADA", fecha: "2026-10-27", hora: "09:30" }, hoy, ahora),
+    false,
+  );
+  // Rechazada: cita fecha pasada
+  assert.equal(
+    puedeCancelarCita({ estado: "CONFIRMADA", fecha: "2026-10-26", hora: "15:00" }, hoy, ahora),
+    false,
+  );
+  // Rechazada: estado terminal COMPLETADA o CANCELADA
+  assert.equal(
+    puedeCancelarCita({ estado: "COMPLETADA", fecha: "2026-10-28", hora: "08:00" }, hoy, ahora),
+    false,
+  );
+  assert.equal(
+    puedeCancelarCita({ estado: "CANCELADA", fecha: "2026-10-28", hora: "08:00" }, hoy, ahora),
+    false,
+  );
+});
+
+test("ETAPA 11: filtrado de horarios disponibles con instructor, fecha y choques", () => {
+  const hoy = "2026-10-27"; // martes
+  const instructor = {
+    gimnasio_id: "gym-centro",
+    numero_identificacion: "2000000001",
+    tipo_identificacion: "CC",
+    nombre: "Carlos",
+    apellidos: "Gómez",
+    telefono: "3001234567",
+    correo: "carlos@gym.com",
+    especialidad: "FUERZA",
+    fecha_contratacion: "2024-01-01",
+    estado: "ACTIVO",
+    horario: {
+      MARTES: [{ desde: "08:00", hasta: "11:00" }],
+      MIERCOLES: [{ desde: "09:00", hasta: "12:00" }],
+    },
+  };
+
+  // Cita existente del instructor a las 09:30 el martes
+  const citasGimnasio = [
+    {
+      id_cita: 99,
+      gimnasio_id: "gym-centro",
+      id_cliente: "1000000002",
+      id_instructor: "2000000001",
+      fecha: "2026-10-27",
+      hora: "09:30",
+      estado: "CONFIRMADA",
+      tipo_cita: "EVALUACION",
+      notas: "",
+    },
+  ];
+
+  // Fecha pasada -> vacío
+  assert.deepEqual(
+    filtrarHorariosDisponibles({
+      instructor,
+      fecha: "2026-10-26",
+      franjasOcupadas: aFranjasOcupadas(citasGimnasio),
+      hoy,
+      horaActualTexto: "08:00",
+    }),
+    [],
+  );
+
+  // Día que el instructor no atiende (jueves 2026-10-29) -> vacío
+  assert.deepEqual(
+    filtrarHorariosDisponibles({
+      instructor,
+      fecha: "2026-10-29",
+      franjasOcupadas: aFranjasOcupadas(citasGimnasio),
+      hoy,
+      horaActualTexto: "08:00",
+    }),
+    [],
+  );
+
+  // Martes hoy a las 08:45: slots en 08:00-11:00 son 08:00, 08:30, 09:00, 09:30, 10:00, 10:30, 11:00
+  // Filtra los <= 08:45 (08:00, 08:30 eliminados)
+  // Filtra choque en 09:30 (eliminado)
+  // Quedan: 09:00, 10:00, 10:30, 11:00
+  const slotsHoy = filtrarHorariosDisponibles({
+    instructor,
+    fecha: "2026-10-27",
+    franjasOcupadas: aFranjasOcupadas(citasGimnasio),
+    hoy,
+    horaActualTexto: "08:45",
+  });
+  assert.deepEqual(slotsHoy, ["09:00", "10:00", "10:30", "11:00"]);
+});
+
+test("ETAPA 11: clases grupales separa activas e historial y valida retiro", () => {
+  const hoy = "2026-10-27";
+  const ahora = "10:00";
+  const claseA = {
+    id_clase: 101,
+    gimnasio_id: "gym-centro",
+    id_instructor: "2000000001",
+    nombre: "Rumba Mañana",
+    tipo_clase: "RUMBA",
+    dia_semana: "MARTES",
+    hora: "11:00",
+    duracion_min: 60,
+    aforo_max: 20,
+    inscritos: [],
+    estado: "ACTIVA",
+  };
+  const claseB = {
+    id_clase: 102,
+    gimnasio_id: "gym-centro",
+    id_instructor: "2000000002",
+    nombre: "Yoga Relax",
+    tipo_clase: "YOGA",
+    dia_semana: "MIERCOLES",
+    hora: "09:00",
+    duracion_min: 45,
+    aforo_max: 15,
+    inscritos: [],
+    estado: "ACTIVA",
+  };
+
+  const filas = [
+    {
+      inscripcion: {
+        id_inscripcion: 1,
+        gimnasio_id: "gym-centro",
+        id_clase: 101,
+        id_cliente: "1000000001",
+        fecha: "2026-10-27",
+        estado: "INSCRITA",
+        creada_el: "2026-10-20",
+      },
+      clase: claseA,
+    },
+    {
+      inscripcion: {
+        id_inscripcion: 2,
+        gimnasio_id: "gym-centro",
+        id_clase: 102,
+        id_cliente: "1000000001",
+        fecha: "2026-10-28",
+        estado: "INSCRITA",
+        creada_el: "2026-10-20",
+      },
+      clase: claseB,
+    },
+    {
+      inscripcion: {
+        id_inscripcion: 3,
+        gimnasio_id: "gym-centro",
+        id_clase: 101,
+        id_cliente: "1000000001",
+        fecha: "2026-10-20",
+        estado: "INSCRITA",
+        creada_el: "2026-10-15",
+      },
+      clase: claseA,
+    },
+    {
+      inscripcion: {
+        id_inscripcion: 4,
+        gimnasio_id: "gym-centro",
+        id_clase: 102,
+        id_cliente: "1000000001",
+        fecha: "2026-10-28",
+        estado: "RETIRADA",
+        creada_el: "2026-10-20",
+      },
+      clase: claseB,
+    },
+  ];
+
+  const sep = separarInscripcionesCliente({ filas, hoy, horaActualTexto: ahora });
+  // Activas: id 1 (hoy 11:00) y id 2 (mañana 09:00)
+  assert.deepEqual(
+    sep.activas.map((f) => f.inscripcion.id_inscripcion),
+    [1, 2],
+  );
+  // Historial: id 4 (retirada 2026-10-28) e id 3 (pasada 2026-10-20)
+  assert.deepEqual(
+    sep.historial.map((f) => f.inscripcion.id_inscripcion),
+    [4, 3],
+  );
+
+  // Retirada permitida: inscripción 2 mañana
+  assert.equal(puedeRetirarseClase(filas[1].inscripcion, "09:00", hoy, ahora), true);
+  // Retirada permitida: inscripción 1 hoy 11:00 con hora actual 10:00
+  assert.equal(puedeRetirarseClase(filas[0].inscripcion, "11:00", hoy, ahora), true);
+  // Retirada no permitida si ya pasó o empezó: hoy 11:00 con hora actual 11:15
+  assert.equal(puedeRetirarseClase(filas[0].inscripcion, "11:00", hoy, "11:15"), false);
+  // Retirada no permitida si ya está retirada o cancelada
+  assert.equal(puedeRetirarseClase(filas[3].inscripcion, "09:00", hoy, ahora), false);
+});
+
+test("ETAPA 11: insignias usan el sistema compartido badge-g (gymbrot.css)", () => {
+  assert.deepEqual(badgeEstadoCita("CONFIRMADA"), { label: "Confirmada", className: "badge-confirmada" });
+  assert.deepEqual(badgeEstadoCita("PENDIENTE"), { label: "Pendiente", className: "badge-pendiente" });
+  assert.deepEqual(badgeEstadoCita("CANCELADA"), { label: "Cancelada", className: "badge-cancelada" });
+  assert.deepEqual(badgeEstadoCita("COMPLETADA"), { label: "Completada", className: "badge-completada" });
+
+  assert.deepEqual(badgeEstadoInscripcion("INSCRITA"), { label: "Reservada", className: "badge-activo" });
+  assert.deepEqual(badgeEstadoInscripcion("RETIRADA"), { label: "Retirada", className: "badge-inactivo" });
+  assert.deepEqual(badgeEstadoInscripcion("CANCELADA"), { label: "Cancelada por el gimnasio", className: "badge-cancelada" });
+});
+
+test("ETAPA 11: franjas ocupadas no conservan cliente ni notas y siguen bloqueando choques", () => {
+  const citas = [
+    {
+      id_cita: 50,
+      gimnasio_id: "gym-centro",
+      id_cliente: "1000000099",
+      id_instructor: "2000000001",
+      fecha: "2026-10-28",
+      hora: "09:00",
+      estado: "PENDIENTE",
+      tipo_cita: "NUTRICION",
+      notas: "Dato privado de otro cliente",
+    },
+    {
+      id_cita: 51,
+      gimnasio_id: "gym-centro",
+      id_cliente: "1000000098",
+      id_instructor: "2000000001",
+      fecha: "2026-10-28",
+      hora: "09:30",
+      estado: "CANCELADA",
+      tipo_cita: "CONSULTA",
+      notas: "",
+    },
+  ];
+  const franjas = aFranjasOcupadas(citas);
+  // Las canceladas no ocupan; las demás solo guardan instructor, fecha y hora
+  assert.deepEqual(franjas, [{ id_instructor: "2000000001", fecha: "2026-10-28", hora: "09:00" }]);
+  assert.equal(JSON.stringify(franjas).includes("1000000099"), false);
+  assert.equal(JSON.stringify(franjas).includes("privado"), false);
+  assert.equal(JSON.stringify(franjas).includes("PENDIENTE"), false);
+
+  const instructor = {
+    numero_identificacion: "2000000001",
+    estado: "ACTIVO",
+    horario: { MIERCOLES: [{ desde: "09:00", hasta: "10:00" }] },
+  };
+  const slots = filtrarHorariosDisponibles({
+    instructor,
+    fecha: "2026-10-28",
+    franjasOcupadas: franjas,
+    hoy: "2026-10-27",
+    horaActualTexto: "10:00",
+  });
+  // 09:00 ocupada; 09:30 libre porque la cita estaba cancelada
+  assert.deepEqual(slots, ["09:30", "10:00"]);
+});
+
+test("ETAPA 11 (B3): horarios disponibles excluyen colisiones con citas y clases del propio cliente", () => {
+  const instructor = {
+    numero_identificacion: "2000000001",
+    estado: "ACTIVO",
+    horario: { LUNES: [{ desde: "08:00", hasta: "12:00" }] },
+  };
+  const fecha = "2026-11-02"; // Lunes futuro
+
+  // El instructor no tiene citas ocupadas
+  const franjasOcupadas = [];
+
+  // El cliente ya tiene una cita activa propia a las 09:00 con otro instructor
+  const citasCliente = [
+    {
+      id_cita: 10,
+      gimnasio_id: "gym-centro",
+      id_cliente: "1000000001",
+      id_instructor: "2000000002",
+      fecha,
+      hora: "09:00",
+      estado: "CONFIRMADA",
+      tipo_cita: "EVALUACION",
+      notas: "",
+    },
+    // Cita cancelada a las 11:30 no debe bloquear
+    {
+      id_cita: 11,
+      gimnasio_id: "gym-centro",
+      id_cliente: "1000000001",
+      id_instructor: "2000000002",
+      fecha,
+      hora: "11:30",
+      estado: "CANCELADA",
+      tipo_cita: "CONSULTA",
+      notas: "",
+    },
+  ];
+
+  // El cliente está inscrito a una clase de Rumba de 10:00 a 11:00 (duración 60m: cubre 10:00 y 10:30)
+  const clasesCliente = [
+    {
+      inscripcion: {
+        id_inscripcion: 20,
+        gimnasio_id: "gym-centro",
+        id_clase: 101,
+        id_cliente: "1000000001",
+        fecha,
+        estado: "INSCRITA",
+        creada_el: "2026-10-25",
+      },
+      clase: {
+        id_clase: 101,
+        gimnasio_id: "gym-centro",
+        id_instructor: "2000000003",
+        nombre: "Rumba Intensa",
+        tipo_clase: "RUMBA",
+        dia_semana: "LUNES",
+        hora: "10:00",
+        duracion_min: 60,
+        aforo_max: 20,
+        inscritos: [],
+        estado: "ACTIVA",
+      },
+    },
+  ];
+
+  const slots = filtrarHorariosDisponibles({
+    instructor,
+    fecha,
+    franjasOcupadas,
+    hoy: "2026-10-27",
+    horaActualTexto: "08:00",
+    citasCliente,
+    clasesCliente,
+  });
+
+  // Franjas de 08:00 a 12:00 son: 08:00, 08:30, 09:00, 09:30, 10:00, 10:30, 11:00, 11:30, 12:00
+  // 09:00 bloqueada por cita propia
+  // 10:00 y 10:30 bloqueadas por clase propia de 10:00-11:00
+  // 11:30 NO bloqueada porque la cita propia está cancelada
+  assert.equal(slots.includes("09:00"), false);
+  assert.equal(slots.includes("10:00"), false);
+  assert.equal(slots.includes("10:30"), false);
+  assert.equal(slots.includes("08:00"), true);
+  assert.equal(slots.includes("08:30"), true);
+  assert.equal(slots.includes("09:30"), true);
+  assert.equal(slots.includes("11:00"), true);
+  assert.equal(slots.includes("11:30"), true);
+  assert.equal(slots.includes("12:00"), true);
 });

@@ -1,10 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using GymBrot.Api.Models;
 using GymBrot.Api.Data;
+using GymBrot.Api.DTOs;
 
 namespace GymBrot.Api.Controllers
 {
+    // Recibe y devuelve DTOs: el modelo Cliente (la tabla) nunca sale ni entra directo.
     [Route("api/[controller]")]
     [ApiController]
     public class ClientesController : ControllerBase
@@ -18,74 +19,68 @@ namespace GymBrot.Api.Controllers
         // GET: api/Clientes            -> todos
         // GET: api/Clientes?gimnasioId=1 -> solo los de ese gimnasio
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Cliente>>> GetClientes([FromQuery] int? gimnasioId)
+        public async Task<ActionResult<IEnumerable<ClienteDto>>> GetClientes([FromQuery] int? gimnasioId)
         {
             var consulta = _context.Clientes.AsQueryable();
             if (gimnasioId.HasValue)
             {
-                consulta = consulta.Where(x => x.GimnasioId == gimnasioId.Value);
+                consulta = consulta.Where(c => c.GimnasioId == gimnasioId.Value);
             }
-            return await consulta.ToListAsync();
+            var clientes = await consulta.OrderBy(c => c.Nombre).ToListAsync();
+            return clientes.Select(ClienteDto.DesdeModelo).ToList();
         }
 
         // GET: api/Clientes/5
         [HttpGet("{id}")]
-        public async Task<ActionResult<Cliente>> GetCliente(int id)
+        public async Task<ActionResult<ClienteDto>> GetCliente(int id)
         {
             var cliente = await _context.Clientes.FindAsync(id);
-
             if (cliente == null)
             {
                 return NotFound();
             }
-
-            return cliente;
-        }
-
-        // PUT: api/Clientes/5
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutCliente(int id, Cliente cliente)
-        {
-            if (id != cliente.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(cliente).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!ClienteExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
+            return ClienteDto.DesdeModelo(cliente);
         }
 
         // POST: api/Clientes
         [HttpPost]
-        public async Task<ActionResult<Cliente>> PostCliente(Cliente cliente)
+        public async Task<ActionResult<ClienteDto>> PostCliente(ClienteCrearDto dto)
         {
-            // La cedula es unica por gimnasio: 409 con un mensaje claro en vez de un 500 de SQL Server.
-            if (await _context.Clientes.AnyAsync(x => x.GimnasioId == cliente.GimnasioId && x.NumeroIdentificacion == cliente.NumeroIdentificacion))
+            if (!await _context.Gimnasios.AnyAsync(g => g.Id == dto.GimnasioId))
+            {
+                return BadRequest(new { mensaje = "El gimnasio no existe." });
+            }
+            // La cédula es única por gimnasio: 409 con un mensaje claro en vez de un 500 de SQL Server.
+            if (await _context.Clientes.AnyAsync(c => c.GimnasioId == dto.GimnasioId && c.NumeroIdentificacion == dto.NumeroIdentificacion.Trim()))
             {
                 return Conflict(new { mensaje = "Ya existe un registro con esa identificación en este gimnasio" });
             }
 
+            var cliente = dto.CrearModelo();
             _context.Clientes.Add(cliente);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetCliente), new { id = cliente.Id }, cliente);
+            return CreatedAtAction(nameof(GetCliente), new { id = cliente.Id }, ClienteDto.DesdeModelo(cliente));
+        }
+
+        // PUT: api/Clientes/5
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutCliente(int id, ClienteActualizarDto dto)
+        {
+            var cliente = await _context.Clientes.FindAsync(id);
+            if (cliente == null)
+            {
+                return NotFound();
+            }
+            var cedula = dto.NumeroIdentificacion.Trim();
+            if (await _context.Clientes.AnyAsync(c => c.Id != id && c.GimnasioId == cliente.GimnasioId && c.NumeroIdentificacion == cedula))
+            {
+                return Conflict(new { mensaje = "Ya existe un registro con esa identificación en este gimnasio" });
+            }
+
+            dto.AplicarA(cliente);
+            await _context.SaveChangesAsync();
+            return NoContent();
         }
 
         // DELETE: api/Clientes/5
@@ -99,14 +94,16 @@ namespace GymBrot.Api.Controllers
             }
 
             _context.Clientes.Remove(cliente);
-            await _context.SaveChangesAsync();
-
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Las FK son Restrict: si tiene registros relacionados, no se puede borrar.
+                return Conflict(new { mensaje = "No se puede borrar: tiene registros relacionados." });
+            }
             return NoContent();
-        }
-
-        private bool ClienteExists(int id)
-        {
-            return _context.Clientes.Any(e => e.Id == id);
         }
     }
 }

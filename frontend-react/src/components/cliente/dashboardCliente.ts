@@ -1,5 +1,5 @@
 import { horaActual, NOMBRE_TIPO_CITA } from "../../lib/citas";
-import { membresiaVigente } from "../../lib/membresias";
+import { estadoMembresiaPorFecha, membresiaVigente } from "../../lib/membresias";
 import { diasEntre, normalizar } from "../../lib/rutinas";
 import type {
   Cita,
@@ -87,7 +87,22 @@ export type EstadoEfectivoMembresiaCliente =
   | "POR_VENCER"
   | "VENCIDA"
   | "CANCELADA"
+  | "PROGRAMADA"
+  | "SIN_VERIFICAR"
   | "CUENTA_INACTIVA";
+
+export function claseEstadoMembresia(estado: EstadoEfectivoMembresiaCliente): string {
+  const clases: Record<EstadoEfectivoMembresiaCliente, string> = {
+    VIGENTE: "badge-activo",
+    POR_VENCER: "badge-pendiente",
+    PROGRAMADA: "badge-pendiente",
+    VENCIDA: "badge-vencida",
+    CANCELADA: "badge-cancelada",
+    CUENTA_INACTIVA: "badge-inactivo",
+    SIN_VERIFICAR: "badge-inactivo",
+  };
+  return clases[estado];
+}
 
 export type ResumenMembresiaCliente = {
   membresia: Membresia;
@@ -123,10 +138,13 @@ export function seleccionarMembresiaResumen(opciones: {
   };
 
   const activasVigentes = delCliente
-    .filter((m) => m.estado === "ACTIVA" && m.fecha_vencimiento >= hoy)
+    .filter((m) => estadoMembresiaPorFecha(m, hoy) === "ACTIVA")
     .sort(ordenarMasReciente);
 
-  const seleccionada = activasVigentes[0] ?? [...delCliente].sort(ordenarMasReciente)[0];
+  const programadas = delCliente
+    .filter((m) => estadoMembresiaPorFecha(m, hoy) === "PROGRAMADA")
+    .sort((a, b) => a.fecha_inicio.localeCompare(b.fecha_inicio) || ordenarMasReciente(a, b));
+  const seleccionada = activasVigentes[0] ?? programadas[0] ?? [...delCliente].sort(ordenarMasReciente)[0];
   if (!seleccionada) return null;
 
   const vigente = membresiaVigente(seleccionada, hoy, cliente);
@@ -162,7 +180,34 @@ export function seleccionarMembresiaResumen(opciones: {
       modalidadTexto,
       diasRestantes,
       textoVigencia:
-        diasVencida === 1 ? "Venció hace 1 día" : `Venció hace ${diasVencida} días`,
+        seleccionada.fecha_vencimiento >= hoy
+          ? "Membresía registrada como vencida"
+          : diasVencida === 1 ? "Venció hace 1 día" : `Venció hace ${diasVencida} días`,
+    };
+  }
+
+  if (seleccionada.fecha_inicio > hoy) {
+    const diasParaInicio = diasEntre(hoy, seleccionada.fecha_inicio);
+    return {
+      membresia: seleccionada,
+      vigente: false,
+      estadoEfectivo: "PROGRAMADA",
+      etiquetaEstado: "Programada",
+      modalidadTexto,
+      diasRestantes,
+      textoVigencia: diasParaInicio === 1 ? "Comienza mañana" : `Comienza en ${diasParaInicio} días`,
+    };
+  }
+
+  if (!cliente || cliente.numero_identificacion !== idCliente || cliente.gimnasio_id !== gimnasioId) {
+    return {
+      membresia: seleccionada,
+      vigente: false,
+      estadoEfectivo: "SIN_VERIFICAR",
+      etiquetaEstado: "Sin verificar",
+      modalidadTexto,
+      diasRestantes,
+      textoVigencia: "No pudimos verificar el estado de tu cuenta",
     };
   }
 

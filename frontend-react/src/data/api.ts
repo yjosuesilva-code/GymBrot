@@ -5,6 +5,7 @@ import { OBJETIVOS_RUTINA } from "../lib/rutinas"; // [P3] única lista de objet
 import { DIAS_MAX_INSCRIPCION, TIPOS_CLASE, aMinutos, diaSemanaDe, fechasDeClase, horaFin, seCruzan } from "../lib/clases"; // [P3] B7
 import { slugUnico, slugify, validarSlug, normalizarSlugDeUrl } from "../lib/slug"; // [multitenant-slug]
 import { gimnasioFijado } from "../tenant/tenantActivo"; // [multitenant-slug]
+import { usaWebApi, clientesWebApi, type TenantApi } from "./webApi"; // [web-api]
 import { migrarDisponibilidadTexto, diaDisponible, horaDisponible, choque, validarHorario } from "../lib/horarios"; // [P3] horario de instructores y citas
 import type {
   Gimnasio, // [multitenant]
@@ -1297,6 +1298,16 @@ function gimnasioActivo(): string | null {
   return sesionTieneAcceso(gym) ? gym : null;
 }
 
+/* [web-api] El gimnasio abierto como lo necesita la Web API: su slug es lo
+   que se busca alla (el id del frontend, 'gym-centro', no existe en SQL Server).
+   null = sin gimnasio activo, igual que readTenant. */
+function tenantParaApi(): TenantApi | null {
+  const gym = gimnasioActivo();
+  if (!gym) return null;
+  const g = db.read<Gimnasio>("gimnasios").find((x) => x.gimnasio_id === gym);
+  return g ? { gimnasio_id: g.gimnasio_id, slug: g.slug } : null;
+}
+
 function publico(g: Gimnasio): GimnasioPublico {
   return { gimnasio_id: g.gimnasio_id, slug: g.slug, nombre: g.nombre, ciudad: g.ciudad, estado: g.estado };
 }
@@ -1983,7 +1994,8 @@ export const api = {
       const limpia = contrasena.trim();
       if (!limpia) return { ok: false, mensaje: "La contraseña no puede quedar vacía" };
 
-      const cliente = db.readTenant<Cliente>("clientes").find((c) => c.numero_identificacion === id);
+      // [web-api] Por api.clientes.get: con la Web API el cliente ya no esta en localStorage.
+      const cliente = await api.clientes.get(id);
       if (!cliente) return { ok: false, mensaje: "El cliente no existe" };
 
       const usuarios = db.readTenant<Usuario>("usuarios");
@@ -2063,13 +2075,23 @@ export const api = {
   /* [multitenant] Implementacion de referencia: toda lectura va por
      db.readTenant y toda escritura por db.writeTenant. Las demas entidades
      por gimnasio copian este patron. */
+  /* [web-api] Con VITE_API_URL definida, los clientes se leen y guardan en la
+     Web API (SQL Server) en vez de localStorage. Ver data/webApi.ts. */
   clientes: {
     async list(): Promise<Cliente[]> {
+      if (usaWebApi) {
+        const t = tenantParaApi();
+        return t ? clientesWebApi.list(t) : [];
+      }
       await api._delay();
       return db.readTenant<Cliente>("clientes");
     },
 
     async get(id: string): Promise<Cliente | null> {
+      if (usaWebApi) {
+        const t = tenantParaApi();
+        return t ? clientesWebApi.get(t, id) : null;
+      }
       await api._delay();
       return db.readTenant<Cliente>("clientes").find((c) => c.numero_identificacion === id) ?? null;
     },
@@ -2077,6 +2099,10 @@ export const api = {
     // La cedula es unica dentro de cada gimnasio (D3): la misma persona puede
     // estar registrada en otro gimnasio sin que eso cuente como duplicado.
     async create(data: ClienteNuevo): Promise<ApiResp<Cliente>> {
+      if (usaWebApi) {
+        const t = tenantParaApi();
+        return t ? clientesWebApi.create(t, data) : { ok: false, mensaje: "No hay un gimnasio activo." };
+      }
       await api._delay();
       const arr = db.readTenant<Cliente>("clientes");
       if (arr.some((c) => c.numero_identificacion === data.numero_identificacion))
@@ -2093,6 +2119,10 @@ export const api = {
     },
 
     async update(id: string, data: Partial<ClienteNuevo>): Promise<ApiResp<Cliente>> {
+      if (usaWebApi) {
+        const t = tenantParaApi();
+        return t ? clientesWebApi.update(t, id, data) : { ok: false, mensaje: "No hay un gimnasio activo." };
+      }
       await api._delay();
       const arr = db.readTenant<Cliente>("clientes");
       const c = arr.find((x) => x.numero_identificacion === id);
@@ -2103,6 +2133,13 @@ export const api = {
     },
 
     async setEstado(id: string, estado: Cliente["estado"]): Promise<ApiResp<Cliente>> {
+      if (usaWebApi) {
+        const t = tenantParaApi();
+        if (!t) return { ok: false, mensaje: "No hay un gimnasio activo." };
+        const res = await clientesWebApi.update(t, id, { estado });
+        if (res.ok) await api.usuarios.setEstado(id, estado); // mismo espejo que el mock
+        return res.ok ? { ...res, mensaje: "Estado actualizado" } : res;
+      }
       await api._delay();
       const arr = db.readTenant<Cliente>("clientes");
       const c = arr.find((x) => x.numero_identificacion === id);

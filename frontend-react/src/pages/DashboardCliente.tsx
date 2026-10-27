@@ -7,6 +7,7 @@ import {
 } from "../components/cliente/borradorEntrenamiento";
 import type { AmbitoBorrador } from "../components/cliente/borradorEntrenamiento";
 import {
+  claseEstadoMembresia,
   formatearListaGrupos,
   limpiarDescripcionRutina,
   obtenerSaludoCliente,
@@ -135,7 +136,7 @@ function ContenidoDashboardCliente({
 
       const promesaMembresia = Promise.all([
         api.membresias.byCliente(cedula),
-        api.clientes.get(cedula).catch(() => null),
+        api.clientes.get(cedula),
       ])
         .then(([membresias, cliente]) => ({
           ok: true as const,
@@ -810,13 +811,7 @@ function ContenidoDashboardCliente({
                     {membresiaResumen.modalidadTexto}
                   </span>
                   <span
-                    className={`badge-g ${
-                      membresiaResumen.estadoEfectivo === "VIGENTE"
-                        ? "badge-activo"
-                        : membresiaResumen.estadoEfectivo === "POR_VENCER"
-                          ? "badge-pendiente"
-                          : "badge-vencido"
-                    }`}
+                    className={`badge-g ${claseEstadoMembresia(membresiaResumen.estadoEfectivo)}`}
                   >
                     {membresiaResumen.etiquetaEstado}
                   </span>

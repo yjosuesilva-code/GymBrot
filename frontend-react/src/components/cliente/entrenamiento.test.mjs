@@ -54,6 +54,13 @@ const {
   seleccionarProximaCitaCliente,
   textoObjetivoPlan,
 } = await import("./dashboardCliente.ts");
+const {
+  filtrarYOrdenarPagosCliente,
+  formatearMetodoPago,
+  formatearModalidadPago,
+  resolverBeneficiosPlan,
+  separarMembresiasCliente,
+} = await import("./miMembresia.ts");
 const { MAX_REPS, MAX_SEGUNDOS, MAX_PESO_KG, resumirSeries, validarSeries } = await import("../../lib/rutinas.ts");
 
 function ejercicio(tipo = "REPETICIONES", equipo = "Mancuernas", peso = 7.5) {
@@ -1246,4 +1253,186 @@ test("ETAPA 8: última actividad resume el último entrenamiento válido del pla
   assert.equal(resumen.cantidadEjercicios, 2);
   assert.equal(resumen.totalSeries, 3);
   assert.match(resumen.resumenEjerciciosTexto, /Press banca, Plancha abdominal/);
+});
+
+test("ETAPA 9: beneficios del plan según catálogo oficial sin inventar datos", () => {
+  const planes = [
+    {
+      id_plan: 1,
+      nombre: "Básico",
+      descripcion: "Sala de máquinas y cardio",
+      precio_mensual: 50000,
+      precio_semestral: 285000,
+      precio_anual: 540000,
+      estado: "ACTIVO",
+      beneficios: ["Acceso a sala de máquinas", "Área de cardio", "  "],
+    },
+    {
+      id_plan: 2,
+      nombre: "Sin Beneficios",
+      descripcion: "Plan sin lista",
+      precio_mensual: 40000,
+      precio_semestral: 200000,
+      precio_anual: 380000,
+      estado: "ACTIVO",
+    },
+  ];
+
+  assert.deepEqual(resolverBeneficiosPlan(1, planes), [
+    "Acceso a sala de máquinas",
+    "Área de cardio",
+  ]);
+  assert.deepEqual(resolverBeneficiosPlan(2, planes), []);
+  assert.deepEqual(resolverBeneficiosPlan(99, planes), []);
+  assert.deepEqual(resolverBeneficiosPlan(null, planes), []);
+  assert.deepEqual(resolverBeneficiosPlan(undefined, planes), []);
+});
+
+test("ETAPA 9: formato de modalidad y método de pago", () => {
+  assert.equal(formatearModalidadPago("ANUAL"), "Plan anual");
+  assert.equal(formatearModalidadPago("SEMESTRAL"), "Plan semestral");
+  assert.equal(formatearModalidadPago("MENSUAL"), "Plan mensual");
+  assert.equal(formatearModalidadPago(undefined), "No especificada");
+
+  assert.equal(formatearMetodoPago("EFECTIVO"), "Efectivo");
+  assert.equal(formatearMetodoPago("TRANSFERENCIA"), "Transferencia");
+  assert.equal(formatearMetodoPago("TARJETA"), "Tarjeta");
+  assert.equal(formatearMetodoPago("NEQUI"), "Nequi");
+  assert.equal(formatearMetodoPago(undefined), "Otro");
+});
+
+test("ETAPA 9: pagos del cliente filtran por tenant/usuario y se ordenan del más reciente al más antiguo", () => {
+  const pagos = [
+    {
+      gimnasio_id: "gym-otro",
+      id_pago: 99,
+      id_cliente: "1000000001",
+      id_membresia: 1,
+      fecha_pago: "2026-10-25",
+      valor: 80000,
+      metodo_pago: "NEQUI",
+      estado_pago: "EXITOSO",
+      referencia_transaccion: "REF-OTRO",
+      observaciones: "",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_pago: 1,
+      id_cliente: "1000000001",
+      id_membresia: 1,
+      fecha_pago: "2026-08-01",
+      valor: 80000,
+      metodo_pago: "EFECTIVO",
+      estado_pago: "EXITOSO",
+      referencia_transaccion: "REC-001",
+      observaciones: "",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_pago: 2,
+      id_cliente: "1000000001",
+      id_membresia: 1,
+      fecha_pago: "2026-09-01",
+      valor: 80000,
+      metodo_pago: "TARJETA",
+      estado_pago: "EXITOSO",
+      referencia_transaccion: "REC-002",
+      observaciones: "",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_pago: 3,
+      id_cliente: "1000000002",
+      id_membresia: 2,
+      fecha_pago: "2026-10-01",
+      valor: 80000,
+      metodo_pago: "NEQUI",
+      estado_pago: "EXITOSO",
+      referencia_transaccion: "REC-003",
+      observaciones: "",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_pago: 4,
+      id_cliente: "1000000001",
+      id_membresia: 1,
+      fecha_pago: "2026-10-01",
+      valor: 80000,
+      metodo_pago: "TRANSFERENCIA",
+      estado_pago: "EXITOSO",
+      referencia_transaccion: "REC-004",
+      observaciones: "Pago mensual",
+    },
+  ];
+
+  const filtrados = filtrarYOrdenarPagosCliente(pagos, "1000000001", "gym-centro");
+  assert.equal(filtrados.length, 3);
+  assert.deepEqual(
+    filtrados.map((p) => p.id_pago),
+    [4, 2, 1],
+  );
+  assert.equal(filtrados[0].metodo_pago, "TRANSFERENCIA");
+  assert.equal(filtrados[0].referencia_transaccion, "REC-004");
+});
+
+test("ETAPA 9: historial de membresías excluye la actual y ordena cronológicamente", () => {
+  const membresias = [
+    {
+      gimnasio_id: "gym-centro",
+      id_membresia: 1,
+      id_cliente: "1000000001",
+      id_plan: 1,
+      tipo_membresia: "Básico",
+      modalidad_pago: "MENSUAL",
+      valor: 50000,
+      fecha_inicio: "2026-07-01",
+      fecha_vencimiento: "2026-08-01",
+      estado: "VENCIDA",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_membresia: 2,
+      id_cliente: "1000000001",
+      id_plan: 2,
+      tipo_membresia: "Estándar",
+      modalidad_pago: "MENSUAL",
+      valor: 80000,
+      fecha_inicio: "2026-08-01",
+      fecha_vencimiento: "2026-09-01",
+      estado: "CANCELADA",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_membresia: 3,
+      id_cliente: "1000000001",
+      id_plan: 3,
+      tipo_membresia: "Premium",
+      modalidad_pago: "MENSUAL",
+      valor: 110000,
+      fecha_inicio: "2026-10-01",
+      fecha_vencimiento: "2026-11-01",
+      estado: "ACTIVA",
+    },
+    {
+      gimnasio_id: "gym-otro",
+      id_membresia: 4,
+      id_cliente: "1000000001",
+      id_plan: 1,
+      tipo_membresia: "Básico",
+      modalidad_pago: "MENSUAL",
+      valor: 50000,
+      fecha_inicio: "2026-09-01",
+      fecha_vencimiento: "2026-10-01",
+      estado: "VENCIDA",
+    },
+  ];
+
+  const anteriores = separarMembresiasCliente(membresias, "1000000001", "gym-centro", 3);
+  assert.equal(anteriores.length, 2);
+  assert.deepEqual(
+    anteriores.map((m) => m.id_membresia),
+    [2, 1],
+  );
+  assert.equal(anteriores[0].estado, "CANCELADA");
+  assert.equal(anteriores[1].estado, "VENCIDA");
 });

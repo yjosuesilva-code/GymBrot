@@ -2021,3 +2021,17 @@ body {
   .cli-dash-link-secundario { width: 100%; }
   .cli-dash-card-footer .cli-ent-boton { width: 100%; }
 }
+
+/* ── T4 · Etapa 9: Mi membresía ── */
+.cli-beneficios-contenedor { padding: 4px 0; }
+.cli-beneficios-lista { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
+.cli-beneficio-item { display: flex; align-items: center; padding: 12px 14px; border: 1px solid var(--border-btn); border-radius: var(--radius-sm); background: var(--bg-side); font-size: 14px; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.cli-beneficio-item span { min-width: 0; }
+.cli-beneficio-item i { flex-shrink: 0; color: var(--neon); }
+.cli-pagos-tabla th, .cli-pagos-tabla td, .cli-membresias-ant-tabla th, .cli-membresias-ant-tabla td { vertical-align: middle; }
+.cli-mi-membresia .card-sub, .cli-mi-membresia .empty-state,
+.cli-mi-membresia .loader, .cli-mi-membresia .paginador-info,
+.cli-mi-membresia .paginador-elipsis, .cli-mi-membresia .table-g th { color: var(--text-table); }
+.cli-mi-membresia .table-wrap:focus-visible { outline: 2px solid var(--neon); outline-offset: 2px; }
+.cli-mi-membresia .cli-ent-boton { text-decoration: none; }
+.cli-mi-membresia .cli-dash-chip { max-width: 100%; flex-wrap: wrap; }

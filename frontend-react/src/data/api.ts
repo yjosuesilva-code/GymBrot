@@ -1263,7 +1263,12 @@ const TENANT_DESDE_SESION = true;
 
 /* Lo que trae la sesion guardada, sin validar el resto de campos (eso lo hace
    auth.ts). Solo interesa a que gimnasios puede entrar. */
-function sesionGuardada(): { gimnasio_id?: unknown; accesos?: unknown } | null {
+function sesionGuardada(): {
+  gimnasio_id?: unknown;
+  accesos?: unknown;
+  tipo_usuario?: unknown;
+  numero_identificacion?: unknown;
+} | null {
   const raw = localStorage.getItem(CLAVE_SESION);
   if (!raw) return null;
   try {
@@ -1272,6 +1277,18 @@ function sesionGuardada(): { gimnasio_id?: unknown; accesos?: unknown } | null {
   } catch {
     return null;
   }
+}
+
+// El filtro por gimnasio no basta para las consultas financieras del cliente.
+// Se aplica también a list() para que no permita eludir byCliente(). Esta
+// autorización es del mock; un backend debe imponerla sobre la sesión real.
+function filtrarFinanzasDeSesion<T extends { id_cliente: string }>(filas: T[]): T[] {
+  const sesion = sesionGuardada();
+  if (!sesion) return [];
+  if (sesion.tipo_usuario === "ADMINISTRADOR" || sesion.tipo_usuario === "INSTRUCTOR") return filas;
+  if (sesion.tipo_usuario !== "CLIENTE") return [];
+  if (typeof sesion.numero_identificacion !== "string" || !sesion.numero_identificacion) return [];
+  return filas.filter((fila) => fila.id_cliente === sesion.numero_identificacion);
 }
 
 /* Simula la politica RLS "solo filas de gimnasios donde soy miembro"
@@ -2119,20 +2136,20 @@ export const api = {
   // Catalogo global por ahora: si los planes son de cada gimnasio sigue
   // pendiente en DECISIONES.md (catalogos globales vs por gimnasio).
   planes: {
-    async list(): Promise<PlanMembresia[]> {
+    async list(opciones: { incluirInactivos?: boolean } = {}): Promise<PlanMembresia[]> {
       await api._delay();
-      return db.read<PlanMembresia>("planes").filter((p) => p.estado === "ACTIVO");
+      return db.read<PlanMembresia>("planes").filter((p) => opciones.incluirInactivos || p.estado === "ACTIVO");
     },
   },
 
   membresias: {
     async list(): Promise<Membresia[]> {
       await api._delay();
-      return db.readTenant<Membresia>("membresias");
+      return filtrarFinanzasDeSesion(db.readTenant<Membresia>("membresias"));
     },
     async byCliente(id: string): Promise<Membresia[]> {
       await api._delay();
-      return db.readTenant<Membresia>("membresias").filter((m) => m.id_cliente === id);
+      return filtrarFinanzasDeSesion(db.readTenant<Membresia>("membresias")).filter((m) => m.id_cliente === id);
     },
 
     async create(data: MembresiaNueva): Promise<ApiResp<Membresia>> {
@@ -2175,11 +2192,11 @@ export const api = {
   pagos: {
     async  list(): Promise<Pago[]> {
       await api._delay();
-      return db.readTenant<Pago>("pagos");
+      return filtrarFinanzasDeSesion(db.readTenant<Pago>("pagos"));
     },
     async byCliente(id: string): Promise<Pago[]> {
       await api._delay();
-      return db.readTenant<Pago>("pagos").filter((p) => p.id_cliente === id);
+      return filtrarFinanzasDeSesion(db.readTenant<Pago>("pagos")).filter((p) => p.id_cliente === id);
     },
 
     /* Registra un cobro y activa la membresia. El orden importa y es el que

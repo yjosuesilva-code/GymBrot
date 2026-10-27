@@ -1,8 +1,17 @@
 import type { Cliente, Membresia } from "../types";
 
+export function estadoMembresiaPorFecha(
+  m: Membresia,
+  hoy: string,
+): Membresia["estado"] | "PROGRAMADA" {
+  if (m.estado !== "ACTIVA") return m.estado;
+  if (m.fecha_vencimiento < hoy) return "VENCIDA";
+  return m.fecha_inicio > hoy ? "PROGRAMADA" : "ACTIVA";
+}
+
 /* Regla unica de "esta membresia cuenta como vigente".
 
-   Una membresia solo es vigente si esta ACTIVA, no ha vencido y ademas su
+   Una membresia solo es vigente si esta ACTIVA, ya inicio, no ha vencido y su
    cliente sigue ACTIVO. El tercer termino es el que costó un bug: Finanzas
    contaba con estado y vencimiento pero ignoraba al cliente, de modo que
    suspender a alguien en Clientes bajaba "Clientes activos" del Dashboard y
@@ -17,5 +26,5 @@ export function membresiaVigente(
   hoy: string,
   cliente: Cliente | null | undefined,
 ): boolean {
-  return m.estado === "ACTIVA" && m.fecha_vencimiento >= hoy && cliente?.estado === "ACTIVO";
+  return estadoMembresiaPorFecha(m, hoy) === "ACTIVA" && cliente?.estado === "ACTIVO";
 }

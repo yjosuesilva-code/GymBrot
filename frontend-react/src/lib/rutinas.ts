@@ -1,12 +1,14 @@
 import type {
   Cliente,
   Ejercicio,
+  EjercicioRealizado,
   EstadoRutina,
   FilaSupervision,
   LetraSesion,
   ObjetivoRutina,
   Rutina,
   RutinaEjercicio,
+  SerieRealizada,
 } from "../types";
 import { utils } from "./utils";
 
@@ -179,4 +181,69 @@ export function alumnosDeInstructor(filas: FilaSupervision[], clientes: Cliente[
       b.motivos.length - a.motivos.length ||
       (a.cliente?.nombre ?? "").localeCompare(b.cliente?.nombre ?? "")
   );
+}
+
+/* ---------- Series realizadas (KAN-98) ---------- */
+
+export const MAX_REPS = 100;
+export const MAX_SEGUNDOS = 3600;
+export const MAX_PESO_KG = 500;
+
+type ResumenSeries = Pick<EjercicioRealizado, "series" | "reps" | "segundos" | "peso_kg">;
+
+// Resumen de un ejercicio a partir de sus series: cuántas se hicieron, la de mayor peso
+// (si empatan, la de más reps) y el máximo de segundos. Sin peso cuenta como 0 al comparar.
+export function resumirSeries(detalle: SerieRealizada[]): ResumenSeries {
+  if (detalle.length === 0) return { series: 0, reps: null, segundos: null, peso_kg: null };
+  const mejor = detalle.reduce((a, b) => {
+    const pesoA = a.peso_kg ?? 0;
+    const pesoB = b.peso_kg ?? 0;
+    if (pesoB !== pesoA) return pesoB > pesoA ? b : a;
+    return (b.reps ?? 0) > (a.reps ?? 0) ? b : a;
+  });
+  const segundos = detalle.map((s) => s.segundos).filter((s): s is number => s != null);
+  return {
+    series: detalle.length,
+    reps: mejor.reps ?? null,
+    segundos: segundos.length > 0 ? Math.max(...segundos) : null,
+    peso_kg: mejor.peso_kg ?? null,
+  };
+}
+
+// Revisa reps / segundos / peso según el tipo de medición. `donde` va al inicio del mensaje.
+function errorValores(v: Omit<SerieRealizada, "numero">, ejercicio: Ejercicio, donde: string, obligatorio: boolean): string | null {
+  const fuera = (x: number, max: number) => !Number.isFinite(x) || x < 0 || x > max;
+  if (ejercicio.tipo_medicion === "REPETICIONES") {
+    if (v.segundos != null) return donde + ": es por repeticiones, no lleva segundos";
+    if (v.reps == null) return obligatorio ? donde + ": faltan las repeticiones" : null;
+    if (!Number.isInteger(v.reps) || fuera(v.reps, MAX_REPS))
+      return donde + ": las repeticiones deben ser un entero entre 0 y " + MAX_REPS;
+  } else {
+    if (v.reps != null) return donde + ": es por tiempo, no lleva repeticiones";
+    if (v.segundos == null) return obligatorio ? donde + ": faltan los segundos" : null;
+    if (fuera(v.segundos, MAX_SEGUNDOS)) return donde + ": los segundos deben estar entre 0 y " + MAX_SEGUNDOS;
+  }
+  if (v.peso_kg != null && fuera(v.peso_kg, MAX_PESO_KG)) return donde + ": el peso debe estar entre 0 y " + MAX_PESO_KG + " kg";
+  return null;
+}
+
+// Valida el detalle de un ejercicio: al menos una serie, números 1..N sin repetir y valores
+// según el tipo de medición. Devuelve el mensaje de error o null si todo está bien.
+export function validarSeries(detalle: SerieRealizada[], ejercicio: Ejercicio): string | null {
+  if (detalle.length === 0) return ejercicio.nombre + ": el detalle no tiene series";
+  const numeros = detalle.map((s) => s.numero).sort((a, b) => a - b);
+  if (numeros.some((n, i) => n !== i + 1))
+    return ejercicio.nombre + ": las series deben numerarse de 1 a " + detalle.length + " sin repetir";
+  for (const s of detalle) {
+    const error = errorValores(s, ejercicio, ejercicio.nombre + ", serie " + s.numero, true);
+    if (error) return error;
+  }
+  return null;
+}
+
+// Valida un resumen que llega sin detalle (todos los campos son opcionales)
+export function validarResumen(e: ResumenSeries, ejercicio: Ejercicio): string | null {
+  if (e.series != null && (!Number.isInteger(e.series) || e.series < 0 || e.series > MAX_REPS))
+    return ejercicio.nombre + ": el número de series no es válido";
+  return errorValores(e, ejercicio, ejercicio.nombre, false);
 }

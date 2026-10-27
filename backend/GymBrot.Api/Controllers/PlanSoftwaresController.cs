@@ -1,99 +1,97 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using GymBrot.Api.Models;
 using GymBrot.Api.Data;
+using GymBrot.Api.DTOs;
 
-[Route("api/[controller]")]
-[ApiController]
-public class PlanSoftwaresController : ControllerBase
+namespace GymBrot.Api.Controllers
 {
-    private readonly GymBrotContext _context;
-    public PlanSoftwaresController(GymBrotContext context)
+    [Route("api/[controller]")]
+    [ApiController]
+    public class PlanSoftwaresController : ControllerBase
     {
-        _context = context;
-    }
-
-    // GET: api/PlanSoftware
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<PlanSoftware>>> GetPlanSoftware()
-    {
-        return await _context.PlanesSoftware.ToListAsync();
-    }
-
-    // GET: api/PlanSoftware/5
-    [HttpGet("{id}")]
-    public async Task<ActionResult<PlanSoftware>> GetPlanSoftware(int id)
-    {
-        var plansoftware = await _context.PlanesSoftware.FindAsync(id);
-
-        if (plansoftware == null)
+        private readonly GymBrotContext _context;
+        public PlanSoftwaresController(GymBrotContext context)
         {
-            return NotFound();
+            _context = context;
         }
 
-        return plansoftware;
-    }
-
-    // PUT: api/PlanSoftware/5
-    // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-    [HttpPut("{id}")]
-    public async Task<IActionResult> PutPlanSoftware(int? id, PlanSoftware plansoftware)
-    {
-        if (id != plansoftware.Id)
+        // GET: api/PlanSoftwares
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<PlanSoftwareDto>>> GetPlanesSoftware()
         {
-            return BadRequest();
+            var planes = await _context.PlanesSoftware.OrderBy(p => p.PrecioMensual).ToListAsync();
+            return planes.Select(PlanSoftwareDto.DesdeModelo).ToList();
         }
 
-        _context.Entry(plansoftware).State = EntityState.Modified;
-
-        try
+        // GET: api/PlanSoftwares/5
+        [HttpGet("{id}")]
+        public async Task<ActionResult<PlanSoftwareDto>> GetPlanSoftware(int id)
         {
-            await _context.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!PlanSoftwareExists(id))
+            var plan = await _context.PlanesSoftware.FindAsync(id);
+            if (plan == null)
             {
                 return NotFound();
             }
-            else
-            {
-                throw;
-            }
+            return PlanSoftwareDto.DesdeModelo(plan);
         }
 
-        return NoContent();
-    }
-
-    // POST: api/PlanSoftware
-    // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-    [HttpPost]
-    public async Task<ActionResult<PlanSoftware>> PostPlanSoftware(PlanSoftware plansoftware)
-    {
-        _context.PlanesSoftware.Add(plansoftware);
-        await _context.SaveChangesAsync();
-
-        return CreatedAtAction("GetPlanSoftware", new { id = plansoftware.Id }, plansoftware);
-    }
-
-    // DELETE: api/PlanSoftware/5
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeletePlanSoftware(int? id)
-    {
-        var plansoftware = await _context.PlanesSoftware.FindAsync(id);
-        if (plansoftware == null)
+        // POST: api/PlanSoftwares
+        [HttpPost]
+        public async Task<ActionResult<PlanSoftwareDto>> PostPlanSoftware(PlanSoftwareGuardarDto dto)
         {
-            return NotFound();
+            var codigo = dto.Codigo.Trim().ToUpperInvariant();
+            if (await _context.PlanesSoftware.AnyAsync(p => p.Codigo == codigo))
+            {
+                return Conflict(new { mensaje = "Ya existe un plan con ese código." });
+            }
+
+            var plan = dto.CrearModelo();
+            _context.PlanesSoftware.Add(plan);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetPlanSoftware), new { id = plan.Id }, PlanSoftwareDto.DesdeModelo(plan));
         }
 
-        _context.PlanesSoftware.Remove(plansoftware);
-        await _context.SaveChangesAsync();
+        // PUT: api/PlanSoftwares/5
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutPlanSoftware(int id, PlanSoftwareGuardarDto dto)
+        {
+            var plan = await _context.PlanesSoftware.FindAsync(id);
+            if (plan == null)
+            {
+                return NotFound();
+            }
+            var codigo = dto.Codigo.Trim().ToUpperInvariant();
+            if (await _context.PlanesSoftware.AnyAsync(p => p.Id != id && p.Codigo == codigo))
+            {
+                return Conflict(new { mensaje = "Ya existe un plan con ese código." });
+            }
 
-        return NoContent();
-    }
+            dto.AplicarA(plan);
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
 
-    private bool PlanSoftwareExists(int? id)
-    {
-        return _context.PlanesSoftware.Any(e => e.Id == id);
+        // DELETE: api/PlanSoftwares/5
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeletePlanSoftware(int id)
+        {
+            var plan = await _context.PlanesSoftware.FindAsync(id);
+            if (plan == null)
+            {
+                return NotFound();
+            }
+
+            _context.PlanesSoftware.Remove(plan);
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                return Conflict(new { mensaje = "No se puede borrar: hay gimnasios con este plan." });
+            }
+            return NoContent();
+        }
     }
 }

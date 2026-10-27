@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using GymBrot.Api.Models;
 using GymBrot.Api.Data;
+using GymBrot.Api.DTOs;
 
 namespace GymBrot.Api.Controllers
 {
@@ -15,70 +15,66 @@ namespace GymBrot.Api.Controllers
             _context = context;
         }
 
-        // GET: api/Gimnasio
+        // GET: api/Gimnasios
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Gimnasio>>> GetGimnasio()
+        public async Task<ActionResult<IEnumerable<GimnasioDto>>> GetGimnasios()
         {
-            return await _context.Gimnasios.ToListAsync();
+            var gimnasios = await _context.Gimnasios.OrderBy(g => g.Nombre).ToListAsync();
+            return gimnasios.Select(GimnasioDto.DesdeModelo).ToList();
         }
 
-        // GET: api/Gimnasio/5
+        // GET: api/Gimnasios/5
         [HttpGet("{id}")]
-        public async Task<ActionResult<Gimnasio>> GetGimnasio(int id)
+        public async Task<ActionResult<GimnasioDto>> GetGimnasio(int id)
         {
             var gimnasio = await _context.Gimnasios.FindAsync(id);
-
             if (gimnasio == null)
             {
                 return NotFound();
             }
-
-            return gimnasio;
+            return GimnasioDto.DesdeModelo(gimnasio);
         }
 
-        // PUT: api/Gimnasio/5
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutGimnasio(int id, Gimnasio gimnasio)
-        {
-            if (id != gimnasio.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(gimnasio).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!GimnasioExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return NoContent();
-        }
-
-        // POST: api/Gimnasio
-        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        // POST: api/Gimnasios
         [HttpPost]
-        public async Task<ActionResult<Gimnasio>> PostGimnasio(Gimnasio gimnasio)
+        public async Task<ActionResult<GimnasioDto>> PostGimnasio(GimnasioCrearDto dto)
         {
+            if (!await _context.PlanesSoftware.AnyAsync(p => p.Id == dto.PlanSoftwareId))
+            {
+                return BadRequest(new { mensaje = "El plan de software no existe." });
+            }
+            if (await _context.Gimnasios.AnyAsync(g => g.Slug == dto.Slug.Trim()))
+            {
+                return Conflict(new { mensaje = "Ese enlace ya lo usa otro gimnasio." });
+            }
+
+            var gimnasio = dto.CrearModelo();
             _context.Gimnasios.Add(gimnasio);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction("GetGimnasio", new { id = gimnasio.Id }, gimnasio);
+            return CreatedAtAction(nameof(GetGimnasio), new { id = gimnasio.Id }, GimnasioDto.DesdeModelo(gimnasio));
         }
 
-        // DELETE: api/Gimnasio/5
+        // PUT: api/Gimnasios/5 (el slug no se cambia)
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutGimnasio(int id, GimnasioActualizarDto dto)
+        {
+            var gimnasio = await _context.Gimnasios.FindAsync(id);
+            if (gimnasio == null)
+            {
+                return NotFound();
+            }
+            if (!await _context.PlanesSoftware.AnyAsync(p => p.Id == dto.PlanSoftwareId))
+            {
+                return BadRequest(new { mensaje = "El plan de software no existe." });
+            }
+
+            dto.AplicarA(gimnasio);
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // DELETE: api/Gimnasios/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteGimnasio(int id)
         {
@@ -89,15 +85,16 @@ namespace GymBrot.Api.Controllers
             }
 
             _context.Gimnasios.Remove(gimnasio);
-            await _context.SaveChangesAsync();
-
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Restrict: un gimnasio con clientes, instructores, usuarios o ejercicios no se borra.
+                return Conflict(new { mensaje = "No se puede borrar: el gimnasio tiene clientes, instructores, usuarios o ejercicios." });
+            }
             return NoContent();
         }
-
-        private bool GimnasioExists(int id)
-        {
-            return _context.Gimnasios.Any(e => e.Id == id);
-        }
     }
-
 }

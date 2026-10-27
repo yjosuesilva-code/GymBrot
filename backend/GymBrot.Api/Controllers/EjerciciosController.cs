@@ -18,9 +18,14 @@ namespace GymBrot.Api.Controllers
 
         // GET: api/Ejercicios
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Ejercicio>>> GetEjercicios()
+        public async Task<ActionResult<IEnumerable<Ejercicio>>> GetEjercicios([FromQuery] int? gimnasioId)
         {
-            return await _context.Ejercicios.ToListAsync();
+            var consulta = _context.Ejercicios.AsQueryable();
+            if (gimnasioId.HasValue)
+            {
+                 consulta = consulta.Where(e => e.GimnasioId == null || e.GimnasioId == gimnasioId.Value);
+            }
+            return await consulta.OrderBy(e => e.Nombre).ToListAsync();
         }
 
         // GET: api/Ejercicio/5

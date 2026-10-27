@@ -52,6 +52,8 @@ export function Clientes() {
   const [membresias, setMembresias] = useState<Membresia[]>([]);
   const [ingresos, setIngresos] = useState<Ingreso[]>([]);
   const [cargando, setCargando] = useState(true);
+  // [web-api] Si la Web API no responde, se dice en pantalla en vez de quedar cargando.
+  const [errorCarga, setErrorCarga] = useState("");
   const [filtro, setFiltro] = useState("");
 
   // Paginación: 10 por página (100 socios en el seed); al buscar se vuelve a la 1
@@ -84,26 +86,34 @@ export function Clientes() {
       api.usuarios.list(),
       api.membresias.list(),
       api.ingresos.delDia(hoy),
-    ]).then(([cs, us, ms, is]) => {
+    ])
+      .then(([cs, us, ms, is]) => {
+        setClientes(cs);
+        setUsuarios(us);
+        setMembresias(ms);
+        setIngresos(is);
+        setErrorCarga("");
+      })
+      .catch((e: unknown) => setErrorCarga(e instanceof Error ? e.message : "No se pudieron cargar los clientes."))
+      .finally(() => setCargando(false));
+  }, [version, hoy]);
+
+  async function recargar() {
+    try {
+      const [cs, us, ms, is] = await Promise.all([
+        api.clientes.list(),
+        api.usuarios.list(),
+        api.membresias.list(),
+        api.ingresos.delDia(hoy),
+      ]);
       setClientes(cs);
       setUsuarios(us);
       setMembresias(ms);
       setIngresos(is);
-      setCargando(false);
-    });
-  }, [version, hoy]);
-
-  async function recargar() {
-    const [cs, us, ms, is] = await Promise.all([
-      api.clientes.list(),
-      api.usuarios.list(),
-      api.membresias.list(),
-      api.ingresos.delDia(hoy),
-    ]);
-    setClientes(cs);
-    setUsuarios(us);
-    setMembresias(ms);
-    setIngresos(is);
+      setErrorCarga("");
+    } catch (e) {
+      setErrorCarga(e instanceof Error ? e.message : "No se pudieron cargar los clientes.");
+    }
   }
 
   const filtrados = clientes.filter((c) => {
@@ -288,6 +298,12 @@ export function Clientes() {
           </button>
         </div>
       </div>
+
+      {errorCarga && (
+        <div className="alert-g alert-error show" role="alert" style={{ marginBottom: 16 }}>
+          {errorCarga}
+        </div>
+      )}
 
       <div className="table-wrap">
         <table className="table-g tabla-stack">

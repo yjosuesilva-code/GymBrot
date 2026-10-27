@@ -16,7 +16,6 @@ import { VistaPreviaRecurso } from "../ejercicios/VistaPreviaRecurso";
 import {
   construirEvolucionEjercicio,
   extraerEjerciciosConHistorial,
-  formatoSerieRealizada,
 } from "./historialEntrenamiento";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
@@ -56,7 +55,7 @@ export function EvolucionEjercicio({
         <i className="bi bi-graph-up-arrow" aria-hidden="true" />
         <div>
           <p className="mb-1">
-            <strong>Aún no hay ejercicios detallados para mostrar evolución de cargas.</strong>
+            <strong>Aún no hay datos por ejercicio para comparar.</strong>
           </p>
           <p className="cli-ent-secundario mb-0">
             {registros.length === 0
@@ -117,7 +116,7 @@ export function EvolucionEjercicio({
     animation: reducirMovimiento ? false : undefined,
     plugins: {
       legend: {
-        labels: { color: "#e8eaed" },
+        display: false,
       },
       tooltip: {
         callbacks: {
@@ -133,13 +132,13 @@ export function EvolucionEjercicio({
     },
     scales: {
       x: {
-        ticks: { color: "#8a8f98", maxRotation: 0, autoSkip: true },
+        ticks: { color: "#d5d9de", maxRotation: 0, autoSkip: true },
         grid: { color: "rgba(255, 255, 255, 0.06)" },
       },
       y: {
         beginAtZero: false,
         ticks: {
-          color: "#8a8f98",
+          color: "#d5d9de",
           callback(value) {
             return `${value} ${evolucion.unidad}`;
           },
@@ -165,7 +164,7 @@ export function EvolucionEjercicio({
             {opciones.map((op) => (
               <option key={op.info.id_ejercicio} value={op.info.id_ejercicio}>
                 {op.info.nombre} · {op.apariciones}{" "}
-                {op.apariciones === 1 ? "sesión" : "sesiones"} (Sesión{" "}
+                {op.apariciones === 1 ? "entrenamiento" : "entrenamientos"} (Sesión{" "}
                 {op.sesiones.join("/")})
               </option>
             ))}
@@ -202,7 +201,7 @@ export function EvolucionEjercicio({
         </div>
       </div>
 
-      {primero && ultimo && maximo && (
+      {evolucion.suficientesParaComparar && primero && ultimo && maximo && (
         <dl className="cli-evolucion-hitos" aria-label={`Resumen histórico de ${info.nombre}`}>
           <div className="cli-evolucion-hito">
             <dt>Primer valor registrado</dt>
@@ -250,7 +249,7 @@ export function EvolucionEjercicio({
           <div className="cli-evolucion-grafico-cab">
             <h4 className="cli-ej-seccion mb-0">{evolucion.tituloMetrica}</h4>
             <span className="cli-ent-secundario">
-              {puntosGraficables.length} sesiones con datos · Los valores exactos también están en la lista inferior
+              {puntosGraficables.length} entrenamientos con datos. Puedes consultar los valores exactos en «Ver registros».
             </span>
           </div>
           <p className="cli-ent-secundario mb-0">
@@ -270,64 +269,65 @@ export function EvolucionEjercicio({
             </p>
           )}
         </div>
+      ) : puntosGraficables.length === 1 && primero ? (
+        <div className="cli-evolucion-unico-card" role="status">
+          <div className="cli-evolucion-unico-dato">
+            <span className="cli-evolucion-unico-etiqueta">Único registro en este plan</span>
+            <div className="cli-evolucion-unico-cifra">
+              <strong>{primero.etiquetaValor}</strong>
+              {primero.contextoSecundario && (
+                <span className="cli-evolucion-hito-sub">{primero.contextoSecundario}</span>
+              )}
+            </div>
+            <small className="cli-ent-secundario">
+              {utils.fecha(primero.fecha)} · Sesión {primero.sesion}
+            </small>
+          </div>
+          <p className="cli-ent-secundario mb-0">
+            <i className="bi bi-info-circle me-2" aria-hidden="true" />
+            Se necesitan al menos dos entrenamientos con datos de este ejercicio para mostrar una comparación gráfica.
+          </p>
+        </div>
       ) : (
         <p className="cli-evolucion-aviso-unico" role="status">
           <i className="bi bi-info-circle me-2" aria-hidden="true" />
-          {puntosGraficables.length === 1
-            ? "Registraste este ejercicio en 1 sesión. Cuando lo registres en al menos 2 sesiones podrás comparar su tendencia gráfica."
-            : "No hay valores numéricos suficientes para trazar una curva en este ejercicio."}
+          No hay valores numéricos suficientes para trazar una curva en este ejercicio.
         </p>
       )}
 
-      <div className="cli-evolucion-registros">
-        <h4 className="cli-ej-seccion mb-2">
-          Registros históricos de {info.nombre} ({puntosDesc.length})
-        </h4>
-        <ol
-          className="cli-evolucion-lista"
-          aria-label={`Historial cronológico de ${info.nombre}, del más reciente al más antiguo`}
-        >
-          {puntosDesc.map((punto) => (
-            <li key={punto.id_registro} className="cli-evolucion-item">
-              <div className="cli-evolucion-item-cab">
-                <div className="cli-evolucion-item-fecha">
-                  <span className="inst-letra inst-letra-sm">Sesión {punto.sesion}</span>
-                  <strong>{utils.fecha(punto.fecha)}</strong>
+      {(puntosDesc.length > 1 || puntosGraficables.length === 0) && (
+        <details className="cli-evolucion-registros" key={idActivo}>
+          <summary className="cli-evolucion-ver-registros">
+            Ver valores por fecha de {info.nombre} ({puntosDesc.length})
+          </summary>
+          <ol
+            className="cli-evolucion-lista"
+            aria-label={`Historial cronológico de ${info.nombre}, del más reciente al más antiguo`}
+          >
+            {puntosDesc.map((punto) => (
+              <li key={punto.id_registro} className="cli-evolucion-item">
+                <div className="cli-evolucion-item-cab">
+                  <div className="cli-evolucion-item-fecha">
+                    <span className="cli-evolucion-sesion">Sesión {punto.sesion}</span>
+                    <strong>{utils.fecha(punto.fecha)}</strong>
+                  </div>
+                  <div className="cli-evolucion-item-metrica">
+                    <strong className="cli-evolucion-valor-principal">
+                      {punto.etiquetaValor}
+                    </strong>
+                    {punto.contextoSecundario && (
+                      <span className="cli-evolucion-contexto">
+                        {" · "}
+                        {punto.contextoSecundario}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="cli-evolucion-item-metrica">
-                  <strong className="cli-evolucion-valor-principal">
-                    {punto.etiquetaValor}
-                  </strong>
-                  {punto.contextoSecundario && (
-                    <span className="cli-evolucion-contexto">
-                      {" · "}
-                      {punto.contextoSecundario}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {punto.tieneDetalle ? (
-                <ul
-                  className="cli-evolucion-series-chips"
-                  aria-label={`Series del ${utils.fecha(punto.fecha)}`}
-                >
-                  {punto.detalle_series.map((s) => (
-                    <li key={s.numero} className="cli-evolucion-serie-chip">
-                      <span>S{s.numero}:</span>{" "}
-                      <strong>{formatoSerieRealizada(s, info.ejercicio)}</strong>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="cli-ent-secundario mb-0">
-                  Registro resumido: {punto.resumenTexto}
-                </p>
-              )}
-            </li>
-          ))}
-        </ol>
-      </div>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
     </div>
   );
 }

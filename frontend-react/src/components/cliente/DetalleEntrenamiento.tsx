@@ -30,7 +30,7 @@ export function DetalleEntrenamiento({ registro, catalogo, onVerEvolucion }: Pro
           <i className="bi bi-info-circle" aria-hidden="true" />
           <div>
             <p className="mb-1">
-              <strong>Sesión registrada sin desglose de ejercicios.</strong>
+              <strong>Entrenamiento registrado sin desglose de ejercicios.</strong>
             </p>
             <p className="cli-ent-secundario mb-0">
               Este registro acredita la sesión {registro.sesion} del {utils.fecha(registro.fecha)}, pero no incluye series individuales. Los entrenamientos que finalices desde Mi rutina guardarán cada ejercicio y serie realizada.
@@ -110,8 +110,7 @@ export function DetalleEntrenamiento({ registro, catalogo, onVerEvolucion }: Pro
                 ) : (
                   <p className="cli-hist-resumen-legado">
                     <i className="bi bi-clock-history me-2" aria-hidden="true" />
-                    Registro resumido (sin desglose serie por serie):{" "}
-                    <strong>{textoResumen}</strong>
+                    Registro guardado como resumen general, sin desglose serie por serie.
                   </p>
                 )}
               </li>

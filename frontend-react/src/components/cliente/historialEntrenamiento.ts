@@ -373,21 +373,21 @@ export function construirEvolucionEjercicio(
     unidad = "s";
     tituloMetrica = "Duración por serie (segundos)";
     explicacionMetrica = tieneAlgunPeso
-      ? "Se muestra el máximo de segundos por sesión. Su carga solo se asocia cuando existe el detalle de esa serie."
-      : "Ejercicio medido por tiempo (sin carga externa registrada). Se muestra el máximo de segundos por sesión.";
+      ? "Se muestra la serie de mayor duración de cada entrenamiento. El peso se indica cuando está guardado en esa misma serie."
+      : "Se muestra la serie de mayor duración de cada entrenamiento, sin carga externa registrada.";
   } else if (tieneAlgunPeso) {
     metrica = "PESO";
     unidad = "kg";
-    tituloMetrica = "Carga resumen registrada (kg)";
+    tituloMetrica = "Peso registrado (kg)";
     explicacionMetrica =
-      "Se utiliza el peso resumen oficial del ejercicio (serie de mayor carga) acompañado de sus repeticiones.";
+      "Se muestra el peso guardado en el resumen de cada entrenamiento: la serie de mayor carga y sus repeticiones.";
   } else if (tieneAlgunaRep) {
     metrica = "REPETICIONES";
     unidad = "reps";
     tituloMetrica = "Repeticiones registradas";
     explicacionMetrica =
       info.equipo === "Peso corporal"
-        ? "Ejercicio de peso corporal (sin carga externa). Se muestra la evolución de repeticiones por sesión."
+        ? "Ejercicio de peso corporal, sin carga externa. Se comparan las repeticiones guardadas en el resumen de cada entrenamiento."
         : "No se registró carga en kg para este ejercicio. Se muestra la evolución de repeticiones.";
   } else if (tieneAlgunSegundo) {
     metrica = "SEGUNDOS";

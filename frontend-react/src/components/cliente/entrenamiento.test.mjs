@@ -45,6 +45,15 @@ const {
   resolverEjercicioHistorial,
   resumenOficialEjercicioRealizado,
 } = await import("./historialEntrenamiento.ts");
+const {
+  formatearListaGrupos,
+  limpiarDescripcionRutina,
+  obtenerSaludoCliente,
+  resumirUltimaActividad,
+  seleccionarMembresiaResumen,
+  seleccionarProximaCitaCliente,
+  textoObjetivoPlan,
+} = await import("./dashboardCliente.ts");
 const { MAX_REPS, MAX_SEGUNDOS, MAX_PESO_KG, resumirSeries, validarSeries } = await import("../../lib/rutinas.ts");
 
 function ejercicio(tipo = "REPETICIONES", equipo = "Mancuernas", peso = 7.5) {
@@ -988,4 +997,253 @@ test("AUDITORÍA: un ejercicio propio editado conserva su descripción actual en
   const texto = obtenerPasosTecnicos(propio).map((p) => p.instruccion).join(" ");
   assert.ok(texto.includes(descripcion));
   assert.doesNotMatch(texto, /barra|trapecios/);
+});
+
+test("ETAPA 8: saludo personalizado y mensaje alternativo cuando falta el nombre", () => {
+  assert.deepEqual(obtenerSaludoCliente("Valentina"), {
+    saludo: "Hola, Valentina",
+    tieneNombre: true,
+  });
+  assert.deepEqual(obtenerSaludoCliente("   "), {
+    saludo: "Te damos la bienvenida a tu espacio de entrenamiento",
+    tieneNombre: false,
+  });
+  assert.deepEqual(obtenerSaludoCliente(null), {
+    saludo: "Te damos la bienvenida a tu espacio de entrenamiento",
+    tieneNombre: false,
+  });
+  assert.equal(textoObjetivoPlan("Ganancia muscular"), "aumentar masa muscular");
+  assert.equal(formatearListaGrupos(["Pecho", "Tríceps", "Hombro"]), "pecho, tríceps y hombro");
+  assert.equal(
+    limpiarDescripcionRutina({
+      id_rutina: 1,
+      gimnasio_id: "gym-centro",
+      nombre: "Ganancia muscular A/B/C",
+      objetivo: "Ganancia muscular",
+      descripcion: "Plan de ganancia muscular · énfasis tren superior",
+      id_cliente: "1000000001",
+      id_instructor: "1020304050",
+      duracion_semanas: 8,
+      fecha_creacion: "2026-10-01",
+      fecha_fin: "2026-11-26",
+      division: ["A", "B", "C"],
+    }),
+    "Énfasis tren superior",
+  );
+});
+
+test("ETAPA 8: membresía filtra por cliente/gimnasio y clasifica vigencia real", () => {
+  const clienteActivo = {
+    gimnasio_id: "gym-centro",
+    numero_identificacion: "1000000001",
+    estado: "ACTIVO",
+  };
+  const membresias = [
+    {
+      gimnasio_id: "gym-otro",
+      id_membresia: 99,
+      id_cliente: "1000000001",
+      id_plan: 3,
+      tipo_membresia: "Plan Anual",
+      modalidad_pago: "ANUAL",
+      fecha_inicio: "2026-01-01",
+      fecha_vencimiento: "2027-01-01",
+      valor: 800000,
+      estado: "ACTIVA",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_membresia: 1,
+      id_cliente: "1000000001",
+      id_plan: 1,
+      tipo_membresia: "Plan Mensual",
+      modalidad_pago: "MENSUAL",
+      fecha_inicio: "2026-09-01",
+      fecha_vencimiento: "2026-10-01",
+      valor: 95000,
+      estado: "VENCIDA",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_membresia: 2,
+      id_cliente: "1000000001",
+      id_plan: 1,
+      tipo_membresia: "Plan Mensual",
+      modalidad_pago: "MENSUAL",
+      fecha_inicio: "2026-10-01",
+      fecha_vencimiento: "2026-11-01",
+      valor: 95000,
+      estado: "ACTIVA",
+    },
+  ];
+
+  const vigente = seleccionarMembresiaResumen({
+    membresias,
+    cliente: clienteActivo,
+    idCliente: "1000000001",
+    gimnasioId: "gym-centro",
+    hoy: "2026-10-15",
+  });
+  assert.ok(vigente);
+  assert.equal(vigente.membresia.id_membresia, 2);
+  assert.equal(vigente.estadoEfectivo, "VIGENTE");
+  assert.equal(vigente.etiquetaEstado, "Activa");
+  assert.equal(vigente.diasRestantes, 17);
+  assert.match(vigente.modalidadTexto, /Plan Mensual/);
+
+  const porVencer = seleccionarMembresiaResumen({
+    membresias,
+    cliente: clienteActivo,
+    idCliente: "1000000001",
+    gimnasioId: "gym-centro",
+    hoy: "2026-10-28",
+  });
+  assert.ok(porVencer);
+  assert.equal(porVencer.estadoEfectivo, "POR_VENCER");
+  assert.equal(porVencer.textoVigencia, "Vence en 4 días");
+
+  const sinMembresia = seleccionarMembresiaResumen({
+    membresias,
+    cliente: clienteActivo,
+    idCliente: "1000009999",
+    gimnasioId: "gym-centro",
+    hoy: "2026-10-15",
+  });
+  assert.equal(sinMembresia, null);
+});
+
+test("ETAPA 8: próxima cita ignora citas pasadas, canceladas, completadas o de otro gimnasio", () => {
+  const instructores = [
+    {
+      gimnasio_id: "gym-centro",
+      numero_identificacion: "1020304050",
+      nombre: "Carlos",
+      apellidos: "Méndez",
+      especialidad: "Musculación",
+    },
+  ];
+  const citas = [
+    {
+      gimnasio_id: "gym-centro",
+      id_cita: 1,
+      id_cliente: "1000000001",
+      id_instructor: "1020304050",
+      tipo_cita: "EVALUACION",
+      fecha: "2026-10-06",
+      hora: "09:00",
+      estado: "CONFIRMADA",
+      notas: "Cita en el pasado",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_cita: 2,
+      id_cliente: "1000000001",
+      id_instructor: "1020304050",
+      tipo_cita: "NUTRICION",
+      fecha: "2026-10-30",
+      hora: "10:00",
+      estado: "CANCELADA",
+      notas: "Cancelada",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_cita: 3,
+      id_cliente: "1000000001",
+      id_instructor: "1020304050",
+      tipo_cita: "SEGUIMIENTO",
+      fecha: "2026-10-28",
+      hora: "15:30",
+      estado: "PENDIENTE",
+      notas: "",
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_cita: 4,
+      id_cliente: "1000000001",
+      id_instructor: "1020304050",
+      tipo_cita: "NUTRICION",
+      fecha: "2026-10-27",
+      hora: "08:00",
+      estado: "CONFIRMADA",
+      notas: "",
+    },
+  ];
+
+  const proxima = seleccionarProximaCitaCliente({
+    citas,
+    instructores,
+    idCliente: "1000000001",
+    gimnasioId: "gym-centro",
+    hoy: "2026-10-26",
+    horaActualTexto: "14:00",
+  });
+  assert.ok(proxima);
+  assert.equal(proxima.cita.id_cita, 4);
+  assert.equal(proxima.tipoTexto, "Nutrición");
+  assert.equal(proxima.nombreInstructor, "Carlos Méndez");
+  assert.equal(proxima.estadoTexto, "Confirmada");
+
+  const ningunaFutura = seleccionarProximaCitaCliente({
+    citas,
+    instructores,
+    idCliente: "1000000001",
+    gimnasioId: "gym-centro",
+    hoy: "2026-11-01",
+    horaActualTexto: "10:00",
+  });
+  assert.equal(ningunaFutura, null);
+});
+
+test("ETAPA 8: última actividad resume el último entrenamiento válido del plan actual", () => {
+  const { catalogo } = fixtureBorrador();
+  const ambito = { gimnasioId: "gym-centro", idCliente: "1000000001", idRutina: 5 };
+  const registros = [
+    {
+      gimnasio_id: "gym-centro",
+      id_registro: 10,
+      id_rutina: 5,
+      id_cliente: "1000000001",
+      sesion: "A",
+      fecha: "2026-10-10",
+      registrado_por: "1000000001",
+      notas: "Primera sesión",
+      ejercicios_realizados: [{ id_ejercicio: 1, series: 3 }],
+    },
+    {
+      gimnasio_id: "gym-centro",
+      id_registro: 12,
+      id_rutina: 5,
+      id_cliente: "1000000001",
+      sesion: "B",
+      fecha: "2026-10-18",
+      registrado_por: "1000000001",
+      notas: "Excelente energía",
+      ejercicios_realizados: [
+        {
+          id_ejercicio: 1,
+          detalle_series: [
+            { numero: 1, reps: 10, segundos: null, peso_kg: 17.5 },
+            { numero: 2, reps: 10, segundos: null, peso_kg: 17.5 },
+          ],
+        },
+        {
+          id_ejercicio: 2,
+          detalle_series: [{ numero: 1, reps: null, segundos: 45, peso_kg: null }],
+        },
+      ],
+    },
+  ];
+
+  const resumen = resumirUltimaActividad({
+    registros,
+    ambito,
+    catalogo,
+    hoy: "2026-10-18",
+  });
+  assert.ok(resumen);
+  assert.equal(resumen.registro.id_registro, 12);
+  assert.equal(resumen.esHoy, true);
+  assert.equal(resumen.cantidadEjercicios, 2);
+  assert.equal(resumen.totalSeries, 3);
+  assert.match(resumen.resumenEjerciciosTexto, /Press banca, Plancha abdominal/);
 });

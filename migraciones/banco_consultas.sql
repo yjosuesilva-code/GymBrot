@@ -9,6 +9,7 @@
 --   C) GROUP BY + HAVING ............ Q8, Q10
 --   D) Subconsulta / CTE ............ Q9 (CTE), Q10 (subconsulta)
 --   E) Vista creada y consultada .... ver consultas/vistas.sql
+--   F) Multi-gimnasio (tabla GIMNASIOS) Q14, Q15, Q16, Q17
 -- Nota: nombre y apellidos viven en USUARIOS; CLIENTES e INSTRUCTORES se unen
 -- a USUARIOS por numero_identificacion. MEMBRESIAS no guarda el cliente: se
 -- llega a él por HISTORIAL_MEMBRESIAS (id_cliente, id_membresia).
@@ -311,3 +312,93 @@ WHERE p.estado_pago = 'EXITOSO'
   AND p.fecha_pago >= date_trunc('month', CURRENT_DATE) - INTERVAL '11 months'
 GROUP BY date_trunc('month', p.fecha_pago)
 ORDER BY date_trunc('month', p.fecha_pago);
+
+
+-- ---------------------------------------------------------------------------
+-- Q14. [F] Ingresos por gimnasio
+-- PREGUNTA DE NEGOCIO: ¿Cuánto ha recaudado cada gimnasio en pagos exitosos,
+-- en total y en los últimos 30 días?
+-- El gimnasio del pago sale del plan de la membresía pagada.
+-- Tablas: pagos, membresias, planes_membresias, gimnasios
+-- ---------------------------------------------------------------------------
+SELECT g.nombre                                                         AS gimnasio,
+       g.plan_software,
+       COUNT(*)                                                         AS pagos_exitosos,
+       SUM(p.valor)                                                     AS ingresos_totales,
+       COALESCE(SUM(p.valor) FILTER (WHERE p.fecha_pago >= CURRENT_DATE - 30), 0) AS ingresos_30_dias
+FROM pagos p
+JOIN membresias m         ON m.id_membresia = p.id_membresia
+JOIN planes_membresias pl ON pl.id_plan = m.id_plan
+JOIN gimnasios g          ON g.id_gimnasio = pl.id_gimnasio
+WHERE p.estado_pago = 'EXITOSO'
+GROUP BY g.id_gimnasio, g.nombre, g.plan_software
+ORDER BY ingresos_totales DESC;
+
+
+-- ---------------------------------------------------------------------------
+-- Q15. [F] Clientes activos y con membresía vigente por gimnasio
+-- PREGUNTA DE NEGOCIO: ¿Cuántos clientes tiene cada gimnasio, cuántos tienen la
+-- cuenta ACTIVA y cuántos tienen hoy una membresía vigente?
+-- LEFT JOIN desde gimnasios: un gimnasio sin clientes también aparece (con 0).
+-- Criterio de vigencia: el mismo de Q1 (historial activo + membresía ACTIVA no vencida).
+-- Tablas: gimnasios, usuarios, historial_membresias, membresias
+-- ---------------------------------------------------------------------------
+SELECT g.nombre                                               AS gimnasio,
+       g.ciudad,
+       COUNT(u.numero_identificacion)                         AS clientes,
+       COUNT(u.numero_identificacion) FILTER (WHERE u.estado = 'ACTIVO') AS clientes_activos,
+       COUNT(u.numero_identificacion) FILTER (WHERE EXISTS (
+           SELECT 1
+           FROM historial_membresias h
+           JOIN membresias m ON m.id_membresia = h.id_membresia
+           WHERE h.id_cliente = u.numero_identificacion
+             AND h.activa
+             AND m.estado = 'ACTIVA'
+             AND m.fecha_vencimiento >= CURRENT_DATE))        AS con_membresia_vigente
+FROM gimnasios g
+LEFT JOIN usuarios u ON u.id_gimnasio = g.id_gimnasio
+                    AND u.tipo_usuario = 'CLIENTE'
+GROUP BY g.id_gimnasio, g.nombre, g.ciudad
+ORDER BY clientes DESC;
+
+
+-- ---------------------------------------------------------------------------
+-- Q16. [F] Gimnasios con la suscripción de software vencida o por vencer
+-- PREGUNTA DE NEGOCIO: ¿Qué gimnasios tienen su suscripción a GymBrot vencida o
+-- por vencer en los próximos 60 días? (para que el SUPERADMIN gestione la renovación).
+-- Tablas: gimnasios, usuarios (administradores del gimnasio, para contactarlos)
+-- ---------------------------------------------------------------------------
+SELECT g.nombre                                  AS gimnasio,
+       g.slug,
+       g.plan_software,
+       g.estado,
+       g.vence_suscripcion,
+       g.vence_suscripcion - CURRENT_DATE        AS dias_restantes,
+       string_agg(u.correo, ', ' ORDER BY u.correo) AS contactos_admin
+FROM gimnasios g
+LEFT JOIN usuarios u ON u.id_gimnasio = g.id_gimnasio
+                    AND u.tipo_usuario = 'ADMINISTRADOR'
+WHERE g.vence_suscripcion <= CURRENT_DATE + 60
+GROUP BY g.id_gimnasio, g.nombre, g.slug, g.plan_software, g.estado, g.vence_suscripcion
+ORDER BY g.vence_suscripcion;
+
+
+-- ---------------------------------------------------------------------------
+-- Q17. [F] Asistencia y duración de visita por gimnasio (últimos 30 días)
+-- PREGUNTA DE NEGOCIO: ¿Cuántos ingresos aprobados tuvo cada gimnasio en los
+-- últimos 30 días, cuántos fueron rechazados y cuánto dura en promedio una visita?
+-- Duración: hora_salida - hora_entrada (TIME - TIME = INTERVAL), en minutos.
+-- Tablas: registros_ingresos, usuarios, gimnasios
+-- ---------------------------------------------------------------------------
+SELECT g.nombre                                                          AS gimnasio,
+       COUNT(*) FILTER (WHERE ri.estado_verificacion = 'APROBADO')       AS ingresos_aprobados,
+       COUNT(*) FILTER (WHERE ri.estado_verificacion = 'RECHAZADO')      AS ingresos_rechazados,
+       COUNT(DISTINCT ri.id_cliente)                                     AS clientes_distintos,
+       ROUND(AVG(EXTRACT(EPOCH FROM (ri.hora_salida - ri.hora_entrada)) / 60)
+             FILTER (WHERE ri.estado_verificacion = 'APROBADO'))         AS minutos_promedio
+FROM registros_ingresos ri
+JOIN usuarios u  ON u.numero_identificacion = ri.id_cliente
+JOIN gimnasios g ON g.id_gimnasio = u.id_gimnasio
+WHERE ri.fecha >= CURRENT_DATE - 30
+GROUP BY g.id_gimnasio, g.nombre
+ORDER BY ingresos_aprobados DESC;

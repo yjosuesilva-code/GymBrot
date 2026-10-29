@@ -21,7 +21,7 @@ SELECT c.numero_identificacion,
 FROM clientes c
 JOIN usuarios u             ON u.numero_identificacion = c.numero_identificacion
 JOIN historial_membresias h ON h.id_cliente = c.numero_identificacion
-                           AND h.activa = 1
+                           AND h.activa
 JOIN membresias m           ON m.id_membresia = h.id_membresia
 JOIN planes_membresias pl   ON pl.id_plan = m.id_plan
 WHERE m.estado = 'ACTIVA'

@@ -19,7 +19,7 @@
 -- Q1. Clientes con membresía vigente
 -- PREGUNTA DE NEGOCIO: ¿Qué clientes tienen hoy una membresía vigente, de qué
 -- plan y cuándo vence? (para saber quién puede entrar y a quién avisar).
--- Criterio de vigencia: historial_membresias.activa = 1 Y membresia ACTIVA no
+-- Criterio de vigencia: historial_membresias.activa (BOOLEAN) Y membresia ACTIVA no
 -- vencida. Se exigen ambos para no confiar en un solo indicador.
 -- Tablas: clientes, usuarios, historial_membresias, membresias, planes_membresias
 -- ---------------------------------------------------------------------------
@@ -30,7 +30,7 @@ SELECT c.numero_identificacion,
 FROM clientes c
 JOIN usuarios u             ON u.numero_identificacion = c.numero_identificacion
 JOIN historial_membresias h ON h.id_cliente = c.numero_identificacion
-                           AND h.activa = 1
+                           AND h.activa
 JOIN membresias m           ON m.id_membresia = h.id_membresia
 JOIN planes_membresias pl   ON pl.id_plan = m.id_plan
 WHERE m.estado = 'ACTIVA'
@@ -112,7 +112,8 @@ ORDER BY ci.fecha, ci.hora, instructor;
 -- Q5. Asistencia de los últimos 30 días
 -- PREGUNTA DE NEGOCIO: ¿Quiénes son los 20 clientes que más asistieron en los
 -- últimos 30 días y cuánto dura en promedio su visita?
--- Solo cuenta ingresos APROBADOS con hora de salida registrada.
+-- Solo cuenta ingresos APROBADOS con hora de salida registrada. Las horas son
+-- TIME: hora_salida - hora_entrada da un INTERVAL (el esquema garantiza salida >= entrada).
 -- Tablas: registros_ingresos, clientes, usuarios
 -- ---------------------------------------------------------------------------
 SELECT c.numero_identificacion,
@@ -147,7 +148,7 @@ WHERE u.estado = 'ACTIVO'
         FROM historial_membresias h
         JOIN membresias m ON m.id_membresia = h.id_membresia
         WHERE h.id_cliente = c.numero_identificacion
-          AND h.activa = 1
+          AND h.activa
           AND m.estado = 'ACTIVA'
           AND m.fecha_vencimiento >= CURRENT_DATE
   )

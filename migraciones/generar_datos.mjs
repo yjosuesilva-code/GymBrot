@@ -1,12 +1,24 @@
-// Genera los scripts 01..20 de datos de prueba (solo local, no se sube al repositorio).
-// Uso, desde esta carpeta:  node generar_datos.mjs
-// La semilla es fija: cada ejecución produce exactamente los mismos datos.
+// Genera los scripts 01..20 de datos de prueba y 00_ejecutar_todo_pgadmin.sql.
+// Uso, desde esta carpeta:  node generar_datos.mjs [AAAA-MM-DD]
+// Las fechas se calculan respecto a HOY: la fecha de ejecución, o la que se pase
+// como argumento (ej. el día de la presentación). Así siempre hay membresías
+// vigentes, citas próximas e ingresos recientes respecto a CURRENT_DATE.
+// La semilla es fija: con la misma fecha, cada ejecución produce los mismos datos.
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const CARPETA = dirname(fileURLToPath(import.meta.url));
-const HOY = fecha('2026-10-29');
+// Las fechas fijas de este script están escritas para el 2026-10-29 y se desplazan
+// los mismos días que haya entre esa fecha y HOY.
+const REFERENCIA = fecha('2026-10-29');
+const argumento = process.argv[2];
+if (argumento && !/^\d{4}-\d{2}-\d{2}$/.test(argumento)) {
+  throw new Error(`Fecha inválida "${argumento}": usa el formato AAAA-MM-DD`);
+}
+const HOY = fecha(argumento ?? fechaLocalDeHoy());
+const DESFASE = Math.round((HOY - REFERENCIA) / 86400000);
+const fechaRel = (texto) => new Date(fecha(texto).getTime() + DESFASE * 86400000);
 
 // ---------------------------------------------------------------------------
 // Utilidades
@@ -35,6 +47,10 @@ function tomar(lista, n) {
 
 function fecha(texto) {
   return new Date(texto + 'T00:00:00Z');
+}
+function fechaLocalDeHoy() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function sumarDias(d, dias) {
   return new Date(d.getTime() + dias * 86400000);
@@ -85,9 +101,12 @@ function escribir(archivo, tabla, comentario, columnas, filas, columnaId) {
   if (columnaId) {
     lineas.push(`SELECT setval(pg_get_serial_sequence('${tabla}', '${columnaId}'), (SELECT MAX(${columnaId}) FROM ${tabla}));`);
   }
-  writeFileSync(join(CARPETA, archivo), lineas.join('\n') + '\n', 'utf8');
+  const texto = lineas.join('\n') + '\n';
+  writeFileSync(join(CARPETA, archivo), texto, 'utf8');
+  generados.push({ archivo, texto });
   console.log(`${archivo.padEnd(28)} ${filas.length}`);
 }
+const generados = [];
 
 // ---------------------------------------------------------------------------
 // Catálogos de nombres
@@ -110,11 +129,11 @@ const telefono = () => `3${elegir(['00', '01', '02', '04', '05', '10', '11', '12
 // 01 GIMNASIOS
 // ---------------------------------------------------------------------------
 const gimnasios = [
-  { id_gimnasio: 1, slug: 'iron-gym-valledupar', nombre: 'Iron Gym Valledupar', ciudad: 'Valledupar', telefono: '3001234567', plan_software: 'PRO', estado: 'ACTIVO', fecha_registro: fecha('2025-01-15'), vence_suscripcion: fecha('2027-01-15'), dominio: 'irongym.co', factor: 1.0, clientes: 30, instructores: 6 },
-  { id_gimnasio: 2, slug: 'titan-fit', nombre: 'Titan Fit', ciudad: 'Valledupar', telefono: '3012345678', plan_software: 'BASICO', estado: 'ACTIVO', fecha_registro: fecha('2025-03-01'), vence_suscripcion: fecha('2026-12-01'), dominio: 'titanfit.co', factor: 0.85, clientes: 25, instructores: 5 },
-  { id_gimnasio: 3, slug: 'pulso-gym', nombre: 'Pulso Gym', ciudad: 'Aguachica', telefono: '3023456789', plan_software: 'PREMIUM', estado: 'ACTIVO', fecha_registro: fecha('2025-04-10'), vence_suscripcion: fecha('2027-04-10'), dominio: 'pulsogym.co', factor: 0.9, clientes: 20, instructores: 4 },
-  { id_gimnasio: 4, slug: 'cuerpo-activo', nombre: 'Cuerpo Activo', ciudad: 'Santa Marta', telefono: '3034567890', plan_software: 'PRO', estado: 'ACTIVO', fecha_registro: fecha('2025-05-20'), vence_suscripcion: fecha('2026-11-20'), dominio: 'cuerpoactivo.co', factor: 1.1, clientes: 15, instructores: 3 },
-  { id_gimnasio: 5, slug: 'zona-fit', nombre: 'Zona Fit', ciudad: 'Barranquilla', telefono: '3045678901', plan_software: 'BASICO', estado: 'SUSPENDIDO', fecha_registro: fecha('2025-06-01'), vence_suscripcion: fecha('2026-09-30'), dominio: 'zonafit.co', factor: 0.8, clientes: 10, instructores: 2 },
+  { id_gimnasio: 1, slug: 'iron-gym-valledupar', nombre: 'Iron Gym Valledupar', ciudad: 'Valledupar', telefono: '3001234567', plan_software: 'PRO', estado: 'ACTIVO', fecha_registro: fechaRel('2025-01-15'), vence_suscripcion: fechaRel('2027-01-15'), dominio: 'irongym.co', factor: 1.0, clientes: 30, instructores: 6 },
+  { id_gimnasio: 2, slug: 'titan-fit', nombre: 'Titan Fit', ciudad: 'Valledupar', telefono: '3012345678', plan_software: 'BASICO', estado: 'ACTIVO', fecha_registro: fechaRel('2025-03-01'), vence_suscripcion: fechaRel('2026-12-01'), dominio: 'titanfit.co', factor: 0.85, clientes: 25, instructores: 5 },
+  { id_gimnasio: 3, slug: 'pulso-gym', nombre: 'Pulso Gym', ciudad: 'Aguachica', telefono: '3023456789', plan_software: 'PREMIUM', estado: 'ACTIVO', fecha_registro: fechaRel('2025-04-10'), vence_suscripcion: fechaRel('2027-04-10'), dominio: 'pulsogym.co', factor: 0.9, clientes: 20, instructores: 4 },
+  { id_gimnasio: 4, slug: 'cuerpo-activo', nombre: 'Cuerpo Activo', ciudad: 'Santa Marta', telefono: '3034567890', plan_software: 'PRO', estado: 'ACTIVO', fecha_registro: fechaRel('2025-05-20'), vence_suscripcion: fechaRel('2026-11-20'), dominio: 'cuerpoactivo.co', factor: 1.1, clientes: 15, instructores: 3 },
+  { id_gimnasio: 5, slug: 'zona-fit', nombre: 'Zona Fit', ciudad: 'Barranquilla', telefono: '3045678901', plan_software: 'BASICO', estado: 'SUSPENDIDO', fecha_registro: fechaRel('2025-06-01'), vence_suscripcion: fechaRel('2026-09-30'), dominio: 'zonafit.co', factor: 0.8, clientes: 10, instructores: 2 },
 ];
 escribir('01_gimnasios.sql', 'gimnasios', 'tenants', ['id_gimnasio', 'slug', 'nombre', 'ciudad', 'telefono', 'plan_software', 'estado', 'fecha_registro', 'vence_suscripcion'], gimnasios, 'id_gimnasio');
 
@@ -235,7 +254,7 @@ const administradores = [];
 const instructores = [];
 const clientes = [];
 
-usuarios.push({ numero_identificacion: '1000000001', id_gimnasio: null, tipo_identificacion: 'CC', nombre: 'Laura', apellidos: 'Méndez Rojas', telefono: '3100000001', correo: 'laura.mendez@gymbrot.co', contrasena_hash: 'hash-prueba-superadmin', foto_url: null, estado: 'ACTIVO', fecha_registro: fecha('2025-01-01'), tipo_usuario: 'SUPERADMIN' });
+usuarios.push({ numero_identificacion: '1000000001', id_gimnasio: null, tipo_identificacion: 'CC', nombre: 'Laura', apellidos: 'Méndez Rojas', telefono: '3100000001', correo: 'laura.mendez@gymbrot.co', contrasena_hash: 'hash-prueba-superadmin', foto_url: null, estado: 'ACTIVO', fecha_registro: fechaRel('2025-01-01'), tipo_usuario: 'SUPERADMIN' });
 administradores.push({ numero_identificacion: '1000000001', rol: 'PLATAFORMA' });
 
 // Administradores: un gerente por gimnasio y recepción en los tres más grandes
@@ -260,7 +279,7 @@ for (const g of gimnasios) {
   for (let i = 0; i < g.instructores; i++) {
     const p = persona();
     const cedula = `1065200${String(consecutivoInstructor).padStart(3, '0')}`;
-    const contratacion = fechaEntre(g.fecha_registro, fecha('2026-08-31'));
+    const contratacion = fechaEntre(g.fecha_registro, fechaRel('2026-08-31'));
     usuarios.push({
       numero_identificacion: cedula, id_gimnasio: g.id_gimnasio, tipo_identificacion: probabilidad(0.9) ? 'CC' : 'CE', nombre: p.nombre, apellidos: p.apellidos,
       telefono: telefono(), correo: `${sinTildes(p.nombre.split(' ')[0])}.${sinTildes(p.apellidos.split(' ')[0])}.i${consecutivoInstructor}@${g.dominio}`,
@@ -293,14 +312,14 @@ for (const g of gimnasios) {
     const p = persona();
     const cedula = `1065100${String(consecutivoCliente).padStart(3, '0')}`;
     const menor = probabilidad(0.06);
-    const nacimiento = menor ? fechaEntre(fecha('2009-01-01'), fecha('2011-12-31')) : fechaEntre(fecha('1965-01-01'), fecha('2006-12-31'));
+    const nacimiento = menor ? fechaEntre(fechaRel('2009-01-01'), fechaRel('2011-12-31')) : fechaEntre(fechaRel('1965-01-01'), fechaRel('2006-12-31'));
     clientes.push({
       numero_identificacion: cedula, id_gimnasio: g.id_gimnasio, nombre: p.nombre, apellidos: p.apellidos,
       tipo_identificacion: menor ? 'TI' : elegir(['CC', 'CC', 'CC', 'CC', 'CC', 'CC', 'CC', 'CE', 'PP']),
       direccion: `${elegir(CALLES)} ${entero(1, 60)} # ${entero(1, 50)}-${dosDigitos(entero(1, 99))}, ${g.ciudad}`,
       fecha_nacimiento: nacimiento,
       huella_dactilar: probabilidad(0.5) ? sqlCrudo(`decode('${Array.from({ length: 16 }, () => entero(0, 15).toString(16)).join('')}', 'hex')`) : null,
-      fecha_registro: fechaEntre(maxFecha(g.fecha_registro, fecha('2025-07-01')), fecha('2026-10-20')),
+      fecha_registro: fechaEntre(maxFecha(g.fecha_registro, fechaRel('2025-07-01')), fechaRel('2026-10-20')),
       estado: 'ACTIVO',
       membresias: [],
     });
@@ -653,7 +672,7 @@ for (const c of citas.filter((c) => c.estado !== 'CANCELADA')) {
 }
 for (const c of tomar(clientes.filter((c) => gimnasioPorId[c.id_gimnasio].estado === 'ACTIVO'), 20)) {
   const idPlantilla = plantillas.find((p) => p.id_gimnasio === c.id_gimnasio).id_plantilla;
-  notificar(c, idPlantilla, 'Trae a un amigo y gana un mes', `${c.nombre}, refiere a un amigo y recibe un mes gratis.`, fechaEntre(maxFecha(c.fecha_registro, fecha('2026-09-01')), HOY), 'MANUAL');
+  notificar(c, idPlantilla, 'Trae a un amigo y gana un mes', `${c.nombre}, refiere a un amigo y recibe un mes gratis.`, fechaEntre(maxFecha(c.fecha_registro, fechaRel('2026-09-01')), HOY), 'MANUAL');
 }
 notificaciones.sort((a, b) => a.orden - b.orden).forEach((n, i) => { n.id_notificacion = i + 1; });
 
@@ -679,3 +698,22 @@ escribir('17_citas.sql', 'citas', 'instructor y cliente del mismo gimnasio', ['i
 escribir('18_sesiones_gymbrot.sql', 'sesiones_gymbrot', 'conversaciones con el asistente', ['id_sesion', 'id_cliente', 'fecha', 'hora_inicio', 'hora_fin', 'contexto_activo'], sesiones, 'id_sesion');
 escribir('19_mensajes_gymbrot.sql', 'mensajes_gymbrot', 'mensajes de cada sesión', ['id_mensaje', 'id_sesion', 'id_cita', 'remitente', 'contenido', 'timestamp_msg', 'tipo_intencion'], mensajes, 'id_mensaje');
 escribir('20_notificaciones.sql', 'notificaciones', 'plantillas del sistema o del gimnasio del cliente', ['id_notificacion', 'id_cliente', 'id_plantilla', 'tipo', 'asunto', 'contenido', 'estado_envio', 'fecha_envio', 'origen'], notificaciones, 'id_notificacion');
+
+// Versión para el Query Tool de pgAdmin: los 20 archivos en orden, sin comandos de psql
+const pgadmin = [
+  '-- =============================================================================',
+  '-- DATOS DE PRUEBA GYMBROT — versión para pgAdmin (Query Tool)',
+  '-- Generado por generar_datos.mjs: no editar a mano, regenerar.',
+  `-- Fechas calculadas respecto a ${txtFecha(HOY)}.`,
+  '-- Requiere haber ejecutado migraciones/001_creacion_esquema.sql en una base vacía.',
+  '-- Contiene los archivos 01_ a 20_ en orden, sin \\i ni \\set (solo funcionan en psql).',
+  '-- =============================================================================',
+  "SET client_encoding = 'UTF8';",
+  '',
+  'BEGIN;',
+  '',
+  ...generados.sort((a, b) => a.archivo.localeCompare(b.archivo)).map((g) => `-- ===== ${g.archivo} =====\n${g.texto}`),
+  'COMMIT;',
+];
+writeFileSync(join(CARPETA, '00_ejecutar_todo_pgadmin.sql'), pgadmin.join('\n') + '\n', 'utf8');
+console.log(`${'00_ejecutar_todo_pgadmin.sql'.padEnd(28)} ${generados.length} archivos (HOY = ${txtFecha(HOY)})`);

@@ -2,7 +2,7 @@
 
 **Bloque:** Juan Camilo · **Motor:** PostgreSQL 16.15 · **Esquema:** `migraciones/001_creacion_esquema.sql`
 
-> ⚠️ **Sobre los datos de esta evidencia.** Los resultados de abajo se obtuvieron en un Postgres local con el esquema de Leo y **datos sintéticos generados por mí** (300 000 pagos, 30 000 membresías, 18 000 clientes con membresía), porque todavía no tenía el seed de Samuel. Los números exactos de tiempo y costo **cambiarán** con el seed real. Antes de entregar, repite los pasos de la sección "Cómo reproducirlo" con el seed de Samuel y reemplaza los bloques `ANTES` y `DESPUÉS` por tu propia salida.
+
 
 ---
 

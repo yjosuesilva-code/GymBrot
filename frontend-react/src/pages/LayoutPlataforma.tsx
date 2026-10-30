@@ -1,5 +1,7 @@
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { current, logout } from "../lib/auth";
+import { BotonMenu } from "../components/layout/BotonMenu";
+import { ID_MENU, useMenuMovil } from "../components/layout/useMenuMovil";
 
 /* [plataforma] Shell y guard del panel del SUPERADMIN, fuera de /g/:slug.
    No usa Sidebar/Topbar del portal porque esos dependen de useTenant(), y
@@ -18,6 +20,7 @@ export function LayoutPlataforma() {
   // Hooks antes de cualquier return: el guard sale temprano.
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const menu = useMenuMovil();
   const sesion = current();
 
   if (!sesion) return <Navigate to="/plataforma/login" replace />;
@@ -40,7 +43,7 @@ export function LayoutPlataforma() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <aside id={ID_MENU} className={"sidebar" + (menu.abierto ? " abierto" : "")}>
         <div className="sidebar-logo">
           <img className="logo-mini" src="/logos/gymbrot-logo.png" alt="GYMBROT" width={348} height={180} />
           <img className="logo-full" src="/logos/gymbrot-icono.png" alt="" width={160} height={88} />
@@ -52,6 +55,7 @@ export function LayoutPlataforma() {
               to={m.to}
               title={m.label}
               className={({ isActive }) => "nav-item" + (isActive ? " active" : "")}
+              onClick={menu.cerrar}
             >
               <i className={"bi " + m.icon} aria-hidden />
               <span>{m.label}</span>
@@ -65,11 +69,13 @@ export function LayoutPlataforma() {
           </button>
         </div>
       </aside>
+      {menu.abierto && <div className="sidebar-fondo" onClick={menu.cerrar} aria-hidden />}
       <div className="main-area">
         <header className="topbar">
+          <BotonMenu menu={menu} />
           <div className="topbar-title">{titulo}</div>
           <div className="topbar-right">
-            <span className="pill-doc" style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            <span className="pill-doc topbar-rol" style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>
               Plataforma
             </span>
             <span className="topbar-user">{nombre}</span>

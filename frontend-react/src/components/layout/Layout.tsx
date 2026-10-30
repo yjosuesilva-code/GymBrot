@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { paginas } from "./paginas";
+import { useMenuMovil } from "./useMenuMovil";
 import { current, tieneAcceso } from "../../lib/auth";
 import { useTenant } from "../../tenant/TenantContext";
 
@@ -11,6 +12,7 @@ import { useTenant } from "../../tenant/TenantContext";
 export function Layout() {
   const location = useLocation();
   const { slug, gimnasio, ruta } = useTenant();
+  const menu = useMenuMovil();
   const sesion = current();
 
   // El SUPERADMIN es dueno del software: no vive en /g/:slug
@@ -41,9 +43,11 @@ export function Layout() {
 
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar menu={menu} />
+      {/* Fondo del menu en movil: tocar fuera del panel lo cierra. */}
+      {menu.abierto && <div className="sidebar-fondo" onClick={menu.cerrar} aria-hidden />}
       <div className="main-area">
-        <Topbar titulo={titulo} nombre={sesion.nombre} />
+        <Topbar titulo={titulo} nombre={sesion.nombre} menu={menu} />
         <main className="content" id="app-content">
           <Outlet />
         </main>

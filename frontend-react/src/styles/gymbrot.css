@@ -331,6 +331,73 @@ body {
 .alert-ok    { background: rgba(212,255,0,.08);  border-color: rgba(212,255,0,.35);  color: var(--neon); }
 .alert-error { background: rgba(255,107,107,.08); border-color: rgba(255,107,107,.35); color: #ff8a8a; }
 
+/* ===== Shell en movil (menos de 768px) =====
+   El rail de 72px y el topbar completo no caben en un celular: la pagina se
+   desbordaba a lo ancho. Aqui el sidebar pasa a ser un panel que entra desde
+   la izquierda con el boton de menu del topbar (useMenuMovil.ts), siempre con
+   los textos visibles porque en tactil no hay hover. El topbar se queda con
+   menu, titulo, gimnasio y avatar. */
+.topbar-menu { display: none; }
+.sidebar-fondo { display: none; }
+
+@media (max-width: 767.98px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1045;              /* sobre el contenido, debajo de los modales de Bootstrap */
+    height: auto;
+    transform: translateX(-100%);
+    visibility: hidden;         /* cerrado no recibe foco ni lo lee el lector de pantalla */
+    transition: transform .2s ease, visibility 0s linear .2s;
+  }
+  .sidebar,
+  .sidebar:hover,
+  .sidebar:focus-within { width: 264px; min-width: 264px; padding: 16px; }
+  .sidebar.abierto {
+    transform: none;
+    visibility: visible;
+    transition: transform .2s ease;
+    box-shadow: 12px 0 32px rgba(0, 0, 0, .5);
+  }
+  .sidebar .sidebar-logo { padding-bottom: 20px; }
+  .sidebar .sidebar-logo .logo-mini { opacity: 0; }
+  .sidebar .sidebar-logo .logo-full { opacity: 1; width: 140px; }
+  .sidebar .nav-item { justify-content: flex-start; gap: 12px; min-height: 44px; padding: 10px 12px; }
+  .sidebar .nav-item span { max-width: 200px; opacity: 1; }
+
+  .sidebar-fondo { display: block; position: fixed; inset: 0; z-index: 1044; background: rgba(0, 0, 0, .6); }
+  body:has(.sidebar.abierto) { overflow: hidden; }   /* el fondo no se desplaza detras del menu */
+
+  .topbar { padding: 0 12px 0 4px; gap: 4px; }
+  .topbar-menu {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 44px;                /* area tactil minima recomendada */
+    height: 44px;
+    background: none;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: #fff;
+    font-size: 22px;
+    cursor: pointer;
+  }
+  .topbar-menu:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .topbar-title { flex: 1; min-width: 0; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar-right { gap: 8px; min-width: 0; }
+  /* .topbar delante: .pill-doc se define mas abajo y si no ganaria. */
+  .topbar .topbar-rol, .topbar .topbar-user { display: none; }
+  .topbar-gym { max-width: 128px; min-width: 0; }
+  .topbar-gym span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .avatar { flex: none; }
+
+  .content { padding: 16px; gap: 20px; }
+  .card-g { padding: 16px; }
+}
+
 
 /* ############################################################
    #  SECCIONES POR INTEGRANTE â€” cada quien SOLO en la suya

@@ -2,8 +2,9 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { paginasPorRol } from "./paginas";
 import { useTenant } from "../../tenant/TenantContext";
 import { current, logout } from "../../lib/auth";
+import { ID_MENU, type MenuMovil } from "./useMenuMovil";
 
-export function Sidebar() {
+export function Sidebar({ menu }: { menu: MenuMovil }) {
   // [multitenant-slug] paginas.ts no conoce el slug: se le pone aqui.
   const { ruta } = useTenant();
   const navigate = useNavigate();
@@ -18,7 +19,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="sidebar">
+    <aside id={ID_MENU} className={"sidebar" + (menu.abierto ? " abierto" : "")}>
       <div className="sidebar-logo">
         <img className="logo-mini" src="/logos/gymbrot-logo.png" alt="GYMBROT" width={348} height={180} />
         <img className="logo-full" src="/logos/gymbrot-icono.png" alt="" width={160} height={88} />
@@ -31,6 +32,7 @@ export function Sidebar() {
             title={p.label}
             className={({ isActive }) => "nav-item" + (isActive ? " active" : "")}
             end={p.to === "/dashboard" || p.to === "/instructor-dashboard" || p.to === "/mi-dashboard"}
+            onClick={menu.cerrar}
           >
             <i className={"bi " + p.icon} aria-hidden />
             <span>{p.label}</span>

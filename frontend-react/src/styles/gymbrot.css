@@ -769,6 +769,9 @@ body {
 
 
 /* ===== [P2] Estilos propios Â· clientes, cliente-detalle, progreso, citas ===== */
+/* [P2] Botones deshabilitados mientras la API responde (Guardar, Desactivar, acciones de la tabla).
+   Aplica a toda la app: si el equipo lo aprueba, conviene moverlo a la seccion BASE de botones. */
+.btn-neon:disabled, .btn-dark:disabled, .btn-danger-g:disabled, .btn-icon:disabled { opacity: .55; cursor: not-allowed; filter: none; }
 /* Las paginas de clientes reutilizan los componentes de la base. Lo de abajo
    es de la plataforma (pagina del software y registro de gimnasios), que no
    tiene sidebar ni topbar y por eso necesita su propio esqueleto. */

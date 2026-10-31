@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Modal } from "react-bootstrap";
 import { api } from "../data/api";
@@ -34,6 +35,12 @@ const VACIO: FormCliente = {
   fecha_nacimiento: "",
 };
 
+// Alerta superior (mismo patrón que Instructores.tsx): ok = verde neón, error = rojo
+type Alerta = { tipo: "ok" | "error"; mensaje: string };
+
+// Validación simple de formato de correo; el campo es opcional
+const CORREO_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /* Categoria de edad del desktop (colCategoria). El legacy la deriva de la edad
    en anios; aqui se usa la misma segmentacion para que la columna se lea igual. */
 function categoriaEdad(edad: number | null): string {
@@ -67,6 +74,14 @@ export function Clientes() {
   const [clave, setClave] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [verClave, setVerClave] = useState(false);
+  // Evita doble envío del formulario mientras la API responde
+  const [guardando, setGuardando] = useState(false);
+
+  // Aviso de éxito o error tras guardar o cambiar el estado de un cliente
+  const [alerta, setAlerta] = useState<Alerta | null>(null);
+  // Cliente pendiente de confirmar la desactivación (null = sin modal abierto)
+  const [porDesactivar, setPorDesactivar] = useState<Cliente | null>(null);
+  const [cambiandoEstado, setCambiandoEstado] = useState(false);
 
   // Modal unificado de validación de acceso (entrada o salida)
   const [modoRegistro, setModoRegistro] = useState<ModoRegistro | null>(null);
@@ -97,6 +112,13 @@ export function Clientes() {
       .catch((e: unknown) => setErrorCarga(e instanceof Error ? e.message : "No se pudieron cargar los clientes."))
       .finally(() => setCargando(false));
   }, [version, hoy]);
+
+  // La alerta se oculta sola a los 4 s; el cleanup cancela el temporizador si llega otra
+  useEffect(() => {
+    if (!alerta) return;
+    const t = setTimeout(() => setAlerta(null), 4000);
+    return () => clearTimeout(t);
+  }, [alerta]);
 
   async function recargar() {
     try {
@@ -177,9 +199,15 @@ export function Clientes() {
     setShow(true);
   }
 
-  async function guardar() {
-    if (!form.numero_identificacion || !form.nombre || !form.apellidos) {
+  async function guardar(e?: FormEvent) {
+    e?.preventDefault(); // el formulario se envía con Enter o con el botón Guardar
+    if (guardando) return;
+    if (!form.numero_identificacion.trim() || !form.nombre.trim() || !form.apellidos.trim()) {
       setError("La identificación, el nombre y los apellidos son obligatorios");
+      return;
+    }
+    if (form.correo.trim() && !CORREO_VALIDO.test(form.correo.trim())) {
+      setError("El correo no tiene un formato válido");
       return;
     }
 
@@ -195,31 +223,55 @@ export function Clientes() {
       return;
     }
 
-    const res = editandoId
-      ? await api.clientes.update(editandoId, form as Partial<ClienteNuevo>)
-      : await api.clientes.create(form as ClienteNuevo);
-    if (!res.ok) {
-      setError(res.mensaje);
-      return;
-    }
-
-    if (clave.trim()) {
-      const id = editandoId ?? form.numero_identificacion;
-      const rc = await api.usuarios.asignar(id, clave.trim());
-      if (!rc.ok) {
-        setError(rc.mensaje);
+    setGuardando(true);
+    try {
+      const res = editandoId
+        ? await api.clientes.update(editandoId, form as Partial<ClienteNuevo>)
+        : await api.clientes.create(form as ClienteNuevo);
+      if (!res.ok) {
+        setError(res.mensaje);
         return;
       }
-    }
 
-    setShow(false);
-    await recargar();
+      if (clave.trim()) {
+        const id = editandoId ?? form.numero_identificacion;
+        const rc = await api.usuarios.asignar(id, clave.trim());
+        if (!rc.ok) {
+          setError(rc.mensaje);
+          return;
+        }
+      }
+
+      setShow(false);
+      setAlerta({ tipo: "ok", mensaje: `${res.mensaje}: ${form.nombre.trim()} ${form.apellidos.trim()}` });
+      await recargar();
+    } finally {
+      setGuardando(false);
+    }
   }
 
-  async function cambiarEstado(c: Cliente) {
-    const nuevo = c.estado === "ACTIVO" ? "INACTIVO" : "ACTIVO";
-    await api.clientes.setEstado(c.numero_identificacion, nuevo);
-    await recargar();
+  /* Desactivar deja al cliente sin acceso al gimnasio, por eso pide confirmación.
+     Activar no tiene riesgo y se aplica directamente. */
+  function cambiarEstado(c: Cliente) {
+    if (c.estado === "ACTIVO") setPorDesactivar(c);
+    else void aplicarEstado(c, "ACTIVO");
+  }
+
+  async function aplicarEstado(c: Cliente, nuevo: Cliente["estado"]) {
+    setCambiandoEstado(true);
+    try {
+      const res = await api.clientes.setEstado(c.numero_identificacion, nuevo);
+      const nombre = `${c.nombre} ${c.apellidos}`;
+      setAlerta(
+        res.ok
+          ? { tipo: "ok", mensaje: nuevo === "ACTIVO" ? `${nombre} fue activado` : `${nombre} fue desactivado` }
+          : { tipo: "error", mensaje: res.mensaje },
+      );
+      if (res.ok) await recargar();
+    } finally {
+      setCambiandoEstado(false);
+      setPorDesactivar(null);
+    }
   }
 
   /* Atajo del monitor: cerrar la entrada abierta sin volver a pasar por el modal.
@@ -276,8 +328,12 @@ export function Clientes() {
             type="text"
             className="form-control-dark"
             placeholder="Buscar por nombre, identificación o correo..."
+            aria-label="Buscar clientes por nombre, identificación o correo"
             value={filtro}
-            onChange={(e) => setFiltro(e.target.value)}
+            onChange={(e) => {
+              setFiltro(e.target.value);
+              setPagina(1); // al buscar se vuelve a la primera página
+            }}
           />
         </div>
         <div className="toolbar-acciones">
@@ -298,6 +354,16 @@ export function Clientes() {
           </button>
         </div>
       </div>
+
+      {alerta && (
+        <div
+          className={"alert-g show alert-" + alerta.tipo}
+          role={alerta.tipo === "ok" ? "status" : "alert"}
+          style={{ marginBottom: 16 }}
+        >
+          {alerta.mensaje}
+        </div>
+      )}
 
       {errorCarga && (
         <div className="alert-g alert-error show" role="alert" style={{ marginBottom: 16 }}>
@@ -328,7 +394,9 @@ export function Clientes() {
             ) : filtrados.length === 0 ? (
               <tr>
                 <td colSpan={7} className="empty-state">
-                  No hay clientes
+                  {filtro.trim()
+                    ? `Sin resultados para «${filtro.trim()}»`
+                    : "Aún no hay clientes registrados"}
                 </td>
               </tr>
             ) : (
@@ -387,6 +455,7 @@ export function Clientes() {
                         <button
                           className="btn-icon"
                           title="Ver detalle"
+                          aria-label={`Ver detalle de ${c.nombre} ${c.apellidos}`}
                           onClick={() =>
                             navigate(ruta("/clientes/" + c.numero_identificacion))
                           }
@@ -396,6 +465,7 @@ export function Clientes() {
                         <button
                           className="btn-icon"
                           title="Editar"
+                          aria-label={`Editar a ${c.nombre} ${c.apellidos}`}
                           onClick={() => abrirEdicion(c)}
                         >
                           <i className="bi bi-pencil" aria-hidden />
@@ -405,6 +475,8 @@ export function Clientes() {
                           title={
                             c.estado === "ACTIVO" ? "Desactivar" : "Activar"
                           }
+                          aria-label={`${c.estado === "ACTIVO" ? "Desactivar" : "Activar"} a ${c.nombre} ${c.apellidos}`}
+                          disabled={cambiandoEstado}
                           onClick={() => cambiarEstado(c)}
                         >
                           <i
@@ -494,11 +566,17 @@ export function Clientes() {
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {error && <div className="alert-g alert-error show">{error}</div>}
+          {error && <div className="alert-g alert-error show" role="alert">{error}</div>}
+          {/* noValidate: la validación la hace guardar() para mostrar mensajes en español y con el tema oscuro */}
+          <form id="form-cliente" onSubmit={guardar} noValidate>
+          <p className="card-sub" style={{ marginBottom: 12 }}>
+            Los campos con <span aria-hidden="true">*</span> son obligatorios.
+          </p>
           <div className="row g-3">
             <div className="col-md-6">
-              <label className="form-label-g">Tipo</label>
+              <label className="form-label-g" htmlFor="cli-tipo">Tipo</label>
               <select
+                id="cli-tipo"
                 className="form-control-dark"
                 value={form.tipo_identificacion}
                 onChange={(e) =>
@@ -512,8 +590,10 @@ export function Clientes() {
               </select>
             </div>
             <div className="col-md-6">
-              <label className="form-label-g">Número de identificación</label>
+              <label className="form-label-g" htmlFor="cli-identificacion">Número de identificación <span aria-hidden="true">*</span></label>
               <input
+                id="cli-identificacion"
+                aria-required="true"
                 className="form-control-dark"
                 value={form.numero_identificacion}
                 disabled={editandoId !== null}
@@ -523,32 +603,38 @@ export function Clientes() {
               />
             </div>
             <div className="col-md-6">
-              <label className="form-label-g">Nombre</label>
+              <label className="form-label-g" htmlFor="cli-nombre">Nombre <span aria-hidden="true">*</span></label>
               <input
+                id="cli-nombre"
+                aria-required="true"
                 className="form-control-dark"
                 value={form.nombre}
                 onChange={(e) => setCampo("nombre", e.target.value)}
               />
             </div>
             <div className="col-md-6">
-              <label className="form-label-g">Apellidos</label>
+              <label className="form-label-g" htmlFor="cli-apellidos">Apellidos <span aria-hidden="true">*</span></label>
               <input
+                id="cli-apellidos"
+                aria-required="true"
                 className="form-control-dark"
                 value={form.apellidos}
                 onChange={(e) => setCampo("apellidos", e.target.value)}
               />
             </div>
             <div className="col-md-6">
-              <label className="form-label-g">Teléfono</label>
+              <label className="form-label-g" htmlFor="cli-telefono">Teléfono</label>
               <input
+                id="cli-telefono"
                 className="form-control-dark"
                 value={form.telefono}
                 onChange={(e) => setCampo("telefono", e.target.value)}
               />
             </div>
             <div className="col-md-6">
-              <label className="form-label-g">Correo</label>
+              <label className="form-label-g" htmlFor="cli-correo">Correo</label>
               <input
+                id="cli-correo"
                 className="form-control-dark"
                 type="email"
                 value={form.correo}
@@ -556,16 +642,18 @@ export function Clientes() {
               />
             </div>
             <div className="col-md-6">
-              <label className="form-label-g">Dirección</label>
+              <label className="form-label-g" htmlFor="cli-direccion">Dirección</label>
               <input
+                id="cli-direccion"
                 className="form-control-dark"
                 value={form.direccion}
                 onChange={(e) => setCampo("direccion", e.target.value)}
               />
             </div>
             <div className="col-md-6">
-              <label className="form-label-g">Fecha de nacimiento</label>
+              <label className="form-label-g" htmlFor="cli-nacimiento">Fecha de nacimiento</label>
               <input
+                id="cli-nacimiento"
                 className="form-control-dark"
                 type="date"
                 value={form.fecha_nacimiento}
@@ -619,13 +707,47 @@ export function Clientes() {
               </div>
             )}
           </div>
+          </form>
         </Modal.Body>
         <Modal.Footer>
-          <button className="btn-dark" onClick={() => setShow(false)}>
+          <button type="button" className="btn-dark" onClick={() => setShow(false)} disabled={guardando}>
             Cancelar
           </button>
-          <button className="btn-neon" onClick={guardar}>
-            Guardar
+          <button type="submit" form="form-cliente" className="btn-neon" disabled={guardando}>
+            {guardando ? "Guardando..." : "Guardar"}
+          </button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* ---- Confirmación antes de desactivar ---- */}
+      <Modal
+        show={porDesactivar !== null}
+        onHide={() => !cambiandoEstado && setPorDesactivar(null)}
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Desactivar cliente</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p style={{ margin: 0 }}>
+            ¿Desactivar a <b>{porDesactivar?.nombre} {porDesactivar?.apellidos}</b>?
+          </p>
+          <p className="card-sub" style={{ marginTop: 8 }}>
+            No podrá ingresar al gimnasio hasta que lo vuelvas a activar. Su
+            historial de membresías, pagos e ingresos se conserva.
+          </p>
+        </Modal.Body>
+        <Modal.Footer>
+          <button type="button" className="btn-dark" onClick={() => setPorDesactivar(null)} disabled={cambiandoEstado}>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="btn-danger-g"
+            disabled={cambiandoEstado}
+            onClick={() => porDesactivar && aplicarEstado(porDesactivar, "INACTIVO")}
+          >
+            {cambiandoEstado ? "Desactivando..." : "Desactivar"}
           </button>
         </Modal.Footer>
       </Modal>

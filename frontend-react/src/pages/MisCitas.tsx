@@ -53,8 +53,6 @@ type ErroresSeccion = {
   membresia?: string;
 };
 
-type EstadoMembresia = "activa" | "inactiva" | "error_verificacion";
-
 type EstadoCarga =
   | { estado: "cargando" }
   | { estado: "sin-sesion"; mensaje: string }
@@ -70,7 +68,6 @@ type EstadoCarga =
       inscripcionesCliente: { inscripcion: InscripcionClase; clase: Clase }[];
       membresias: Membresia[];
       cliente: Cliente | null;
-      estadoMembresia: EstadoMembresia;
       erroresSeccion: ErroresSeccion;
     };
 

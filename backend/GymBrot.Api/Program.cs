@@ -5,7 +5,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 
 builder.Services.AddDbContext<GymBrotContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("CadenaConexion")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("CadenaConexion")));
 
 // Add services to the container.
 
